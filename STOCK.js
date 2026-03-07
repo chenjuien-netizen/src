@@ -320,10 +320,16 @@ function StockMoves_onEdit_(e) {
 
   if (col === colFrac) {
     const rawEditValue = (e && Object.prototype.hasOwnProperty.call(e, "value")) ? e.value : range.getValue();
-    const parsedFraction = StockMoves_parseFractionInput_(rawEditValue);
-    if (parsedFraction !== null) {
-      range.setValue(parsedFraction);
-      StockMoves_applyFractionDisplayFormat_(range);
+    try {
+      const parsedFraction = StockMoves_parseFractionInput_(rawEditValue);
+      if (parsedFraction !== null) {
+        range.setValue(parsedFraction);
+        StockMoves_applyFractionDisplayFormat_(range);
+      }
+    } catch (err) {
+      range.clearContent();
+      try { SpreadsheetApp.getActive().toast(String(err && err.message ? err.message : err), "STOCK", 4); } catch (e2) {}
+      return;
     }
 
     const fracNow = StockMoves_toNumber_(range.getValue());
@@ -514,12 +520,30 @@ function StockMoves_applyOutCommandToState_(stateInput, parsed, row, ref, packsP
   }
 
   if (!(consume > 0)) throw new Error(`Sortie invalide ligne ${row} (${ref}).`);
+  if (parsed.type === "BOXES" && Number(parsed.qty || 0) === 1 && totalBoxes > 0 && totalBoxes < 1) {
+    // Business rule: 1箱 on sub-1 fractional stock means clear remaining stock.
+    next.boxes = 0;
+    next.sign = "";
+    next.fraction = 0;
+    next.missingPacks = 0;
+    return StockMoves_normalizeState_(next);
+  }
   if (consume > totalBoxes + 1e-9) {
     throw new Error(`Stock insuffisant ligne ${row} (${ref}) : demandé ${consume}箱-equivalent > disponible ${totalBoxes}.`);
   }
 
   totalBoxes = Math.max(0, totalBoxes - consume);
-  const shape = StockMoves_boxesEquivalentToState_(totalBoxes, state.packsPerBox);
+  let shape;
+  if (parsed.type === "PACKS" && StockMoves_toInt_(state.packsPerBox) > 0) {
+    // After a pack move, prefer canonical packs form over fraction form.
+    const ppb = StockMoves_toInt_(state.packsPerBox);
+    const totalPacks = Math.max(0, Math.floor(totalBoxes * ppb + 1e-9));
+    const whole = Math.floor(totalPacks / ppb);
+    const remPacks = totalPacks - (whole * ppb);
+    shape = { boxes: whole, sign: "", fraction: 0, missingPacks: remPacks, packsPerBox: ppb };
+  } else {
+    shape = StockMoves_boxesEquivalentToState_(totalBoxes, state.packsPerBox);
+  }
 
   next.boxes = shape.boxes;
   next.sign = shape.sign;
@@ -603,6 +627,7 @@ function StockMoves_parseFractionInput_(value) {
   const num = Number(m[1]);
   const den = Number(m[2]);
   if (!den) throw new Error("分数格式错误: " + s);
+  if ([2, 3, 4].indexOf(den) === -1) throw new Error("分数只支持 /2 /3 /4");
   return num / den;
 }
 

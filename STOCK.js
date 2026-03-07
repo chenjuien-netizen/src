@@ -583,6 +583,17 @@ function StockMoves_boxesEquivalentToState_(totalBoxesInput, packsPerBox) {
   // Prefer canonical "boxes + missing packs" when 包/箱 is valid.
   if (ppb > 0) {
     const eps = 1e-6;
+
+    // Special case: for sub-1 carton quantities, keep a pure packs form
+    // like 0箱 + 9包 instead of 1箱 - 7包.
+    if (n < 1 - eps) {
+      const remPacks = Math.round(n * ppb);
+      const reconSmall = remPacks / ppb;
+      if (remPacks >= 0 && remPacks < ppb && Math.abs(reconSmall - n) <= eps) {
+        return { boxes: 0, sign: "", fraction: 0, missingPacks: remPacks, packsPerBox: ppb };
+      }
+    }
+
     let baseBoxes = Math.ceil(n - eps);
     let miss = Math.round((n - baseBoxes) * ppb); // usually <= 0
 

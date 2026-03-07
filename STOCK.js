@@ -319,15 +319,22 @@ function StockMoves_onEdit_(e) {
   const isManualCol = manualCols.indexOf(col) !== -1;
 
   if (col === colFrac) {
-    const rawEditValue = (e && Object.prototype.hasOwnProperty.call(e, "value")) ? e.value : range.getValue();
+    const rawEditValue = (e && Object.prototype.hasOwnProperty.call(e, "value"))
+      ? e.value
+      : range.getDisplayValue();
+
     try {
       const parsedFraction = StockMoves_parseFractionInput_(rawEditValue);
       if (parsedFraction !== null) {
+        range.setNumberFormat("@");
         range.setValue(parsedFraction);
+        StockMoves_applyFractionDisplayFormat_(range);
+      } else {
         StockMoves_applyFractionDisplayFormat_(range);
       }
     } catch (err) {
       range.clearContent();
+      StockMoves_applyFractionDisplayFormat_(range);
       try { SpreadsheetApp.getActive().toast(String(err && err.message ? err.message : err), "STOCK", 4); } catch (e2) {}
       return;
     }
@@ -537,6 +544,14 @@ function StockMoves_applyOutCommandToState_(stateInput, parsed, row, ref, packsP
   if (parsed.type === "PACKS" && StockMoves_toInt_(state.packsPerBox) > 0) {
     // After a pack move, prefer canonical packs form over fraction form.
     const ppb = StockMoves_toInt_(state.packsPerBox);
+    if (totalBoxes > 0 && totalBoxes < 1) {
+      next.boxes = 0;
+      next.sign = "";
+      next.fraction = 0;
+      next.missingPacks = Math.max(0, Math.floor(totalBoxes * ppb + 1e-9));
+      next.packsPerBox = ppb;
+      return StockMoves_normalizeState_(next);
+    }
     const totalPacks = Math.max(0, Math.floor(totalBoxes * ppb + 1e-9));
     const whole = Math.floor(totalPacks / ppb);
     const remPacks = totalPacks - (whole * ppb);
@@ -644,7 +659,7 @@ function StockMoves_parseFractionInput_(value) {
 
 function StockMoves_applyFractionDisplayFormat_(range) {
   if (!range) return;
-  range.setNumberFormat("# ?/??");
+  range.setNumberFormat("# ?/?");
 }
 
 function StockMoves_gcd_(a, b) {

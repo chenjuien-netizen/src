@@ -283,6 +283,23 @@ function syncMsImportToStock() {
 
       toAdd.push({
         "货号": refDis,
+        "Nom": "",
+        "Catégorie": "",
+        "Contenu colis": "",
+        "Composition matérielle": "",
+        "Marque": "",
+        "Année": "",
+        "Saison": "",
+        "Colisage": "",
+        "Couleur": "",
+        "Stock": 0,
+        "Nbr de pièces hors unité de colisage": "",
+        "Poids (en gramme)": "",
+        "Prix": "",
+        "Pays d'origine": "",
+        "Remise (%)": "",
+        "Remarque": "",
+        "Date de création": "",
         "MS_STATUT": "MS_DISABLED",
         "MS_LAST_SEEN": nowText
       });

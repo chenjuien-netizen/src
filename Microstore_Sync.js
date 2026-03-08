@@ -21,12 +21,14 @@ function syncMsImportToStock() {
 
   try {
     var shMs = ss.getSheetByName(SHEET_MS_IMPORT);
+    var shMsDisabled = ss.getSheetByName(SHEET_MS_IMPORT_DISABLED);
     var shStock = ss.getSheetByName(SHEET_STOCK);
     var shTpl = ss.getSheetByName(SHEET_TEMPLATE_STOCK);
 
     if (!shMs) throw new Error("Feuille introuvable: " + SHEET_MS_IMPORT);
     if (!shStock) throw new Error("Feuille introuvable: " + SHEET_STOCK);
     if (!shTpl) throw new Error("Feuille introuvable: " + SHEET_TEMPLATE_STOCK);
+    if (!shMsDisabled) throw new Error("Feuille introuvable: " + SHEET_MS_IMPORT_DISABLED);
 
     var nowText = msFormatNowText_();
 
@@ -119,6 +121,27 @@ function syncMsImportToStock() {
       var rec = msMap[k];
       var merged = msMergeRemarqueNom_(rec.remarque, rec.nom);
       rec.remarqueFinale = msApplyDoublonTag_(merged, doublonCount[k] || 1);
+    }
+
+    ss.toast("Lecture MS_IMPORT_DISABLED…", "Microstore", 5);
+
+    var disabledIndex = {};
+    var disLastRow = shMsDisabled.getLastRow();
+    var disLastCol = shMsDisabled.getLastColumn();
+
+    if (disLastRow >= 3 && disLastCol > 0) {
+      var disHeaders = shMsDisabled.getRange(2, 1, 1, disLastCol).getValues()[0];
+      var disHeaderMap = headerMap_(disHeaders);
+      ensureHeadersExist_(disHeaderMap, ["Référence"], "MS_IMPORT_DISABLED (ligne 2)");
+
+      var disData = shMsDisabled.getRange(3, 1, disLastRow - 2, disLastCol).getValues();
+
+      for (var d = 0; d < disData.length; d++) {
+        var refRawDis = msGetCell_(disData[d], disHeaderMap["référence"]);
+        var refDis = msNormalizeRef_(refRawDis);
+        if (!refDis) continue;
+        disabledIndex[refDis] = true;
+      }
     }
 
     ss.toast("Lecture STOCK…", "Microstore", 5);
@@ -218,7 +241,7 @@ function syncMsImportToStock() {
           "Remise (%)": rec2.remise,
           "Remarque": rec2.remarqueFinale,
           "Date de création": rec2.dateCreation,
-          "MS_STATUT": "MS",
+          "MS_STATUT": (disabledIndex[rec2.ref] ? "MS_DISABLED" : "MS"),
           "MS_LAST_SEEN": nowText
         });
       } else {
@@ -241,7 +264,7 @@ function syncMsImportToStock() {
           "Remise (%)": rec2.remise,
           "Remarque": rec2.remarqueFinale,
           "Date de création": rec2.dateCreation,
-          "MS_STATUT": "MS",
+          "MS_STATUT": (disabledIndex[rec2.ref] ? "MS_DISABLED" : "MS"),
           "MS_LAST_SEEN": nowText
         });
       }
@@ -251,7 +274,14 @@ function syncMsImportToStock() {
       ss.toast("Mise à jour statuts (absents MS)…", "Microstore", 5);
       for (var rr = 0; rr < stockRefs.length; rr++) {
         var rref = msNormalizeRef_(stockRefs[rr][0]);
-        if (!rref || seenInMs[rref]) continue;
+        if (!rref) continue;
+
+        if (disabledIndex[rref]) {
+          msSetOutRow_(out, rr, { "MS_STATUT": "MS_DISABLED" });
+          continue;
+        }
+
+        if (seenInMs[rref]) continue;
 
         var old = (stockStatus[rr] && stockStatus[rr][0]) ? String(stockStatus[rr][0]).trim() : "";
         var newStatus = (old === "MS") ? "MS_SUPPRIME" : "A_CREER";

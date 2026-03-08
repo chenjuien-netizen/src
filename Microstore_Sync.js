@@ -8,7 +8,7 @@ function syncMsImportToStock() {
 
   var lastImportDate = msGetLastImportDateText_();
   var confirmText =
-    "Dernier import Microstore (LOG_IMPORT): " + (lastImportDate || "—") +
+    "Dernier import Microstore (LOG_IMPORT_EXPORT): " + (lastImportDate || "—") +
     "\n\nLancer la synchro MS_IMPORT → STOCK ?";
 
   var btn = ui.alert("Confirmation", confirmText, ui.ButtonSet.OK_CANCEL);
@@ -126,21 +126,88 @@ function syncMsImportToStock() {
     ss.toast("Lecture MS_IMPORT_DISABLED…", "Microstore", 5);
 
     var disabledIndex = {};
+    var disabledMap = {};
+    var disabledOrder = [];
+    var disabledLastIdxByRef = {};
+    var disabledDoublonCount = {};
     var disLastRow = shMsDisabled.getLastRow();
     var disLastCol = shMsDisabled.getLastColumn();
 
     if (disLastRow >= 3 && disLastCol > 0) {
       var disHeaders = shMsDisabled.getRange(2, 1, 1, disLastCol).getValues()[0];
       var disHeaderMap = headerMap_(disHeaders);
-      ensureHeadersExist_(disHeaderMap, ["Référence"], "MS_IMPORT_DISABLED (ligne 2)");
+      var disNeed = [
+        "Référence",
+        "Nom",
+        "Catégorie",
+        "Contenu colis",
+        "Composition matérielle",
+        "Marque",
+        "Année",
+        "Saison",
+        "Colisage",
+        "Couleur",
+        "Stock",
+        "Nbr de pièces hors unité de colisage",
+        "Poids (en gramme)",
+        "Prix",
+        "Pays d'origine",
+        "Remise (%)",
+        "Remarque",
+        "Date de création"
+      ];
+      ensureHeadersExist_(disHeaderMap, disNeed, "MS_IMPORT_DISABLED (ligne 2)");
 
       var disData = shMsDisabled.getRange(3, 1, disLastRow - 2, disLastCol).getValues();
 
       for (var d = 0; d < disData.length; d++) {
-        var refRawDis = msGetCell_(disData[d], disHeaderMap["référence"]);
+        var rowDis = disData[d];
+        var refRawDis = msGetCell_(rowDis, disHeaderMap["référence"]);
         var refDis = msNormalizeRef_(refRawDis);
         if (!refDis) continue;
+
         disabledIndex[refDis] = true;
+        disabledOrder.push(refDis);
+        disabledLastIdxByRef[refDis] = d;
+        disabledDoublonCount[refDis] = (disabledDoublonCount[refDis] || 0) + 1;
+
+        disabledMap[refDis] = {
+          ref: refDis,
+          nom: msGetCell_(rowDis, disHeaderMap["nom"]),
+          categorie: msGetCell_(rowDis, disHeaderMap["catégorie"]),
+          contenuColis: msGetCell_(rowDis, disHeaderMap["contenu colis"]),
+          compo: normalizeUpper_(msGetCell_(rowDis, disHeaderMap["composition matérielle"])),
+          marque: msGetCell_(rowDis, disHeaderMap["marque"]),
+          annee: msGetCell_(rowDis, disHeaderMap["année"]),
+          saison: msGetCell_(rowDis, disHeaderMap["saison"]),
+          colisage: msGetCell_(rowDis, disHeaderMap["colisage"]),
+          couleur: msNormalizeCouleur_(msGetCell_(rowDis, disHeaderMap["couleur"])),
+          stock: msGetCell_(rowDis, disHeaderMap["stock"]),
+          horsColisage: msGetCell_(rowDis, disHeaderMap["nbr de pièces hors unité de colisage"]),
+          poidsG: msGetCell_(rowDis, disHeaderMap["poids (en gramme)"]),
+          prix: msGetCell_(rowDis, disHeaderMap["prix"]),
+          paysOrigine: msGetCell_(rowDis, disHeaderMap["pays d'origine"]),
+          remise: msGetCell_(rowDis, disHeaderMap["remise (%)"]),
+          remarque: msGetCell_(rowDis, disHeaderMap["remarque"]),
+          dateCreation: msGetCell_(rowDis, disHeaderMap["date de création"])
+        };
+      }
+
+      var refsDisabled = [];
+      var seenDisabled = {};
+      for (var dd = 0; dd < disabledOrder.length; dd++) {
+        var refDD = disabledOrder[dd];
+        if (disabledLastIdxByRef[refDD] !== dd) continue;
+        if (seenDisabled[refDD]) continue;
+        seenDisabled[refDD] = true;
+        refsDisabled.push(refDD);
+      }
+
+      for (var dr = 0; dr < refsDisabled.length; dr++) {
+        var dk = refsDisabled[dr];
+        var drec = disabledMap[dk];
+        var dmerged = msMergeRemarqueNom_(drec.remarque, drec.nom);
+        drec.remarqueFinale = msApplyDoublonTag_(dmerged, disabledDoublonCount[dk] || 1);
       }
     }
 
@@ -241,7 +308,7 @@ function syncMsImportToStock() {
           "Remise (%)": rec2.remise,
           "Remarque": rec2.remarqueFinale,
           "Date de création": rec2.dateCreation,
-          "MS_STATUT": (disabledIndex[rec2.ref] ? "MS_DISABLED" : "MS"),
+          "MS_STATUT": (disabledIndex[rec2.ref] ? "MS_BOTH" : "MS"),
           "MS_LAST_SEEN": nowText
         });
       } else {
@@ -264,7 +331,7 @@ function syncMsImportToStock() {
           "Remise (%)": rec2.remise,
           "Remarque": rec2.remarqueFinale,
           "Date de création": rec2.dateCreation,
-          "MS_STATUT": (disabledIndex[rec2.ref] ? "MS_DISABLED" : "MS"),
+          "MS_STATUT": (disabledIndex[rec2.ref] ? "MS_BOTH" : "MS"),
           "MS_LAST_SEEN": nowText
         });
       }
@@ -281,25 +348,26 @@ function syncMsImportToStock() {
       // existe déjà dans STOCK
       if (stockIndex.hasOwnProperty(refDis)) continue;
 
+      var recDis = disabledMap[refDis] || {};
       toAdd.push({
         "货号": refDis,
-        "Nom": "",
-        "Catégorie": "",
-        "Contenu colis": "",
-        "Composition matérielle": "",
-        "Marque": "",
-        "Année": "",
-        "Saison": "",
-        "Colisage": "",
-        "Couleur": "",
-        "Stock": 0,
-        "Nbr de pièces hors unité de colisage": "",
-        "Poids (en gramme)": "",
-        "Prix": "",
-        "Pays d'origine": "",
-        "Remise (%)": "",
-        "Remarque": "",
-        "Date de création": "",
+        "Nom": recDis.nom || "",
+        "Catégorie": recDis.categorie || "",
+        "Contenu colis": recDis.contenuColis || "",
+        "Composition matérielle": recDis.compo || "",
+        "Marque": recDis.marque || "",
+        "Année": recDis.annee || "",
+        "Saison": recDis.saison || "",
+        "Colisage": recDis.colisage || "",
+        "Couleur": recDis.couleur || "",
+        "Stock": (recDis.stock === null || typeof recDis.stock === "undefined" || recDis.stock === "") ? 0 : recDis.stock,
+        "Nbr de pièces hors unité de colisage": recDis.horsColisage || "",
+        "Poids (en gramme)": recDis.poidsG || "",
+        "Prix": recDis.prix || "",
+        "Pays d'origine": recDis.paysOrigine || "",
+        "Remise (%)": recDis.remise || "",
+        "Remarque": recDis.remarqueFinale || recDis.remarque || "",
+        "Date de création": recDis.dateCreation || "",
         "MS_STATUT": "MS_DISABLED",
         "MS_LAST_SEEN": nowText
       });
@@ -311,15 +379,37 @@ function syncMsImportToStock() {
         var rref = msNormalizeRef_(stockRefs[rr][0]);
         if (!rref) continue;
 
-        if (disabledIndex[rref]) {
-          msSetOutRow_(out, rr, { "MS_STATUT": "MS_DISABLED" });
+        if (disabledIndex[rref] && !seenInMs[rref]) {
+          var recDisExisting = disabledMap[rref] || {};
+          msSetOutRow_(out, rr, {
+            "货号": rref,
+            "Nom": recDisExisting.nom || "",
+            "Catégorie": recDisExisting.categorie || "",
+            "Contenu colis": recDisExisting.contenuColis || "",
+            "Composition matérielle": recDisExisting.compo || "",
+            "Marque": recDisExisting.marque || "",
+            "Année": recDisExisting.annee || "",
+            "Saison": recDisExisting.saison || "",
+            "Colisage": recDisExisting.colisage || "",
+            "Couleur": recDisExisting.couleur || "",
+            "Stock": (recDisExisting.stock === null || typeof recDisExisting.stock === "undefined" || recDisExisting.stock === "") ? 0 : recDisExisting.stock,
+            "Nbr de pièces hors unité de colisage": recDisExisting.horsColisage || "",
+            "Poids (en gramme)": recDisExisting.poidsG || "",
+            "Prix": recDisExisting.prix || "",
+            "Pays d'origine": recDisExisting.paysOrigine || "",
+            "Remise (%)": recDisExisting.remise || "",
+            "Remarque": recDisExisting.remarqueFinale || recDisExisting.remarque || "",
+            "Date de création": recDisExisting.dateCreation || "",
+            "MS_STATUT": "MS_DISABLED",
+            "MS_LAST_SEEN": nowText
+          });
           continue;
         }
 
         if (seenInMs[rref]) continue;
 
         var old = (stockStatus[rr] && stockStatus[rr][0]) ? String(stockStatus[rr][0]).trim() : "";
-        var newStatus = (old === "MS") ? "MS_SUPPRIME" : "A_CREER";
+        var newStatus = (old === "MS" || old === "MS_DISABLED" || old === "MS_BOTH") ? "MS_SUPPRIME" : "A_CREER";
         msSetOutRow_(out, rr, { "MS_STATUT": newStatus });
       }
     }

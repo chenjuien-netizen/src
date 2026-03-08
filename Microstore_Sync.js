@@ -270,6 +270,24 @@ function syncMsImportToStock() {
       }
     }
 
+    // ajouter les refs présentes uniquement dans MS_IMPORT_DISABLED
+    // si elles n'existent ni dans MS_IMPORT ni dans STOCK
+    for (var refDis in disabledIndex) {
+      if (!disabledIndex.hasOwnProperty(refDis)) continue;
+
+      // déjà traité via MS_IMPORT
+      if (seenInMs[refDis]) continue;
+
+      // existe déjà dans STOCK
+      if (stockIndex.hasOwnProperty(refDis)) continue;
+
+      toAdd.push({
+        "货号": refDis,
+        "MS_STATUT": "MS_DISABLED",
+        "MS_LAST_SEEN": nowText
+      });
+    }
+
     if (nExisting > 0) {
       ss.toast("Mise à jour statuts (absents MS)…", "Microstore", 5);
       for (var rr = 0; rr < stockRefs.length; rr++) {

@@ -3,7 +3,8 @@ function onOpen() {
   const ui = SpreadsheetApp.getUi();
 
   ui.createMenu("Microstore")
-    .addItem("Importer dernier export (.xlsx)", "importMicrostoreLatestExport")
+    .addItem("Importer dernier export actifs (.xlsx)", "importMicrostoreLatestExport")
+    .addItem("Importer dernier export désactivés (.xlsx)", "importMicrostoreLatestDisabledExport")
     .addItem("Sync MS_IMPORT → STOCK", "syncMsImportToStock")
     .addSeparator()
     .addItem("Exporter STOCK → MS_EXPORT", "exportStockToMsExport")

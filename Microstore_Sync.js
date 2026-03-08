@@ -297,7 +297,7 @@ function syncMsImportToStock() {
 
 function msGetLastImportDateText_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sh = ss.getSheetByName(SHEET_LOG_IMPORT);
+  var sh = ss.getSheetByName(SHEET_LOG_IMPORT_EXPORT);
   if (!sh) return "";
   var lr = sh.getLastRow();
   if (lr < 2) return "";

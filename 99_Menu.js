@@ -29,7 +29,7 @@ function onOpen() {
     .addItem("Supprimer", "deleteArrivage_")
     .addSeparator()
     .addItem("Convert supplier → UI (H:K → A:F)", "menuConvertSupplierToUi_")
-    .addItem("Clear supplier zone (H4:K200)", "menuClearSupplierZone_")
+    .addItem("Clear supplier zone (H4:K305)", "menuClearSupplierZone_")
     .addToUi();
 
   ui.createMenu("STOCK")

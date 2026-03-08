@@ -49,7 +49,7 @@ function ArrivagesService_quickInsert_(input) {
     const empty = (grid[i] || []).every(c => String(c ?? "").trim() === "");
     if (empty) { idx = i; break; }
   }
-  if (idx === -1) throw new Error("表格已满：A4:F200 没有空行");
+  if (idx === -1) throw new Error("表格已满：A4:F305 没有空行");
 
   const row = UI_TABLE_START_ROW + idx;
 
@@ -181,7 +181,7 @@ if (isEdit) {
   let createdAt = ui.getRange(UI_CREATED_CELL).getValue();
   if (!(createdAt instanceof Date)) createdAt = isNew ? now : "";
 
-  // --- read UI lines A4:F200
+  // --- read UI lines A4:F305
   const grid = ui.getRange(UI_TABLE_RANGE).getValues(); // A..F
   const dbRows = [];
   const payload = []; // for STOCK sync (only rows w/ ref)
@@ -194,7 +194,7 @@ if (isEdit) {
 
     const tail = (typeof toIntSafe_ === "function" ? toIntSafe_(r[1]) : (Number(r[1]) || 0));
     const ppc = (typeof toIntSafe_ === "function" ? toIntSafe_(r[2]) : (Number(r[2]) || 0));
-    const boxPackParsed = ArrivagesDomain_parseBoxesAndPacks_(r[3]);
+    const boxPackParsed = ArrivagesDomain_parseBoxesAndPacks_(r[3], ppc);
     const cartons = Number(boxPackParsed.boxesValue || 0);
     const missingPacks = Number(boxPackParsed.missingPacks || 0);
     const noteS = String(r[4] || "").trim();
@@ -248,7 +248,7 @@ const mixUsed = (isMixStart && tail > 0);
 });
   }
 
-  if (!dbRows.length) throw new Error("Aucune ligne à enregistrer (A4:F200 vide).");
+  if (!dbRows.length) throw new Error("Aucune ligne à enregistrer (A4:F305 vide).");
 
   const writeAll = () => {
     // 1) DB append
@@ -746,13 +746,16 @@ ArrivagesStock_applyTemplateFormulasByHeaderNoteKey_(
       const curSign = colSignCur ? String(shStock.getRange(r, colSignCur).getValue() || "").trim() : "";
       const fracRaw = colFracCur ? shStock.getRange(r, colFracCur).getValue() : "";
       const curFracText = toFracText(fracRaw);
+      const curMissing = colMissingCur ? ArrivagesStock_toNumber_(shStock.getRange(r, colMissingCur).getValue()) : 0;
       const openRest = colOpenRest ? ArrivagesStock_toNumber_(shStock.getRange(r, colOpenRest).getValue()) : 0;
-      const packMax = Math.min(5, Math.max(0, Math.floor(openRest)));
-      const boxMax = Math.min(5, Math.max(0, Math.floor(curBoxes)));
       const hasFraction = !!curFracText;
-      const isFractional = !!curSign || hasFraction;
+      const isOpen = (curMissing !== 0) || !!curSign || hasFraction;
+      const purePacks = curMissing > 0 && curBoxes <= 0 && !curSign && !hasFraction;
+      const packMaxOpen = purePacks ? Math.max(0, Math.floor(curMissing)) : Math.max(0, Math.floor(openRest));
+      const packMaxPlain = Math.min(5, Math.max(0, Math.floor(openRest)));
+      const boxMaxPlain = Math.min(5, Math.max(0, Math.floor(curBoxes)));
 
-      if (curBoxes <= 0 && curTail <= 0 && !isFractional && packMax <= 0) continue;
+      if (curBoxes <= 0 && curTail <= 0 && !isOpen && packMaxPlain <= 0) continue;
 
       const list = [];
       const seen = {};
@@ -765,7 +768,7 @@ ArrivagesStock_applyTemplateFormulasByHeaderNoteKey_(
 
       if (curTail > 0) addOpt("(" + Math.trunc(curTail) + "p)");
 
-      if (isFractional) {
+      if (isOpen) {
         if (curSign === "+") {
           if (curFracText) addOpt(curFracText);
         } else if (curSign === "×") {
@@ -783,13 +786,14 @@ ArrivagesStock_applyTemplateFormulasByHeaderNoteKey_(
           addOpt(curFracText);
         }
 
-        for (let k = 1; k <= packMax; k++) addOpt(k + "包");
+        for (let k = 1; k <= packMaxOpen; k++) addOpt(k + "包");
+        addOpt("1箱");
       } else {
         addOpt("1/2");
         addOpt("1/3");
         addOpt("1/4");
-        for (let k = 1; k <= packMax; k++) addOpt(k + "包");
-        for (let k = 1; k <= boxMax; k++) addOpt(k + "箱");
+        for (let k = 1; k <= packMaxPlain; k++) addOpt(k + "包");
+        for (let k = 1; k <= boxMaxPlain; k++) addOpt(k + "箱");
       }
 
       addOpt("清空库存");
@@ -1277,7 +1281,7 @@ function ArrivagesRepo_existsArrivageId_(dbSheet, id) {
  * Pas de SpreadsheetApp ici.
  ***********************/
 
-function ArrivagesDomain_parseBoxesAndPacks_(input) {
+function ArrivagesDomain_parseBoxesAndPacks_(input, ppcInput) {
   let raw = String(input || "").trim();
 
   // rule: empty means 1 carton
@@ -1292,6 +1296,7 @@ function ArrivagesDomain_parseBoxesAndPacks_(input) {
   // tolerate spaces around operators while preserving mixed fraction with space, e.g. "2 1/2"
   const compact = raw.replace(/\s+/g, " ").trim();
   const noSpace = compact.replace(/\s+/g, "");
+  const hasPpc = Number(ppcInput) > 0;
 
   // integer + fraction (ex: 1+1/4, 1 + 1/4, 2 1/2) -> fractional
   let m = compact.match(/^(\d+)\s+(\d+)\/(\d+)$/);
@@ -1320,8 +1325,37 @@ function ArrivagesDomain_parseBoxesAndPacks_(input) {
     };
   }
 
+  // leading +fraction (ex: +2/3) -> treat as 1 + fraction
+  m = noSpace.match(/^\+(\d+)\/(\d+)$/);
+  if (m) {
+    const n = Number(m[1]);
+    const d = Number(m[2]);
+    if (!d) throw new Error("箱数/包 分数格式错误: " + raw);
+    return {
+      boxesValue: 1 + n / d,
+      missingPacks: 0,
+      kind: "fractional"
+    };
+  }
+
   // normalize spaces for other cases
   raw = noSpace;
+
+  // mixed fraction with packs delta (ex: 2+2/3-5, 2+2/3+5)
+  m = raw.match(/^(\d+)\+(\d+)\/(\d+)([+-])(\d+)$/);
+  if (m) {
+    const whole = Number(m[1]);
+    const n = Number(m[2]);
+    const d = Number(m[3]);
+    const op = m[4];
+    const packs = Number(m[5]);
+    if (!d) throw new Error("箱数/包 分数格式错误: " + raw);
+    return {
+      boxesValue: whole + n / d,
+      missingPacks: op === "+" ? packs : -packs,
+      kind: "fractional"
+    };
+  }
 
   // fraction + fraction (ex: 2/3+2/3) -> fractional
   if (/^\d+\/\d+\+\d+\/\d+$/.test(raw)) {
@@ -1364,6 +1398,14 @@ function ArrivagesDomain_parseBoxesAndPacks_(input) {
     };
   }
 
+  // leading +packs (ex: +3) -> if 每箱件数 exists, treat as 1 carton + packs; otherwise 0 carton + packs
+  if (/^\+\d+$/.test(raw)) {
+    return {
+      boxesValue: hasPpc ? 1 : 0,
+      missingPacks: Number(raw),
+      kind: "packs_delta"
+    };
+  }
   // packs only negative (ex: -3) -> packs_delta
   if (/^-\d+$/.test(raw)) {
     return {
@@ -1607,7 +1649,7 @@ function ArrivagesUI_handleEdit_(e) {
   const sh = e.range.getSheet();
   if (sh.getName() !== SHEET_UI) return;
 
-  // Quick input zone G4:G200 (single edit OR paste)
+  // Quick input zone G4:G305 (single edit OR paste)
   if (e.range.getColumn() === UI_QUICK_COL &&
       e.range.getRow() >= UI_QUICK_ROW_START &&
       e.range.getLastRow() <= UI_QUICK_ROW_END) {
@@ -1940,15 +1982,15 @@ function appendUiRowsSafe_(uiSheet, uiRows) {
   }
 
   if (uiHasHoles_(uiSheet)) {
-    throw new Error("A4:F200 contient des trous (lignes vides au milieu). Nettoie/compacte avant d'ajouter.");
+    throw new Error("A4:F305 contient des trous (lignes vides au milieu). Nettoie/compacte avant d'ajouter.");
   }
 
   const filled = uiContiguousFilledCount_(uiSheet);
-  if (filled >= UI_TABLE_ROWS) throw new Error("A4:F200 est plein. Impossible d'ajouter.");
+  if (filled >= UI_TABLE_ROWS) throw new Error("A4:F305 est plein. Impossible d'ajouter.");
 
   const remaining = UI_TABLE_ROWS - filled;
   if (uiRows.length > remaining) {
-    throw new Error(`Pas assez de place dans A4:F200: restant=${remaining} lignes, besoin=${uiRows.length}.`);
+    throw new Error(`Pas assez de place dans A4:F305: restant=${remaining} lignes, besoin=${uiRows.length}.`);
   }
 
   const startRow = UI_TABLE_START_ROW + filled;
@@ -1966,7 +2008,7 @@ function compactUiTable_(uiSheet) {
   withUiGuard_(() => uiSheet.getRange(UI_TABLE_RANGE).setValues(packed));
 
   try {
-    SpreadsheetApp.getActive().toast("A4:F200 compacté (trous supprimés)", "ARRIVAGES", 5);
+    SpreadsheetApp.getActive().toast("A4:F305 compacté (trous supprimés)", "ARRIVAGES", 5);
   } catch (e) {}
 }
 

@@ -7,17 +7,17 @@ const UI_ID_CELL       = "B1";
 const UI_UPDATED_CELL  = "A2";
 const UI_CREATED_CELL  = "B2";
 const UI_ENTREPOT_CELL = "E1";
-const UI_QUICK_RANGE = "G4:G200";    // zone multi-lignes
+const UI_QUICK_RANGE = "G4:G305";    // zone multi-lignes
 const UI_QUICK_COL = 7;            
 const UI_QUICK_ROW_START = 4;
-const UI_QUICK_ROW_END = 200;
+const UI_QUICK_ROW_END = 305;
 
-const UI_TABLE_RANGE     = "A4:F200";
+const UI_TABLE_RANGE     = "A4:F305";
 const UI_TABLE_START_ROW = 4;
-const UI_TABLE_ROWS      = 197;
+const UI_TABLE_ROWS      = 302;
 const UI_TABLE_COLS      = 6;
 
-const SUP_RANGE = "H4:K200";
+const SUP_RANGE = "H4:K305";
 const SUP_START_ROW = 4;
 
 const LABEL_ADD = "新增";

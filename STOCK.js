@@ -21,6 +21,7 @@ function StockMoves_validateAll_() {
   const colSign = StockMoves_col_(map, "当前signe");
   const colFrac = StockMoves_col_(map, "当前箱数分数");
   const colMissing = StockMoves_col_(map, "当前缺包");
+  const colOpenRest = StockMoves_col_(map, "Carton ouvert (reste)");
 
   if (!colSel || !colRef || !colIn || !colOut || !colTail || !colPpc || !colBoxes || !colSign || !colFrac || !colMissing) {
     throw new Error("Colonnes requises manquantes dans STOCK (选择, 货号, 进货, 出-Sortie/箱, 当前尾箱件数, 每箱件数2, 当前箱数, 当前signe, 当前箱数分数, 当前缺包).");
@@ -66,14 +67,14 @@ function StockMoves_validateAll_() {
     const oldHistory = String(rowValues[colIn - 1] || "").trim();
 
     const currentState = StockMoves_stateFromRowValues_(rowValues, map);
+    const openRest = colOpenRest ? StockMoves_toInt_(rowValues[colOpenRest - 1]) : 0;
     const currentStateText = StockMoves_buildNormalizedStateText_(currentState);
     const latestHistoryStateText = StockMoves_extractLatestStateFromHistory_(oldHistory);
     const manualChanged = StockMoves_hasManualStateChange_(currentStateText, latestHistoryStateText);
 
-    if (outRaw && latestHistoryStateText && manualChanged) {
-      errors.push(`Ligne ${row} (${ref}): conflit (sortie + modification manuelle)`);
-      continue;
-    }
+    // Do not block stock exits just because the current row shape differs from 进货.
+    // Without a real snapshot, that comparison creates false conflicts on untouched lines.
+    // If 出-Sortie/箱 is filled, we let the exit flow continue and use the current row state as source.
 
     if (!outRaw) {
       if (manualChanged) {
@@ -82,6 +83,13 @@ function StockMoves_validateAll_() {
       push(row, colSel, false);
       touchedRows.push(row);
       applied++;
+      continue;
+    }
+
+    const allowedOut = StockMoves_getAllowedOutValues_(currentState, openRest);
+    const canonicalOut = StockMoves_canonicalizeOutValue_(outRaw);
+    if (!canonicalOut || allowedOut.indexOf(canonicalOut) === -1) {
+      errors.push(`Ligne ${row} (${ref}): sortie non autorisée pour l'état courant "${outRaw}"`);
       continue;
     }
 
@@ -193,6 +201,13 @@ function StockMoves_resetPendingRows_() {
     try {
       // Safe fallback when history is empty: restore zero/default state.
       restored = latestStateText ? StockMoves_parseNormalizedStateText_(latestStateText) : { tail: 0, ppc: 0, boxes: 0, sign: "", fraction: 0, missingPacks: 0 };
+
+      // If history is pure pack form like "9包", keep the current 每箱件数2 value
+      if (/^\s*\d+\s*包\s*$/.test(latestStateText)) {
+        const currentPpc = StockMoves_toInt_(rowValues[colPpc - 1]);
+        if (currentPpc > 0) restored.ppc = currentPpc;
+      }
+
       restored.packsPerBox = packsPerBox;
       restored = StockMoves_normalizeState_(restored);
     } catch (err) {
@@ -425,6 +440,12 @@ function StockMoves_parseNormalizedStateText_(stateText) {
   const out = { tail: 0, ppc: 0, boxes: 0, sign: "", fraction: 0, missingPacks: 0 };
   if (!raw) return out;
 
+  let mPurePack = raw.match(/^(\d+)\s*包$/);
+  if (mPurePack) {
+    out.missingPacks = Number(mPurePack[1]) || 0;
+    return out;
+  }
+
   let m = raw.match(/^\((\d+)\s*[pP]\)\s*\+?\s*(.*)$/);
   if (m) {
     out.tail = Number(m[1]) || 0;
@@ -527,9 +548,14 @@ function StockMoves_applyOutCommandToState_(stateInput, parsed, row, ref, packsP
   }
 
   if (!(consume > 0)) throw new Error(`Sortie invalide ligne ${row} (${ref}).`);
-  if (parsed.type === "BOXES" && Number(parsed.qty || 0) === 1 && totalBoxes > 0 && totalBoxes < 1) {
-    // Business rule: 1箱 on sub-1 fractional stock means clear remaining stock.
-    next.boxes = 0;
+  if (parsed.type === "BOXES" && Number(parsed.qty || 0) === 1 && StockMoves_hasOpenState_(state)) {
+    // Business rule: on any open state, 1箱 means clear the currently open remainder only.
+    // It must not consume another closed carton.
+    if (state.sign === "+" && state.boxes > 0) {
+      next.boxes = Math.max(0, state.boxes - 1);
+    } else {
+      next.boxes = 0;
+    }
     next.sign = "";
     next.fraction = 0;
     next.missingPacks = 0;
@@ -791,6 +817,10 @@ function StockMoves_buildNormalizedStateText_(rowObj) {
   const missN = Number(s.missingPacks) || 0;
   const tailN = Number(s.tail) || 0;
 
+  if (tailN <= 0 && wholeN <= 0 && !signTxt && !(s.fraction > 0) && missN > 0) {
+    return String(missN) + "包";
+  }
+
   let core = "";
   if (ppcTxt) {
     if (signTxt === "×") {
@@ -955,33 +985,23 @@ function StockMoves_getPacksPerBox_(sh, map, row, rowValues) {
   return Math.max(0, Math.trunc(n));
 }
 
-function StockMoves_setOutDropdown_(sh, map, row) {
-  const colOut = StockMoves_col_(map, "出-Sortie/箱");
-  const colWh = StockMoves_col_(map, "仓库");
-  if (!colOut) return;
+function StockMoves_hasOpenState_(state) {
+  const miss = Number(state && state.missingPacks ? state.missingPacks : 0);
+  const frac = Number(state && state.fraction ? state.fraction : 0);
+  return miss !== 0 || frac > 0;
+}
 
-  const state = StockMoves_stateFromSheetRow_(sh, map, row);
-  const colOpenRest = StockMoves_col_(map, "Carton ouvert (reste)");
-  const openRest = colOpenRest ? StockMoves_toInt_(sh.getRange(row, colOpenRest).getValue()) : 0;
-
-  const curTail = state.tail;
-  const curBoxes = state.boxes;
-  const curSign = state.sign;
+function StockMoves_getAllowedOutValues_(stateInput, openRestInput) {
+  const state = StockMoves_normalizeState_(stateInput || {});
+  const curTail = StockMoves_toInt_(state.tail);
+  const curBoxes = StockMoves_toInt_(state.boxes);
+  const curSign = String(state.sign || "").trim();
   const curFracText = StockMoves_fractionToText_(state.fraction);
-
-  const packMax = Math.min(5, Math.max(0, Math.floor(openRest)));
-  const boxMax = Math.min(5, Math.max(0, Math.floor(curBoxes)));
-  const isFractional = !!curSign || !!curFracText;
-
-  if (curBoxes <= 0 && curTail <= 0 && !isFractional && packMax <= 0) {
-    sh.getRange(row, colOut).clearDataValidations();
-    if (colWh) {
-      const cellWh = sh.getRange(row, colWh);
-      cellWh.clearDataValidations();
-      cellWh.setValue("");
-    }
-    return;
-  }
+  const curMissing = StockMoves_toInt_(state.missingPacks);
+  const hasFraction = !!curFracText;
+  const isOpen = StockMoves_hasOpenState_(state);
+  const purePacks = curMissing > 0 && curBoxes <= 0 && !curSign && !hasFraction;
+  const openRest = Math.max(0, StockMoves_toInt_(openRestInput));
 
   const list = [];
   const seen = {};
@@ -994,7 +1014,7 @@ function StockMoves_setOutDropdown_(sh, map, row) {
 
   if (curTail > 0) addOpt("(" + Math.trunc(curTail) + "p)");
 
-  if (isFractional) {
+  if (isOpen) {
     if (curSign === "+") {
       if (curFracText) addOpt(curFracText);
     } else if (curSign === "×") {
@@ -1014,18 +1034,62 @@ function StockMoves_setOutDropdown_(sh, map, row) {
       addOpt(curFracText);
     }
 
+    const packMax = purePacks ? Math.max(0, curMissing) : openRest;
     for (let k = 1; k <= packMax; k++) addOpt(k + "包");
-    for (let k = 1; k <= boxMax; k++) addOpt(k + "箱");
+
+    addOpt("1箱");
   } else {
     addOpt("1/2");
     addOpt("1/3");
     addOpt("1/4");
 
+    const packMax = Math.min(5, openRest);
     for (let k = 1; k <= packMax; k++) addOpt(k + "包");
+
+    const boxMax = Math.min(5, Math.max(0, curBoxes));
     for (let k = 1; k <= boxMax; k++) addOpt(k + "箱");
   }
 
   addOpt("清空库存");
+  return list;
+}
+
+function StockMoves_canonicalizeOutValue_(rawInput) {
+  const raw = String(rawInput || "").trim();
+  if (!raw) return "";
+  const parsed = StockMoves_parseOutValue_(raw);
+  if (!parsed.type) return "";
+
+  if (parsed.type === "CLEAR") return "清空库存";
+  if (parsed.type === "TAIL") return "(" + StockMoves_toInt_(parsed.qty) + "p)";
+  if (parsed.type === "BOXES") return StockMoves_toInt_(parsed.qty) + "箱";
+  if (parsed.type === "PACKS") return StockMoves_toInt_(parsed.qty) + "包";
+  if (parsed.type === "FRACTION") {
+    const reduced = StockMoves_reduceFraction_(StockMoves_toInt_(parsed.num), StockMoves_toInt_(parsed.den));
+    return reduced.num + "/" + reduced.den;
+  }
+  return "";
+}
+
+function StockMoves_setOutDropdown_(sh, map, row) {
+  const colOut = StockMoves_col_(map, "出-Sortie/箱");
+  const colWh = StockMoves_col_(map, "仓库");
+  if (!colOut) return;
+
+  const state = StockMoves_stateFromSheetRow_(sh, map, row);
+  const colOpenRest = StockMoves_col_(map, "Carton ouvert (reste)");
+  const openRest = colOpenRest ? StockMoves_toInt_(sh.getRange(row, colOpenRest).getValue()) : 0;
+
+  const list = StockMoves_getAllowedOutValues_(state, openRest);
+  if (list.length <= 1 && list[0] === "清空库存") {
+    sh.getRange(row, colOut).clearDataValidations();
+    if (colWh) {
+      const cellWh = sh.getRange(row, colWh);
+      cellWh.clearDataValidations();
+      cellWh.setValue("");
+    }
+    return;
+  }
 
   const ruleOut = SpreadsheetApp.newDataValidation()
     .requireValueInList(list, true)

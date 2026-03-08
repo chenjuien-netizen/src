@@ -1,0 +1,256 @@
+/**
+ * Export STOCK → MS_EXPORT
+ */
+function exportStockToMsExport() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var shStock = ss.getSheetByName(SHEET_STOCK);
+  var shExp = ss.getSheetByName(SHEET_MS_EXPORT);
+
+  if (!shStock) throw new Error("Feuille introuvable: " + SHEET_STOCK);
+  if (!shExp) throw new Error("Feuille introuvable: " + SHEET_MS_EXPORT);
+
+  var lock = LockService.getDocumentLock();
+  lock.waitLock(30000);
+
+  ss.toast("Export STOCK → MS_EXPORT : démarrage…", "Microstore", 5);
+
+  try {
+    var expLastCol = shExp.getLastColumn();
+    if (expLastCol < 1) throw new Error("MS_EXPORT semble vide (aucune colonne).");
+
+    var expHeaders = shExp.getRange(2, 1, 1, expLastCol).getValues()[0];
+    var expMap = headerMap_(expHeaders);
+
+    var expNeed = [
+      "Référence",
+      "Nom",
+      "Catégorie",
+      "Contenu colis",
+      "Composition matérielle",
+      "Marque",
+      "Année",
+      "Saison",
+      "Colisage",
+      "Couleur",
+      "Stock",
+      "Nbr de pièces hors unité de colisage",
+      "Poids (en gramme)",
+      "Prix",
+      "Pays d'origine",
+      "Remise (%)",
+      "Remarque"
+    ];
+    ensureHeadersExist_(expMap, expNeed, "MS_EXPORT (ligne 2)");
+
+    var stockLastRow = shStock.getLastRow();
+    var stockLastCol = shStock.getLastColumn();
+    if (stockLastRow < 2) {
+      ss.toast("STOCK vide (rien à exporter).", "Microstore", 6);
+      msClearMsExportData_(shExp, expLastCol);
+      return;
+    }
+
+    var stockHeaders = shStock.getRange(1, 1, 1, stockLastCol).getValues()[0];
+    var stockMap = headerMap_(stockHeaders);
+
+    var stockNeed = [
+      "货号",
+      "Nom",
+      "Catégorie",
+      "Contenu colis",
+      "Composition matérielle",
+      "Marque",
+      "Année",
+      "Saison",
+      "Colisage",
+      "Couleur",
+      "Stock",
+      "Nbr de pièces hors unité de colisage",
+      "Poids (en gramme)",
+      "Prix",
+      "Pays d'origine",
+      "Remise (%)",
+      "Date de création",
+      "每箱件数",
+      "包/箱"
+    ];
+    ensureHeadersExist_(stockMap, stockNeed, "STOCK (ligne 1)");
+
+    var data = shStock.getRange(2, 1, stockLastRow - 1, stockLastCol).getValues();
+
+    var ui = SpreadsheetApp.getUi();
+    var msg = "⚠️ L'export va remplacer tout le contenu de MS_EXPORT avec les données de STOCK.\n\nContinuer ?";
+    var btn = ui.alert("Confirmer export Microstore", msg, ui.ButtonSet.OK_CANCEL);
+    if (btn !== ui.Button.OK) {
+      ss.toast("Export annulé.", "Microstore", 4);
+      return;
+    }
+
+    var cRef = stockMap["货号"] - 1;
+    var cNom = stockMap["nom"] - 1;
+    var cCat = stockMap["catégorie"] - 1;
+    var cComp = stockMap["composition matérielle"] - 1;
+    var cMarque = stockMap["marque"] - 1;
+    var cAnnee = stockMap["année"] - 1;
+    var cSaison = stockMap["saison"] - 1;
+    var cStock = stockMap["stock"] - 1;
+    var cColisage = stockMap["colisage"] - 1;
+    var cCouleur = stockMap["couleur"] - 1;
+    var cPrix = stockMap["prix"] - 1;
+    var cRemise = stockMap["remise (%)"] - 1;
+    var cDate = stockMap["date de création"] - 1;
+    var cTotalPcs = stockMap["每箱件数"] - 1;
+    var cPacks = stockMap["包/箱"] - 1;
+    var cHorsColisage = stockMap["nbr de pièces hors unité de colisage"] - 1;
+    var cPoidsG = stockMap["poids (en gramme)"] - 1;
+    var cPaysOrigine = stockMap["pays d'origine"] - 1;
+    var cRemarque = stockMap["remarque"] ? (stockMap["remarque"] - 1) : -1;
+
+    var rows = [];
+    for (var i = 0; i < data.length; i++) {
+      var r = data[i];
+      var ref = msNormalizeRef_(r[cRef]);
+      if (!ref) continue;
+
+      var dtInfo = msNormalizeDateForSort_(r[cDate]);
+      rows.push({
+        sortEmpty: dtInfo.empty,
+        sortTs: dtInfo.ts,
+        ref: ref,
+        nom: msString_(r[cNom]),
+        cat: msString_(r[cCat]),
+        comp: normalizeUpper_(r[cComp]),
+        marque: msString_(r[cMarque]),
+        annee: msString_(r[cAnnee]),
+        saison: msString_(r[cSaison]),
+        colisage: (r[cColisage] === null || typeof r[cColisage] === "undefined") ? "" : r[cColisage],
+        couleur: msNormalizeCouleur_(r[cCouleur]),
+        prix: (r[cPrix] === null || typeof r[cPrix] === "undefined") ? "" : r[cPrix],
+        remise: (r[cRemise] === null || typeof r[cRemise] === "undefined") ? "" : r[cRemise],
+        totalPcs: r[cTotalPcs],
+        stock: r[cStock],
+        packs: r[cPacks],
+        horsColisage: r[cHorsColisage],
+        poidsG: r[cPoidsG],
+        paysOrigine: msString_(r[cPaysOrigine]),
+        remarque: cRemarque >= 0 ? msString_(r[cRemarque]) : ""
+      });
+    }
+
+    rows.sort(function(a, b) {
+      if (a.sortEmpty && !b.sortEmpty) return -1;
+      if (!a.sortEmpty && b.sortEmpty) return 1;
+      if (a.sortEmpty && b.sortEmpty) return 0;
+      return b.sortTs - a.sortTs;
+    });
+
+    var out = [];
+    for (var k = 0; k < rows.length; k++) {
+      var it = rows[k];
+
+      var total = toIntSafe_(it.totalPcs);
+      var packs = toIntSafe_(it.packs);
+      var ppp = toIntSafe_(it.colisage);
+      var contenu = msBuildContenuColis_(total, packs, ppp);
+
+      var line = new Array(expLastCol).fill("");
+      line[expMap["référence"] - 1] = it.ref;
+      line[expMap["nom"] - 1] = it.nom;
+      line[expMap["catégorie"] - 1] = it.cat;
+      line[expMap["contenu colis"] - 1] = contenu;
+      line[expMap["composition matérielle"] - 1] = it.comp;
+      line[expMap["marque"] - 1] = it.marque;
+      line[expMap["année"] - 1] = it.annee;
+      line[expMap["saison"] - 1] = it.saison;
+      line[expMap["colisage"] - 1] = it.colisage;
+      line[expMap["couleur"] - 1] = it.couleur;
+      line[expMap["stock"] - 1] = it.stock;
+      line[expMap["nbr de pièces hors unité de colisage"] - 1] = it.horsColisage;
+      line[expMap["poids (en gramme)"] - 1] = it.poidsG;
+      line[expMap["prix"] - 1] = it.prix;
+      line[expMap["pays d'origine"] - 1] = it.paysOrigine;
+      line[expMap["remise (%)"] - 1] = it.remise;
+      line[expMap["remarque"] - 1] = it.remarque;
+
+      out.push(line);
+    }
+
+    msClearMsExportData_(shExp, expLastCol);
+    if (out.length) shExp.getRange(3, 1, out.length, expLastCol).setValues(out);
+
+    ss.toast("Export terminé: " + out.length + " lignes.", "Microstore", 6);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function msClearMsExportData_(shExp, expLastCol) {
+  var lr = shExp.getLastRow();
+  if (lr >= 3) shExp.getRange(3, 1, lr - 2, expLastCol).clearContent();
+}
+
+function msNormalizeDateForSort_(v) {
+  if (v === null || typeof v === "undefined" || v === "") {
+    return { empty: true, ts: 0 };
+  }
+  if (Object.prototype.toString.call(v) === "[object Date]" && !isNaN(v.getTime())) {
+    return { empty: false, ts: v.getTime() };
+  }
+
+  var s = String(v).trim();
+  if (!s) return { empty: true, ts: 0 };
+
+  var d = new Date(s);
+  if (!isNaN(d.getTime())) return { empty: false, ts: d.getTime() };
+
+  return { empty: true, ts: 0 };
+}
+
+function msBuildContenuColis_(totalPieces, packs, pcsPerPack) {
+  var t = totalPieces ? String(totalPieces) : "x";
+  var p = packs ? String(packs) : "x";
+  var u = pcsPerPack ? String(pcsPerPack) : "x";
+  return "Colis: " + t + " pièces avec " + p + " paquets de " + u + " pièces";
+}
+
+function msString_(v) {
+  if (v === null || typeof v === "undefined") return "";
+  return String(v).trim();
+}
+
+/**
+ * Export MS_EXPORT → Drive en .xlsx (overwrite)
+ */
+function exportMsExportSheetToDriveXlsx() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SHEET_MS_EXPORT);
+  if (!sheet) throw new Error("Feuille introuvable: " + SHEET_MS_EXPORT);
+
+  var folder = DriveApp.getFolderById(MS_EXPORT_DRIVE_FOLDER_ID);
+  var spreadsheetId = ss.getId();
+  var gid = sheet.getSheetId();
+
+  var url =
+    "https://docs.google.com/spreadsheets/d/" +
+    spreadsheetId +
+    "/export?format=xlsx&gid=" +
+    gid;
+
+  var token = ScriptApp.getOAuthToken();
+  var response = UrlFetchApp.fetch(url, {
+    headers: { Authorization: "Bearer " + token }
+  });
+
+  var blob = response.getBlob().setName(MS_EXPORT_FILENAME);
+  var existing = folder.getFilesByName(MS_EXPORT_FILENAME);
+  while (existing.hasNext()) {
+    existing.next().setTrashed(true);
+  }
+
+  var file = folder.createFile(blob);
+
+  SpreadsheetApp.getActive().toast("Export Drive terminé (overwrite)", "MS Export", 5);
+  Logger.log("File created: " + file.getUrl());
+
+  return file.getUrl();
+}

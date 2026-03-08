@@ -5,14 +5,10 @@ function onOpen() {
   ui.createMenu("Microstore")
     .addItem("Importer dernier export (.xlsx)", "importMicrostoreLatestExport")
     .addItem("Sync MS_IMPORT → STOCK", "syncMsImportToStock")
-     .addSeparator()
+    .addSeparator()
     .addItem("Exporter STOCK → MS_EXPORT", "exportStockToMsExport")
-    .addItem(
-  "Exporter MS_EXPORT → Drive (overwrite)",
-  "exportMsExportSheetToDriveXlsx"
-)
+    .addItem("Exporter MS_EXPORT → Drive (overwrite)", "exportMsExportSheetToDriveXlsx")
     .addToUi();
-  
 
   ui.createMenu("eFashion")
     .addItem("Exporter STOCK → eFashion", "exportStockToEFashion")

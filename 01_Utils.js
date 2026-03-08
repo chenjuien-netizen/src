@@ -9,9 +9,9 @@ function withUiGuard_(fn) {
 
 function notify_(title, msg) {
   try {
-    SpreadsheetApp.getUi().alert(String(title||"Info"), String(msg||""), SpreadsheetApp.getUi().ButtonSet.OK);
+    SpreadsheetApp.getUi().alert(String(title || "Info"), String(msg || ""), SpreadsheetApp.getUi().ButtonSet.OK);
   } catch (e) {
-    try { SpreadsheetApp.getActive().toast(String(msg||""), String(title||"Info"), 6); } catch (e2) {}
+    try { SpreadsheetApp.getActive().toast(String(msg || ""), String(title || "Info"), 6); } catch (e2) {}
   }
 }
 
@@ -41,4 +41,32 @@ function parseMixPartnerFromNoteSystem_(noteS) {
   if (!m) return "";
   const raw = m[1];
   return (typeof cleanRef_ === "function" ? cleanRef_(raw) : String(raw || "")).toUpperCase();
+}
+
+function headerMap_(headersRow) {
+  var map = {};
+  for (var c = 0; c < headersRow.length; c++) {
+    var h = headersRow[c];
+    if (h === null || typeof h === "undefined") continue;
+    var key = String(h).trim();
+    if (!key) continue;
+    map[key.toLowerCase()] = c + 1; // 1-based
+  }
+  return map;
+}
+
+function ensureHeadersExist_(map, requiredHeaders, where) {
+  var missing = [];
+  for (var i = 0; i < requiredHeaders.length; i++) {
+    var k = requiredHeaders[i];
+    if (!map.hasOwnProperty(k.toLowerCase())) missing.push(k);
+  }
+  if (missing.length) {
+    throw new Error("Headers manquants dans " + where + ": " + missing.join(", "));
+  }
+}
+
+function normalizeUpper_(s) {
+  var t = (s === null || typeof s === "undefined") ? "" : String(s);
+  return t.trim().toUpperCase();
 }

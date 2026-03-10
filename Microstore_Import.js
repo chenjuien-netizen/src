@@ -3,7 +3,7 @@
  * - Actifs -> MS_IMPORT
  * - Désactivés -> MS_IMPORT_DISABLED
  */
-function importMicrostoreLatestExport(promptForOtherImport) {
+function importMicrostoreLatestExport(promptForOtherImport, silentMode) {
   msImportLatestExportCore_({
     sourceFolderId: MS_IMPORT_FOLDER_ID,
     targetSheetName: SHEET_MS_IMPORT,
@@ -12,11 +12,12 @@ function importMicrostoreLatestExport(promptForOtherImport) {
     noFileMessage: "Aucun fichier .xlsx trouvé dans le dossier des exports actifs.",
     promptForOtherImport: promptForOtherImport !== false,
     otherImportPrompt: "Importer aussi les produits désactivés ?",
-    runOtherImport: function() { importMicrostoreLatestDisabledExport(false); }
+    runOtherImport: function() { importMicrostoreLatestDisabledExport(false, false); },
+    silentMode: silentMode === true
   });
 }
 
-function importMicrostoreLatestDisabledExport(promptForOtherImport) {
+function importMicrostoreLatestDisabledExport(promptForOtherImport, silentMode) {
   msImportLatestExportCore_({
     sourceFolderId: MS_IMPORT_DISABLED_FOLDER_ID,
     targetSheetName: SHEET_MS_IMPORT_DISABLED,
@@ -25,7 +26,8 @@ function importMicrostoreLatestDisabledExport(promptForOtherImport) {
     noFileMessage: "Aucun fichier .xlsx trouvé dans le dossier des exports désactivés.",
     promptForOtherImport: promptForOtherImport !== false,
     otherImportPrompt: "Importer aussi les produits actifs ?",
-    runOtherImport: function() { importMicrostoreLatestExport(false); }
+    runOtherImport: function() { importMicrostoreLatestExport(false, false); },
+    silentMode: silentMode === true
   });
 }
 
@@ -49,7 +51,7 @@ function msImportLatestExportCore_(options) {
     var latestXlsx = msFindLatestXlsxByCreatedTime_(options.sourceFolderId);
     if (!latestXlsx) {
       ss.toast(options.noFileMessage, "Microstore", 6);
-      ui.alert(options.noFileMessage);
+      if (!options.silentMode) ui.alert(options.noFileMessage);
       return;
     }
 
@@ -124,9 +126,9 @@ function msImportLatestExportCore_(options) {
       : ("Import " + options.importLabel + " OK: " + latestXlsx.name + "\n" + numRows + " lignes × " + numCols + " colonnes");
 
     ss.toast("Import " + options.importLabel + " terminé.", "Microstore", 8);
-    ui.alert(successMessage);
+    if (!options.silentMode) ui.alert(successMessage);
 
-    if (options.promptForOtherImport && typeof options.runOtherImport === "function") {
+    if (!options.silentMode && options.promptForOtherImport && typeof options.runOtherImport === "function") {
       var ask = ui.alert("Import Microstore", options.otherImportPrompt, ui.ButtonSet.OK_CANCEL);
       if (ask === ui.Button.OK) {
         options.runOtherImport();

@@ -122,6 +122,7 @@ function exportStockToMsExport() {
         sortEmpty: dtInfo.empty,
         sortTs: dtInfo.ts,
         ref: ref,
+        msStatut: cMsStatut >= 0 ? String(r[cMsStatut] || "").trim() : "",
         nom: msString_(r[cNom]),
         cat: msString_(r[cCat]),
         contenuColis: msString_(r[stockMap["contenu colis"] - 1]),
@@ -165,9 +166,11 @@ function exportStockToMsExport() {
       line[expMap["saison"] - 1] = it.saison;
       line[expMap["colisage"] - 1] = it.colisage;
       line[expMap["couleur"] - 1] = it.couleur ? it.couleur : "MIX";
-      line[expMap["stock"] - 1] = (it.stock === null || typeof it.stock === "undefined" || String(it.stock).trim() === "" || Number(it.stock) === 0)
-        ? Math.floor(Math.random() * 201) + 100
-        : it.stock;
+      line[expMap["stock"] - 1] = (it.msStatut === "MS_DISABLED")
+        ? 0
+        : ((it.stock === null || typeof it.stock === "undefined" || String(it.stock).trim() === "" || Number(it.stock) === 0)
+          ? Math.floor(Math.random() * 201) + 100
+          : it.stock);
       line[expMap["nbr de pièces hors unité de colisage"] - 1] = it.horsColisage;
       line[expMap["poids (en gramme)"] - 1] = it.poidsG;
       line[expMap["prix"] - 1] = it.prix;
@@ -182,6 +185,7 @@ function exportStockToMsExport() {
     if (out.length) shExp.getRange(3, 1, out.length, expLastCol).setValues(out);
 
     ss.toast("Export terminé: " + out.length + " lignes.", "Microstore", 6);
+    exportMsExportSheetToDriveXlsx();
   } finally {
     lock.releaseLock();
   }

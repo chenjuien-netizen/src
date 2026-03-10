@@ -3,8 +3,18 @@
  * - Conserve le comportement métier existant
  */
 function syncMsImportToStock() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
   var ui = SpreadsheetApp.getUi();
+
+  var chainBtn = ui.alert(
+    "Chaînage Microstore avant sync",
+    "Voulez-vous importer d'abord les exports Microstore actifs et désactivés, puis lancer la sync vers STOCK ?\n\nOK = lancer import actifs + import désactivés + sync\nAnnuler = passer directement à la confirmation de sync normale",
+    ui.ButtonSet.OK_CANCEL
+  );
+
+  if (chainBtn === ui.Button.OK) {
+    msRunImportThenSync_();
+    return;
+  }
 
   var lastImportDate = msGetLastImportDateText_();
   var confirmText =
@@ -14,6 +24,11 @@ function syncMsImportToStock() {
   var btn = ui.alert("Confirmation", confirmText, ui.ButtonSet.OK_CANCEL);
   if (btn !== ui.Button.OK) return;
 
+  msRunSyncCore_();
+}
+
+function msRunSyncCore_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
   var lock = LockService.getDocumentLock();
   lock.waitLock(30000);
 
@@ -448,6 +463,43 @@ function syncMsImportToStock() {
   } finally {
     lock.releaseLock();
   }
+}
+
+function msRunImportThenSync_() {
+  var ui = SpreadsheetApp.getUi();
+  var check = msCanRunImportThenSync_();
+
+  if (!check.ok) {
+    ui.alert("Chaînage annulé", check.message, ui.ButtonSet.OK);
+    return;
+  }
+
+  try {
+    importMicrostoreLatestExport(false, true);
+    importMicrostoreLatestDisabledExport(false, true);
+    msRunSyncCore_();
+  } catch (err) {
+    var msg = (err && err.message) ? err.message : String(err);
+    ui.alert("Chaînage interrompu", "Chaînage import + sync interrompu : " + msg, ui.ButtonSet.OK);
+  }
+}
+
+function msCanRunImportThenSync_() {
+  var hasActive = !!msFindLatestXlsxByCreatedTime_(MS_IMPORT_FOLDER_ID);
+  var hasDisabled = !!msFindLatestXlsxByCreatedTime_(MS_IMPORT_DISABLED_FOLDER_ID);
+
+  if (hasActive && hasDisabled) {
+    return { ok: true, message: "" };
+  }
+
+  var missing = [];
+  if (!hasActive) missing.push("actifs");
+  if (!hasDisabled) missing.push("désactivés");
+
+  return {
+    ok: false,
+    message: "Chaîne import + sync non lancée: fichier .xlsx manquant dans le dossier " + missing.join(" et ") + "."
+  };
 }
 
 function msGetLastImportDateText_() {

@@ -71,7 +71,7 @@ function exportStockToMsExport() {
       "Pays d'origine",
       "Remise (%)",
       "Date de création",
-      "每箱件数",
+      "每箱件数2",
       "包/箱"
     ];
     ensureHeadersExist_(stockMap, stockNeed, "STOCK (ligne 1)");
@@ -94,21 +94,26 @@ function exportStockToMsExport() {
     var cAnnee = stockMap["année"] - 1;
     var cSaison = stockMap["saison"] - 1;
     var cStock = stockMap["stock"] - 1;
+    var cTotalPqs = 46 - 1; // AT = KEY:TOTAL_PQS
     var cColisage = stockMap["colisage"] - 1;
     var cCouleur = stockMap["couleur"] - 1;
     var cPrix = stockMap["prix"] - 1;
     var cRemise = stockMap["remise (%)"] - 1;
     var cDate = stockMap["date de création"] - 1;
-    var cTotalPcs = stockMap["每箱件数"] - 1;
+    var cTotalPcs = stockMap["每箱件数2"] - 1;
     var cPacks = stockMap["包/箱"] - 1;
     var cHorsColisage = stockMap["nbr de pièces hors unité de colisage"] - 1;
     var cPoidsG = stockMap["poids (en gramme)"] - 1;
     var cPaysOrigine = stockMap["pays d'origine"] - 1;
     var cRemarque = stockMap["remarque"] ? (stockMap["remarque"] - 1) : -1;
+    var cMsStatut = stockMap["ms_statut"] ? (stockMap["ms_statut"] - 1) : -1;
 
     var rows = [];
     for (var i = 0; i < data.length; i++) {
       var r = data[i];
+
+      if (cMsStatut >= 0 && String(r[cMsStatut]).trim() === "MS_SUPPRIME") continue;
+
       var ref = msNormalizeRef_(r[cRef]);
       if (!ref) continue;
 
@@ -119,6 +124,7 @@ function exportStockToMsExport() {
         ref: ref,
         nom: msString_(r[cNom]),
         cat: msString_(r[cCat]),
+        contenuColis: msString_(r[stockMap["contenu colis"] - 1]),
         comp: normalizeUpper_(r[cComp]),
         marque: msString_(r[cMarque]),
         annee: msString_(r[cAnnee]),
@@ -128,7 +134,7 @@ function exportStockToMsExport() {
         prix: (r[cPrix] === null || typeof r[cPrix] === "undefined") ? "" : r[cPrix],
         remise: (r[cRemise] === null || typeof r[cRemise] === "undefined") ? "" : r[cRemise],
         totalPcs: r[cTotalPcs],
-        stock: r[cStock],
+        stock: r[cTotalPqs],
         packs: r[cPacks],
         horsColisage: r[cHorsColisage],
         poidsG: r[cPoidsG],
@@ -137,13 +143,6 @@ function exportStockToMsExport() {
       });
     }
 
-    rows.sort(function(a, b) {
-      if (a.sortEmpty && !b.sortEmpty) return -1;
-      if (!a.sortEmpty && b.sortEmpty) return 1;
-      if (a.sortEmpty && b.sortEmpty) return 0;
-      return b.sortTs - a.sortTs;
-    });
-
     var out = [];
     for (var k = 0; k < rows.length; k++) {
       var it = rows[k];
@@ -151,26 +150,30 @@ function exportStockToMsExport() {
       var total = toIntSafe_(it.totalPcs);
       var packs = toIntSafe_(it.packs);
       var ppp = toIntSafe_(it.colisage);
-      var contenu = msBuildContenuColis_(total, packs, ppp);
+      var contenu = (total > 0 && packs > 0 && ppp > 0)
+        ? msBuildContenuColis_(total, packs, ppp)
+        : "";
 
       var line = new Array(expLastCol).fill("");
       line[expMap["référence"] - 1] = it.ref;
-      line[expMap["nom"] - 1] = it.nom;
+      line[expMap["nom"] - 1] = it.nom ? String(it.nom).trim() : it.ref;
       line[expMap["catégorie"] - 1] = it.cat;
-      line[expMap["contenu colis"] - 1] = contenu;
+      line[expMap["contenu colis"] - 1] = it.contenuColis;
       line[expMap["composition matérielle"] - 1] = it.comp;
       line[expMap["marque"] - 1] = it.marque;
       line[expMap["année"] - 1] = it.annee;
       line[expMap["saison"] - 1] = it.saison;
       line[expMap["colisage"] - 1] = it.colisage;
-      line[expMap["couleur"] - 1] = it.couleur;
-      line[expMap["stock"] - 1] = it.stock;
+      line[expMap["couleur"] - 1] = it.couleur ? it.couleur : "MIX";
+      line[expMap["stock"] - 1] = (it.stock === null || typeof it.stock === "undefined" || String(it.stock).trim() === "" || Number(it.stock) === 0)
+        ? Math.floor(Math.random() * 201) + 100
+        : it.stock;
       line[expMap["nbr de pièces hors unité de colisage"] - 1] = it.horsColisage;
       line[expMap["poids (en gramme)"] - 1] = it.poidsG;
       line[expMap["prix"] - 1] = it.prix;
       line[expMap["pays d'origine"] - 1] = it.paysOrigine;
       line[expMap["remise (%)"] - 1] = it.remise;
-      line[expMap["remarque"] - 1] = it.remarque;
+      line[expMap["remarque"] - 1] = contenu;
 
       out.push(line);
     }

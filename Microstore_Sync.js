@@ -547,7 +547,7 @@ function msRebuildLockedFilter_A_to_AU_(sh) {
   var existing = sh.getFilter();
   if (existing) existing.remove();
 
-  sh.getRange(1, 1, lastRow, 47).createFilter();
+  sh.getRange(1, 1, lastRow, 46).createFilter();
 }
 
 function msApplyTemplateColumnByHeaderNoteKey_(shTpl, shStock, key, addCount, startRow) {

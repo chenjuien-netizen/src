@@ -179,24 +179,8 @@ function exportStockToMsExport() {
       line[expMap["prix"] - 1] = it.prix;
       line[expMap["pays d'origine"] - 1] = it.paysOrigine;
       line[expMap["remise (%)"] - 1] = it.remise;
-      var remarqueBlocks = [];
-      if (it.remarque) remarqueBlocks.push(String(it.remarque).trim());
-      if (contenu) remarqueBlocks.push(contenu);
       var couleursTexte = msBuildCouleursRemark_(it.couleursRaw);
-      if (couleursTexte) remarqueBlocks.push(couleursTexte);
-
-      // Déduplique les blocs tout en gardant l'ordre
-      var seenRemark = {};
-      var finalBlocks = [];
-      for (var rb = 0; rb < remarqueBlocks.length; rb++) {
-        var txt = String(remarqueBlocks[rb] || "").trim();
-        if (!txt) continue;
-        if (seenRemark[txt]) continue;
-        seenRemark[txt] = true;
-        finalBlocks.push(txt);
-      }
-
-      line[expMap["remarque"] - 1] = finalBlocks.join("\n");
+      line[expMap["remarque"] - 1] = msBuildCleanRemarque_(it.remarque, contenu, couleursTexte);
 
       out.push(line);
     }
@@ -241,6 +225,42 @@ function msBuildContenuColis_(totalPieces, packs, pcsPerPack) {
   var p = packs ? String(packs) : "x";
   var u = pcsPerPack ? String(pcsPerPack) : "x";
   return "Colis: " + t + " pièces avec " + p + " paquets de " + u + " pièces";
+}
+
+function msBuildCleanRemarque_(existingRemark, contenu, couleursTexte) {
+  var lines = String(existingRemark || "").split(/\r?\n/);
+  var otherLines = [];
+  var seenOther = {};
+  var colisLine = "";
+  var couleursLine = "";
+
+  for (var i = 0; i < lines.length; i++) {
+    var line = String(lines[i] || "").trim();
+    if (!line) continue;
+
+    if (/^Colis\s*:/i.test(line)) {
+      if (!colisLine) colisLine = line;
+      continue;
+    }
+
+    if (/^Couleurs\s*:/i.test(line)) {
+      if (!couleursLine) couleursLine = line;
+      continue;
+    }
+
+    if (seenOther[line]) continue;
+    seenOther[line] = true;
+    otherLines.push(line);
+  }
+
+  if (String(contenu || "").trim()) colisLine = String(contenu).trim();
+  if (String(couleursTexte || "").trim()) couleursLine = String(couleursTexte).trim();
+
+  var finalLines = otherLines.slice();
+  if (colisLine) finalLines.push(colisLine);
+  if (couleursLine) finalLines.push(couleursLine);
+
+  return finalLines.join("\n");
 }
 
 function msString_(v) {

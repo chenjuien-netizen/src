@@ -1,10 +1,12 @@
 /****************************************************
  * EXPORT STOCK → PFS (Paris Fashion Shops)
  *
- * v0 TEST:
+ * v1:
  * - Exporte uniquement les lignes STOCK cochées via la colonne 选择 (checkbox TRUE)
  * - Ecrit dans la feuille pfs_export (template PFS)
- * - Uniquement 1 ligne par ref (PACK)
+ * - Génère une ligne par couleur (Pack puis Sub-Pack)
+ * - Utilise Colisage comme source de vérité pour le nombre de pièces par taille
+ * - Utilise Contenu colis uniquement pour détecter les tailles disponibles
  ****************************************************/
 
 var SHEET_PFS_EXPORT = "pfs_export";
@@ -40,7 +42,9 @@ function exportStockToPFS() {
     "Catégorie",
     "Contenu colis",
     "Poids (en gramme)",
-    "Pays d'origine"
+    "Pays d'origine",
+    "Couleurs",
+    "Colisage"
   ], "STOCK");
 
   const lastRow = stock.getLastRow();
@@ -63,6 +67,8 @@ function exportStockToPFS() {
   const colCompo = stockMap["composition matérielle"] || 0;
   const colPoids = stockMap["poids (en gramme)"];
   const colPays = stockMap["pays d'origine"];
+  const colCouleurs = stockMap["couleurs"];
+  const colColisage = stockMap["colisage"];
 
   if (!colPoids) throw new Error("PFS export: colonne 'Poids (en gramme)' introuvable dans STOCK.");
   if (!colPays) throw new Error("PFS export: colonne 'Pays d'origine' introuvable dans STOCK.");
@@ -75,6 +81,8 @@ function exportStockToPFS() {
   const compoVals = colCompo ? stock.getRange(2, colCompo, n, 1).getValues().flat() : null;
   const poidsVals = stock.getRange(2, colPoids, n, 1).getValues().flat();
   const paysVals = stock.getRange(2, colPays, n, 1).getValues().flat();
+  const couleursVals = stock.getRange(2, colCouleurs, n, 1).getValues().flat();
+  const colisageVals = stock.getRange(2, colColisage, n, 1).getValues().flat();
 
   // Collect only selected rows
   const selected = [];
@@ -86,15 +94,25 @@ function exportStockToPFS() {
     const sheetRow = 2 + i;
     const ref = String(refVals[i] || "").trim();
     const prix = String(prixVals[i] ?? "").trim();
-    const tailles = extractTaillesFromContenuColis_(contenuVals[i]);
+    const colisage = parseColisagePFS_(colisageVals[i]);
+    const tailles = colisage.ok
+      ? extractTaillesFromContenuColis_(contenuVals[i], colisage.value)
+      : "";
     const poids = String(poidsVals[i] ?? "").trim();
     const paysFab = String(paysVals[i] ?? "").trim();
+    const couleursRaw = String(couleursVals[i] ?? "").trim();
+    const colorPack = parsePfsColorPackFromStock_(couleursRaw);
 
     // Category normalization and validation
     const catRaw = String(catVals[i] || "").trim();
     const catPfs = normalizeCategoriePFS_(catRaw);
     if (!catPfs) {
       bad.push({ row: sheetRow, ref: ref || "(vide)", reason: "Catégorie PFS invalide: " + (catRaw || "(vide)") });
+      continue;
+    }
+
+    if (!colisage.ok) {
+      bad.push({ row: sheetRow, ref: ref || "(vide)", reason: colisage.reason });
       continue;
     }
 
@@ -118,6 +136,14 @@ function exportStockToPFS() {
       bad.push({ row: sheetRow, ref: ref || "(vide)", reason: "Pays d’origine vide" });
       continue;
     }
+    if (!colorPack.ok) {
+      bad.push({ row: sheetRow, ref: ref || "(vide)", reason: colorPack.reason });
+      continue;
+    }
+    if (colorPack.total !== colisage.value) {
+      bad.push({ row: sheetRow, ref: ref || "(vide)", reason: "Somme des couleurs = " + colorPack.total + " au lieu de " + colisage.value });
+      continue;
+    }
 
     selected.push({
       row: sheetRow,
@@ -129,6 +155,8 @@ function exportStockToPFS() {
       compo: compoVals ? String(compoVals[i] || "").trim() : "",
       poids: poids,
       paysFab: paysFab,
+      colorPack: colorPack,
+      colisage: colisage.value,
     });
   }
 
@@ -196,40 +224,45 @@ function exportStockToPFS() {
   const out = [];
 
   for (const it of selected) {
-    const line = new Array(hinfo.width).fill("");
-
     const cat = it.cat || ""; // PFS normalized category
     const nomFr = String(it.catRaw || "").trim() || cat || it.ref; // use STOCK category for FR name
-
-    // v0 fixed values
-    if (cMarque) line[cMarque - 1] = "S.Z FASHION";
-    if (cGenre) line[cGenre - 1] = "Femme";
-    if (cFamille) line[cFamille - 1] = "Vêtements";
-
-    if (cCategorie) line[cCategorie - 1] = cat;
-    if (cRef) line[cRef - 1] = it.ref;
-    if (cNomFr) line[cNomFr - 1] = nomFr;
-
-    if (cTypeVente) line[cTypeVente - 1] = "Pack";
-    if (cSaison) line[cSaison - 1] = "Printemps/Été 2026";
-
-    // Tailles: convert to PFS format
-    const tailles = normalizeTaillesPFS_(it.tailles);
-    if (cTailles) line[cTailles - 1] = tailles;
-
-    // Leave PFS Couleurs* column empty (do not write anything)
-
-    // Prix & Poids: keep as TEXT to prevent Excel date auto-parsing (e.g., 6.8 -> 06/08/2026)
-    if (cPrix) line[cPrix - 1] = String(it.prix ?? "").trim();
-
-    if (cPoids) line[cPoids - 1] = String(it.poids ?? "").trim();
-
+    const globalTailles = parsePfsTaillesStructure_(it.tailles);
     const compo = normalizeCompositionPFS_(it.compo) || "90% Viscose - 10% Polyester";
-    if (cCompo) line[cCompo - 1] = compo;
 
-    if (cPays) line[cPays - 1] = it.paysFab;
+    if (!globalTailles.ok) {
+      throw new Error("PFS export: structure tailles invalide pour " + it.ref + ": " + globalTailles.reason);
+    }
 
-    out.push(line);
+    const entries = Array.isArray(it.colorPack && it.colorPack.entries) ? it.colorPack.entries : [];
+    for (let idx = 0; idx < entries.length; idx++) {
+      const entry = entries[idx];
+      const taillesColor = buildPfsColorTailles_(entry.qty, globalTailles.sizes);
+      if (!taillesColor.ok) {
+        throw new Error("PFS export: tailles/couleurs incompatibles pour " + it.ref + " / " + entry.color + ": " + taillesColor.reason);
+      }
+
+      const line = new Array(hinfo.width).fill("");
+
+      // fixed values
+      if (cMarque) line[cMarque - 1] = "S.Z FASHION";
+      if (cGenre) line[cGenre - 1] = "Femme";
+      if (cFamille) line[cFamille - 1] = "Vêtements";
+
+      if (cCategorie) line[cCategorie - 1] = cat;
+      if (cRef) line[cRef - 1] = it.ref;
+      if (cNomFr) line[cNomFr - 1] = nomFr;
+
+      if (cTypeVente) line[cTypeVente - 1] = idx === 0 ? "Pack" : "Sub-Pack";
+      if (cSaison) line[cSaison - 1] = "Printemps/Été 2026";
+      if (cTailles) line[cTailles - 1] = taillesColor.value;
+      if (cCouleurs) line[cCouleurs - 1] = entry.color;
+      if (cPrix) line[cPrix - 1] = String(it.prix ?? "").trim();
+      if (cPoids) line[cPoids - 1] = formatWeightKgPFSText_(it.poids);
+      if (cCompo) line[cCompo - 1] = compo;
+      if (cPays) line[cPays - 1] = it.paysFab;
+
+      out.push(line);
+    }
   }
 
   // Overwrite output
@@ -258,62 +291,124 @@ function exportStockToPFS() {
     }
   }
 
+  // Auto-export Drive after sheet generation
+  try {
+    SpreadsheetApp.flush();
+    Utilities.sleep(1200);
+    exportPFSToDriveXlsx();
+  } catch (e) {
+    Logger.log("Auto export Drive PFS failed: " + e);
+  }
+
   ss.toast("PFS_EXPORT généré : " + out.length + " lignes", "PFS", 6);
 }
 
 /****************************************************
- * Extract tailles from Contenu colis text
- * Input: any value
+ * Extract tailles from Contenu colis text, using Colisage as source of truth for qty per size.
+ * Input: v = Contenu colis, colisage = integer
  * Output: normalized PFS tailles string or ""
  ****************************************************/
-function extractTaillesFromContenuColis_(v) {
-  const s0 = String(v || "").trim();
-  if (!s0) return "";
-  // v1: support principal: "6 x M/L - 6 x XL/XXL" -> "6*M/L,6*XL/XXL"
-  // Normalize separators and x to *
-  const norm = normalizeTaillesPFS_(s0);
+function extractTaillesFromContenuColis_(v, colisage) {
+  const raw = String(v || "").trim();
+  if (!raw) return "";
 
-  // Match all occurrences of number*size (size can include /)
-  const regex = /(\d+)\*\s*([A-Za-z0-9]+(?:\/[A-Za-z0-9]+)*)/g;
-  let match;
+  const normalized = raw
+    .replace(/\u00A0/g, " ")
+    .replace(/[／⁄∕]/g, "/")
+    .replace(/[–—−]/g, "-")
+    .replace(/\s+/g, " ")
+    .replace(/\s*-\s*/g, "|")
+    .trim();
+
+  const segments = normalized
+    .split("|")
+    .map(function (part) { return String(part || "").trim(); })
+    .filter(Boolean);
+
+  if (!segments.length) return "";
+
+  const total = Number(colisage);
+  if (!Number.isFinite(total) || total <= 0) return "";
+  if (total % segments.length !== 0) return "";
+
+  const qtyPerSize = total / segments.length;
   const parts = [];
-  while ((match = regex.exec(norm)) !== null) {
-    const n = match[1];
-    const size = match[2];
-    parts.push(`${n}*${size}`);
-  }
-
-  if (parts.length === 0) {
-    return "";
+  for (let i = 0; i < segments.length; i++) {
+    const parsed = parseContenuColisSegmentPFS_(segments[i]);
+    if (!parsed || !parsed.size) return "";
+    parts.push(qtyPerSize + "*" + parsed.size);
   }
 
   return parts.join(",");
 }
 
-/****************************************************
- * Normalisation tailles -> format PFS
+/**
+ * Normalisation tailles -> format PFS, using Colisage as source of truth for qty per size.
  * Ex:
  * - "6 x M/L - 6 x XL/XXL" => "6*M/L,6*XL/XXL"
  * - "2*M/L, 2*XL/XXL" => "2*M/L,2*XL/XXL"
- ****************************************************/
-function normalizeTaillesPFS_(v) {
-  const s0 = String(v || "").trim();
-  if (!s0) return "";
+ */
+function normalizeTaillesPFS_(v, colisage) {
+  const raw = String(v || "").trim();
+  if (!raw) return "";
 
-  // Standardize separators
-  let s = s0;
+  // Parse with the same robust logic as extractTaillesFromContenuColis_
+  const extracted = extractTaillesFromContenuColis_(raw, colisage);
+  if (extracted) return extracted;
 
-  // Convert "6 x" or "6x" to "6*"
-  s = s.replace(/(\d+)\s*[xX×]\s*/g, "$1*");
+  // Fallback: normalize only spaces/commas, but NEVER break slash-based sizes
+  return raw
+    .replace(/\u00A0/g, " ")
+    .replace(/[／⁄∕]/g, "/")
+    .replace(/[–—−]/g, "-")
+    .replace(/\s+/g, " ")
+    .replace(/\s*,\s*/g, ",")
+    .trim();
+}
+function parseContenuColisSegmentPFS_(segment) {
+  const s = String(segment || "").trim();
+  if (!s) return null;
 
-  // Replace " - " or " / " as list separators into comma
-  s = s.replace(/\s*-\s*/g, ",");
-  s = s.replace(/\s*\/\s*/g, ",");
+  // Examples:
+  // "6 x S/M" -> 6*S/M
+  // "6 x XL/XXL" -> 6*XL/XXL
+  // "S/M" -> keep size token and default qty 6 for current PFS v1
+  // "XL/XXL" -> keep size token and default qty 6
 
-  // Remove spaces around commas
-  s = s.replace(/\s*,\s*/g, ",");
+  const withQty = s.match(/^(\d+)\s*[xX×*]?\s*(.+)$/);
+  if (withQty) {
+    const qty = Number(withQty[1]);
+    const size = normalizePfsSizeToken_(withQty[2]);
+    if (!qty || !size) return null;
+    return { qty: qty, size: size };
+  }
 
-  return s;
+  const sizeOnly = normalizePfsSizeToken_(s);
+  if (sizeOnly) {
+    return { qty: 6, size: sizeOnly };
+  }
+
+  return null;
+}
+
+function normalizePfsSizeToken_(raw) {
+  const s = String(raw || "")
+    .replace(/\u00A0/g, " ")
+    .replace(/[／⁄∕]/g, "/")
+    .replace(/\s+/g, " ")
+    .replace(/\s*\/\s*/g, "/")
+    .trim()
+    .toUpperCase();
+
+  if (!s) return "";
+
+  // Keep slash-based dual sizes intact: S/M, L/XL, M/L, XL/XXL
+  if (/^[A-Z0-9]+(?:\/[A-Z0-9]+)+$/.test(s)) return s;
+
+  // Allow simple single tokens if needed
+  if (/^[A-Z0-9]+$/.test(s)) return s;
+
+  return "";
 }
 
 /****************************************************
@@ -625,4 +720,217 @@ function normalizeMaterialName_(matRaw) {
   // Title-case fallback
   const low = s.toLowerCase();
   return low.charAt(0).toUpperCase() + low.slice(1);
+}
+
+
+/****************************************************
+ * Parse STOCK Couleurs into PFS color pack entries.
+ * Input example: "4 ROUGE 2 VERT 2 MARRON 4 BLEU"
+ * Output: { ok:true, total:12, entries:[{color:"Rouge", qty:4}, ...] }
+ ****************************************************/
+function parsePfsColorPackFromStock_(raw) {
+  const s = String(raw || "").trim();
+  if (!s) {
+    return { ok: false, reason: "Couleurs vides" };
+  }
+
+  const tokens = s.split(/\s+/).filter(Boolean);
+  if (tokens.length % 2 !== 0) {
+    return { ok: false, reason: "Couleurs mal formées (paires quantité/couleur attendues): " + s };
+  }
+
+  const entries = [];
+  let total = 0;
+  for (let i = 0; i < tokens.length; i += 2) {
+    const qty = Number(tokens[i]);
+    const colorRaw = String(tokens[i + 1] || "").trim();
+    if (!Number.isFinite(qty) || qty <= 0 || !Number.isInteger(qty)) {
+      return { ok: false, reason: "Quantité couleur invalide: '" + tokens[i] + "' dans '" + s + "'" };
+    }
+    const color = normalizePfsColorName_(colorRaw);
+    if (!color) {
+      return { ok: false, reason: "Couleur non reconnue dans le catalogue PFS: '" + colorRaw + "'" };
+    }
+    entries.push({ color: color, qty: qty });
+    total += qty;
+  }
+
+  return { ok: true, total: total, entries: entries };
+}
+
+/****************************************************
+ * Map STOCK color names to the fixed PFS color catalog.
+ ****************************************************/
+function normalizePfsColorName_(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  const up = s.toUpperCase();
+
+  const MAP = {
+    "ECRU": "Écru",
+    "ÉCRU": "Écru",
+    "IVOIRE": "Ivoire",
+    "VANILLE": "Vanille",
+    "NUDE": "Nude",
+    "CREME": "Crême",
+    "CRÈME": "Crême",
+    "BEIGE": "Beige",
+    "BLANC": "Blanc",
+    "BLEU CIEL": "Bleu Ciel",
+    "BLEU CLAIR": "Bleu Clair",
+    "BLEU": "Bleu",
+    "CYAN": "Cyan",
+    "TURQUOISE": "Turquoise",
+    "BLEU ROI": "Bleu Roi",
+    "JEANS": "Jeans",
+    "DENIM": "Denim",
+    "BLEU CANARD": "Bleu Canard",
+    "BLEU PETROLE": "Bleu Pétrole",
+    "BLEU PÉTROLE": "Bleu Pétrole",
+    "BLEU FONCE": "Bleu Foncé",
+    "BLEU FONCÉ": "Bleu Foncé",
+    "BLEU IRISE": "Bleu Irisé",
+    "BLEU IRISÉ": "Bleu Irisé",
+    "MARINE": "Marine",
+    "GRIS CLAIR": "Gris Clair",
+    "GRIS PERLE": "Gris Perle",
+    "ARGENT": "Argent",
+    "GRIS": "Gris",
+    "GRIS FONCE": "Gris Foncé",
+    "GRIS FONCÉ": "Gris Foncé",
+    "ANTHRACITE": "Anthracite",
+    "JAUNE CLAIR": "Jaune Clair",
+    "JAUNE CITRON": "Jaune Citron",
+    "JAUNE": "Jaune",
+    "JAUNE FONCE": "Jaune Foncé",
+    "JAUNE FONCÉ": "Jaune Foncé",
+    "JAUNE SOLEIL": "Jaune Soleil",
+    "MOUTARDE": "Moutarde",
+    "CAMEL": "Camel",
+    "CHAMPAGNE": "Champagne",
+    "TAUPE": "Taupe",
+    "BRUN": "Brun",
+    "MARRON": "Marron Foncé",
+    "NOIR IRISE": "Noir Irisé",
+    "NOIR IRISÉ": "Noir Irisé",
+    "NOIR": "Noir",
+    "ROSE": "Rose",
+    "FUCHSIA": "Fuchsia",
+    "ROUGE CLAIR": "Rouge Clair",
+    "ROUGE": "Rouge",
+    "CARMIN": "Carmin",
+    "ROUGE FONCE": "Rouge Foncé",
+    "ROUGE FONCÉ": "Rouge Foncé",
+    "BORDEAUX": "Bordeaux",
+    "VERT CLAIR": "Vert Clair",
+    "VERT D'EAU": "Vert d'Eau",
+    "VERT D EAU": "Vert d'Eau",
+    "VERT POMME": "Vert Pomme",
+    "VERT": "Vert",
+    "VERT FONCE": "Vert Foncé",
+    "VERT FONCÉ": "Vert Foncé",
+    "VERT BOUTEILLE": "Vert Bouteille",
+    "VERT SAPIN": "Vert Sapin",
+    "VERT CANARD": "Vert Canard",
+    "OLIVE": "Olive",
+    "KAKI": "Kaki",
+    "LILAS": "Lilas",
+    "LAVANDE": "Lavande",
+    "MAUVE": "Mauve",
+    "VIOLET": "Violet",
+    "INDIGO": "Indigo",
+    "PRUNE": "Prune"
+  };
+
+  if (MAP[up]) return MAP[up];
+
+  // fallback exact-title if already a PFS catalog color
+  for (var i = 0; i < PFS_COLOR_CATALOG.length; i++) {
+    if (PFS_COLOR_CATALOG[i].toUpperCase() === up) return PFS_COLOR_CATALOG[i];
+  }
+  return "";
+}
+
+var PFS_COLOR_CATALOG = [
+  "Écru","Ivoire","Vanille","Nude","Crême","Beige","Blanc","Transparent","Bleu Ciel","Bleu Clair","Bleu","Cyan","Turquoise","Bleu Roi","Jeans","Denim","Bleu Canard","Bleu Pétrole","Bleu Foncé","Bleu Irisé","Marine","Ciel nocturne","Gris Clair","Gris Perle","Argent","Gris","Gris Souris","Acier","Gris Foncé","Carbone","Gris Ardoise","Anthracite","Jaune Clair","Jaune Citron","Jaune","Jaune Foncé","Jaune Soleil","Jaune Fluo","Or","Moutarde","Doré","Ocre","Caramel","Bronze","Camel","Champagne","Taupe","Cognac","Brun","Terracotta","Brun foncé","Marron Clair","Chocolat","Marron Foncé","Multicolore","Bicolore","Noir Irisé","Noir","Saumon","Corail","Abricot","Orange Fluo","Orange","Rouge Orangé","Cuivre","Brique","Rouille","Blush","Rose","Rose Fluo","Fuchsia","Magenta","Framboise","Vieux Rose","Rouge Clair","Rouge","Carmin","Rouge Foncé","Bordeaux","Vert Clair","Vert d'Eau","Céladon","Vert Fluo","Vert Pomme","Vert","Vert Foncé","Vert Bouteille","Vert Sapin","Vert Canard","Olive","Kaki","Lilas","Lavande","Mauve","Violet","Indigo","Prune"
+];
+
+/****************************************************
+ * Parse a normalized tailles string like "6*S/M,6*L/XL"
+ * into [{size:"S/M", qty:6}, ...]
+ ****************************************************/
+function parsePfsTaillesStructure_(taillesStr) {
+  const s = String(taillesStr || "").trim();
+  if (!s) return { ok: false, reason: "Tailles vides" };
+
+  const parts = s.split(/\s*,\s*/).filter(Boolean);
+  if (!parts.length) return { ok: false, reason: "Tailles vides" };
+
+  const out = [];
+  for (let i = 0; i < parts.length; i++) {
+    const m = parts[i].match(/^(\d+)\*\s*(.+)$/);
+    if (!m) return { ok: false, reason: "Format taille invalide: " + parts[i] };
+    const qty = Number(m[1]);
+    const size = String(m[2] || "").trim();
+    if (!Number.isFinite(qty) || qty <= 0 || !size) {
+      return { ok: false, reason: "Format taille invalide: " + parts[i] };
+    }
+    out.push({ size: size, qty: qty });
+  }
+
+  return { ok: true, sizes: out };
+}
+
+/****************************************************
+ * Build per-color tailles string for PFS.
+ * Example:
+ * - entry qty 6, global sizes [S/M:6, L/XL:6] -> "3*S/M,3*L/XL"
+ * - entry qty 4, global sizes [S/M:6, L/XL:6] -> "2*S/M,2*L/XL"
+ ****************************************************/
+function buildPfsColorTailles_(colorQty, sizes) {
+  const qty = Number(colorQty);
+  if (!Number.isFinite(qty) || qty <= 0 || !Array.isArray(sizes) || !sizes.length) {
+    return { ok: false, reason: "Quantité couleur ou tailles globales invalides" };
+  }
+
+  const n = sizes.length;
+  const base = Math.floor(qty / n);
+  let remainder = qty % n;
+
+  const alloc = new Array(n).fill(base);
+
+  for (let i = 0; i < n && remainder > 0; i++, remainder--) {
+    alloc[i] += 1;
+  }
+
+  const parts = [];
+
+  for (let i = 0; i < sizes.length; i++) {
+    if (alloc[i] > sizes[i].qty) {
+      return { ok: false, reason: "Quantité couleur " + qty + " incompatible avec la taille " + sizes[i].size };
+    }
+    parts.push(alloc[i] + "*" + sizes[i].size);
+  }
+  return { ok: true, value: parts.join(", ") };
+}
+
+/****************************************************
+ * Convert STOCK weight in grams to PFS kg text.
+ ****************************************************/
+function formatWeightKgPFSText_(v) {
+  const s = String(v ?? "").trim().replace(/\s+/g, "").replace(",", ".");
+  const n = Number(s);
+  if (!isFinite(n)) return "";
+  const kg = n / 1000;
+  return String(kg.toFixed(3)).replace(/\.0+$/, "").replace(/(\.\d*[1-9])0+$/, "$1");
+}
+function parseColisagePFS_(v) {
+  const s = String(v ?? "").trim().replace(/\s+/g, "").replace(",", ".");
+  const n = Number(s);
+
+  if (!Number.isFinite(n) || n <= 0 || !Number.isInteger(n)) {
+    return { ok: false, reason: "Colisage invalide: '" + String(v ?? "") + "'" };
+  }
+
+  return { ok: true, value: n };
 }

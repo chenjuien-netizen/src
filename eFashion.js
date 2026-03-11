@@ -27,7 +27,8 @@ function exportStockToEFashion() {
     "Pays d'origine",
     "Composition matérielle",
     "Couleurs",
-    "Catégorie"
+    "Catégorie",
+    "Colisage"
   ];
 
   ensureHeadersExist_(stockMap, need, "STOCK");
@@ -51,6 +52,7 @@ function exportStockToEFashion() {
   const cCompo = stockMap["composition matérielle"];
   const cCouleursStock = stockMap["couleurs"];
   const cCategorieStock = stockMap["catégorie"];
+  const cColisage = stockMap["colisage"];
 
   const refVals = stock.getRange(2, cRef, n, 1).getValues().flat();
   const prixVals = stock.getRange(2, cPrix, n, 1).getValues().flat();
@@ -62,8 +64,10 @@ function exportStockToEFashion() {
   const selVals = stock.getRange(2, cSel, n, 1).getValues().flat();
   const couleursStockVals = stock.getRange(2, cCouleursStock, n, 1).getValues().flat();
   const categorieStockVals = stock.getRange(2, cCategorieStock, n, 1).getValues().flat();
+  const colisageVals = stock.getRange(2, cColisage, n, 1).getValues().flat();
 
   let rows = [];
+  const bad = []; // {row, ref, reason}
 
   for (let i = 0; i < n; i++) {
 
@@ -75,7 +79,10 @@ function exportStockToEFashion() {
     const prix = formatPriceEFashionText_(prixVals[i]);
     const dt = normalizeDateForSortEf_(dateVals[i]);
     const contenuColis = String(contenuVals[i] ?? "").trim();
-    const tailles = extractTaillesFromContenuColis_(contenuColis);
+    const colisage = parseColisageEFashion_(colisageVals[i]);
+    const tailles = colisage.ok
+      ? extractTaillesFromContenuColisEFashion_(contenuColis, colisage.value)
+      : "";
     const poids = String(poidsVals[i] ?? "").trim();
     const pays = String(paysVals[i] ?? "").trim();
 
@@ -93,7 +100,19 @@ function exportStockToEFashion() {
     const couleursEf = formatEFashionMixedColorsFromStock_(couleursStock);
 
     const sheetRow = 2 + i;
-
+    if (!colisage.ok) {
+      bad.push({ row: sheetRow, ref: ref || "(vide)", reason: colisage.reason });
+      continue;
+    }
+    if (!tailles) {
+      bad.push({ row: sheetRow, ref: ref || "(vide)", reason: "Tailles introuvables ou invalides dans Contenu colis" });
+      continue;
+    }
+    const colorCheck = validateEFashionColorPack_(couleursStock, colisage.value);
+    if (!colorCheck.ok) {
+      bad.push({ row: sheetRow, ref: ref || "(vide)", reason: colorCheck.reason });
+      continue;
+    }
     rows.push({
       ref: ref,
       prix: prix,
@@ -107,8 +126,25 @@ function exportStockToEFashion() {
       couleursEf: couleursEf,
       sousCategorie: efCat.sousCategorie,
       sousSousCategorie: efCat.sousSousCategorie,
+      colisage: colisage.value,
     });
 
+  }
+  if (bad.length) {
+    const msg = bad
+      .slice(0, 15)
+      .map(function (x) {
+        return "• Ligne " + x.row + " | Ref " + x.ref + "\n  " + x.reason;
+      })
+      .join("\n\n");
+
+    const more = bad.length > 15
+      ? "\n\n(" + (bad.length - 15) + " autres lignes avec erreur...)"
+      : "";
+
+    throw new Error(
+      "eFashion export — erreurs détectées dans STOCK :\n\n" + msg + more
+    );
   }
 
   if (rows.length === 0) {
@@ -252,6 +288,13 @@ function exportStockToEFashion() {
       exportEFashionToDriveXlsx();
     } catch (e) {
       Logger.log("Auto export Drive eFashion failed: " + e);
+    }
+
+    // Also generate photo ZIP helper files in the export Drive folder
+    try {
+      exportEFashionPhotoZipHelperToDrive_(rows);
+    } catch (e) {
+      Logger.log("Photo ZIP helper export failed: " + e);
     }
   }
 
@@ -418,29 +461,36 @@ function normalizeCompositionEFashionFallback_(v) {
  * "6 x M/L - 6 x XL/XXL" -> "6*M/L,6*XL/XXL"
  * "M/L - XL/XXL" -> "6*M/L,6*XL/XXL"
  ****************************************************/
-function extractTaillesFromContenuColis_(v) {
+function extractTaillesFromContenuColisEFashion_(v, colisage) {
   const raw = String(v || "").trim();
   if (!raw) return "";
 
   const normalized = raw
     .replace(/\u00A0/g, " ")
+    .replace(/[／⁄∕]/g, "/")
+    .replace(/[–—−]/g, "-")
     .replace(/\s+/g, " ")
     .replace(/\s*-\s*/g, "|")
     .trim();
 
   const segments = normalized
     .split("|")
-    .map(function (part) { return part.trim(); })
+    .map(function (part) { return String(part || "").trim(); })
     .filter(Boolean);
 
   if (!segments.length) return "";
 
+  const total = Number(colisage);
+  if (!Number.isFinite(total) || total <= 0) return "";
+  if (total % segments.length !== 0) return "";
+
+  const qtyPerSize = total / segments.length;
   const parts = [];
 
   for (let i = 0; i < segments.length; i++) {
-    const parsed = parseContenuColisSegment_(segments[i]);
-    if (!parsed) return "";
-    parts.push(parsed.qty + "*" + parsed.size);
+    const parsed = parseContenuColisSegmentEFashion_(segments[i]);
+    if (!parsed || !parsed.size) return "";
+    parts.push(qtyPerSize + "*" + parsed.size);
   }
 
   return parts.join(",");
@@ -566,42 +616,49 @@ function normalizeEFashionColorName_(raw) {
   return low.charAt(0).toUpperCase() + low.slice(1);
 }
 
-function parseContenuColisSegment_(segment) {
+function parseContenuColisSegmentEFashion_(segment) {
   const s = String(segment || "").trim();
   if (!s) return null;
 
+  // Examples:
+  // "6 x S/M" -> keep only size S/M
+  // "6 x XL/XXL" -> keep only size XL/XXL
+  // "S/M" -> keep S/M
+  // "XL/XXL" -> keep XL/XXL
+
   const withQty = s.match(/^(\d+)\s*[xX×*]?\s*(.+)$/);
   if (withQty) {
-    const size = normalizeEFashionSizeToken_(withQty[2]);
+    const size = normalizeEFashionSizeTokenEFashion_(withQty[2]);
     if (!size) return null;
-    return {
-      qty: Number(withQty[1]),
-      size: size
-    };
+    return { size: size };
   }
 
-  const sizeOnly = normalizeEFashionSizeToken_(s);
+  const sizeOnly = normalizeEFashionSizeTokenEFashion_(s);
   if (sizeOnly) {
-    return {
-      qty: 6,
-      size: sizeOnly
-    };
+    return { size: sizeOnly };
   }
 
   return null;
 }
 
-function normalizeEFashionSizeToken_(raw) {
+function normalizeEFashionSizeTokenEFashion_(raw) {
   const s = String(raw || "")
     .replace(/\u00A0/g, " ")
+    .replace(/[／⁄∕]/g, "/")
     .replace(/\s+/g, " ")
     .replace(/\s*\/\s*/g, "/")
     .trim()
     .toUpperCase();
 
   if (!s) return "";
-  if (!/^[A-Z0-9]+(?:\/[A-Z0-9]+)*$/.test(s)) return "";
-  return s;
+
+  // Keep slash-based dual sizes intact: S/M, L/XL, M/L, XL/XXL
+  if (/^[A-Z0-9]+(?:\/[A-Z0-9]+)+$/.test(s)) return s;
+
+  // Allow simple single tokens if ever needed
+  if (/^[A-Z0-9]+$/.test(s)) return s;
+
+  return "";
 }
 
 /****************************************************
@@ -640,4 +697,218 @@ function mapStockCategoryToEFashion_(raw) {
   };
 
   return MAP[s] || { sousCategorie: "Robes & Combinaisons", sousSousCategorie: "Robes longues" };
+}
+
+/****************************************************
+ * Strict validation for STOCK Couleurs before eFashion export
+ * Rules:
+ * - syntax must be pairs like: 4 ROUGE 2 VERT 2 BLEU
+ * - total quantity must equal 12
+ ****************************************************/
+function validateEFashionColorPack_(raw, expectedTotal) {
+  const s = String(raw || "").trim();
+  if (!s) {
+    return { ok: false, reason: "Couleurs vides" };
+  }
+
+  const tokens = s.split(/\s+/).filter(Boolean);
+  if (tokens.length % 2 !== 0) {
+    return { ok: false, reason: "Couleurs mal formées (paires quantité/couleur attendues): " + s };
+  }
+
+  let total = 0;
+  for (let i = 0; i < tokens.length; i += 2) {
+    const qty = Number(tokens[i]);
+    const color = String(tokens[i + 1] || "").trim();
+
+    if (!Number.isFinite(qty) || qty <= 0 || !Number.isInteger(qty)) {
+      return { ok: false, reason: "Quantité couleur invalide: '" + tokens[i] + "' dans '" + s + "'" };
+    }
+    if (!color || /^\d+$/.test(color)) {
+      return { ok: false, reason: "Couleurs mal formées (couleur manquante ou invalide) dans '" + s + "'" };
+    }
+
+    total += qty;
+  }
+
+  const exp = Number(expectedTotal);
+  if (!Number.isFinite(exp) || exp <= 0) {
+    return { ok: false, reason: "Colisage invalide pour validation couleurs" };
+  }
+
+  if (total !== exp) {
+    return { ok: false, reason: "Somme des couleurs = " + total + " au lieu de " + exp + " dans '" + s + "'" };
+  }
+
+  return { ok: true, total: total };
+}
+
+function parseColisageEFashion_(v) {
+  const s = String(v ?? "").trim().replace(/\s+/g, "").replace(",", ".");
+  const n = Number(s);
+
+  if (!Number.isFinite(n) || n <= 0 || !Number.isInteger(n)) {
+    return { ok: false, reason: "Colisage invalide: '" + String(v ?? "") + "'" };
+  }
+
+  if (n % 2 !== 0) {
+    return { ok: false, reason: "Colisage impair non supporté pour un pack 2 tailles: " + n };
+  }
+
+  return { ok: true, value: n };
+}
+
+/****************************************************
+ * Generate photo ZIP helper files in Drive
+ * - efashion_photo_colors.json
+ * - efashion_photo_zip.py
+ ****************************************************/
+function exportEFashionPhotoZipHelperToDrive_(rows) {
+  const folder = DriveApp.getFolderById(EFASHION_EXPORT_FOLDER_ID);
+
+  const refs = rows.map(function (it) {
+    return {
+      ref: String(it.ref || "").trim().toUpperCase(),
+      color: firstEFashionColor_(it.couleursEf)
+    };
+  }).filter(function (x) {
+    return x.ref;
+  });
+
+  const payload = {
+    generated_at: new Date().toISOString(),
+    refs: refs
+  };
+
+  // Always refresh the ref -> color mapping
+  upsertDriveTextFile_(folder, "efashion_photo_colors.json", JSON.stringify(payload, null, 2), MimeType.PLAIN_TEXT);
+
+  // Create the Python helper only once (or if missing)
+  ensureDriveTextFileExists_(folder, "efashion_photo_zip.py", buildEFashionPhotoZipPythonScript_(), MimeType.PLAIN_TEXT);
+}
+
+function firstEFashionColor_(couleursEf) {
+  const s = String(couleursEf || "").trim();
+  if (!s) return "NOIR";
+
+  const first = s.split(",")[0] || "";
+  const color = first.split("*")[0] || "";
+  return String(color || "NOIR").trim().toUpperCase();
+}
+
+function upsertDriveTextFile_(folder, filename, content, mimeType) {
+  const existing = folder.getFilesByName(filename);
+  while (existing.hasNext()) {
+    existing.next().setTrashed(true);
+  }
+  folder.createFile(filename, content, mimeType || MimeType.PLAIN_TEXT);
+}
+
+function ensureDriveTextFileExists_(folder, filename, content, mimeType) {
+  const existing = folder.getFilesByName(filename);
+  if (existing.hasNext()) return;
+  folder.createFile(filename, content, mimeType || MimeType.PLAIN_TEXT);
+}
+
+function buildEFashionPhotoZipPythonScript_() {
+  return [
+    "#!/usr/bin/env python3",
+    "from __future__ import annotations",
+    "",
+    "import argparse",
+    "import json",
+    "import re",
+    "import zipfile",
+    "from collections import defaultdict",
+    "from pathlib import Path",
+    "",
+    "IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.webp'}",
+    "DEFAULT_COLOR = 'NOIR'",
+    "MAX_PHOTOS_PER_REF = 20",
+    "",
+    "def slugify_color(color: str) -> str:",
+    "    color = (color or DEFAULT_COLOR).strip().upper()",
+    "    color = color.replace(' ', '-')",
+    "    color = re.sub(r'[^A-Z0-9\\-À-ÿ]', '-', color)",
+    "    color = re.sub(r'-{2,}', '-', color).strip('-')",
+    "    return color or DEFAULT_COLOR",
+    "",
+    "def normalize_ref(ref: str) -> str:",
+    "    return ref.strip().upper()",
+    "",
+    "def parse_input_name(path: Path) -> tuple[str, int] | None:",
+    "    stem = path.stem.strip()",
+    "    m = re.fullmatch(r'(.+?)_(\\d+)$', stem)",
+    "    if m:",
+    "        ref = normalize_ref(m.group(1))",
+    "        raw_index = int(m.group(2))",
+    "        pos = max(0, raw_index - 1)",
+    "        return ref, pos",
+    "    return normalize_ref(stem), 0",
+    "",
+    "def load_mapping(mapping_path: Path | None) -> dict[str, str]:",
+    "    if mapping_path is None or not mapping_path.exists():",
+    "        return {}",
+    "    data = json.loads(mapping_path.read_text(encoding='utf-8'))",
+    "    out: dict[str, str] = {}",
+    "    if isinstance(data, dict) and isinstance(data.get('refs'), list):",
+    "        for item in data['refs']:",
+    "            if isinstance(item, dict) and item.get('ref'):",
+    "                out[normalize_ref(str(item['ref']))] = slugify_color(str(item.get('color', DEFAULT_COLOR)))",
+    "    return out",
+    "",
+    "def build_zip(input_dir: Path, output_zip: Path, mapping: dict[str, str]) -> None:",
+    "    files = [p for p in input_dir.iterdir() if p.is_file() and p.suffix.lower() in IMAGE_EXTS]",
+    "    if not files:",
+    "        raise SystemExit(f'Aucune image trouvée dans {input_dir}')",
+    "",
+    "    by_ref: dict[str, list[tuple[int, Path]]] = defaultdict(list)",
+    "    for path in files:",
+    "        parsed = parse_input_name(path)",
+    "        if parsed is None:",
+    "            continue",
+    "        ref, pos = parsed",
+    "        by_ref[ref].append((pos, path))",
+    "",
+    "    output_zip.parent.mkdir(parents=True, exist_ok=True)",
+    "    with zipfile.ZipFile(output_zip, 'w', compression=zipfile.ZIP_DEFLATED) as zf:",
+    "        for ref in sorted(by_ref):",
+    "            color = mapping.get(ref, DEFAULT_COLOR)",
+    "            entries = sorted(by_ref[ref], key=lambda x: (x[0], x[1].name.lower()))",
+    "            used_positions: set[int] = set()",
+    "            count = 0",
+    "            for suggested_pos, path in entries:",
+    "                if count >= MAX_PHOTOS_PER_REF:",
+    "                    break",
+    "                pos = suggested_pos",
+    "                while pos in used_positions:",
+    "                    pos += 1",
+    "                used_positions.add(pos)",
+    "                arcname = f'{ref}-{color}-{pos}{path.suffix.lower()}'",
+    "                zf.write(path, arcname)",
+    "                count += 1",
+    "",
+    "def main() -> int:",
+    "    parser = argparse.ArgumentParser(description='Prépare un ZIP de photos renommées au format {reference-couleur}-{position}.jpg')",
+    "    parser.add_argument('--input', default='input', help='Dossier d\'entrée contenant les photos')",
+    "    parser.add_argument('--output', default='output/photos_upload.zip', help='Chemin du ZIP de sortie')",
+    "    parser.add_argument('--mapping', default='efashion_photo_colors.json', help='Fichier JSON de mapping ref -> couleur')",
+    "    args = parser.parse_args()",
+    "",
+    "    input_dir = Path(args.input)",
+    "    output_zip = Path(args.output)",
+    "    mapping_path = Path(args.mapping) if args.mapping else None",
+    "",
+    "    if not input_dir.exists() or not input_dir.is_dir():",
+    "        raise SystemExit(f'Dossier input introuvable: {input_dir}')",
+    "",
+    "    mapping = load_mapping(mapping_path)",
+    "    build_zip(input_dir, output_zip, mapping)",
+    "    print(f'ZIP créé: {output_zip}')",
+    "    return 0",
+    "",
+    "if __name__ == '__main__':",
+    "    raise SystemExit(main())",
+    ""
+  ].join("\n");
 }

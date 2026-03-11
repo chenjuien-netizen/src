@@ -518,21 +518,30 @@ function formatEFashionMixedColorsFromStock_(raw) {
 
   const re = /(\d+)\s+([A-Za-zÀ-ÿ]+)/g;
   const parts = [];
+  let oddSplitIndex = 0;
   let m;
   while ((m = re.exec(s)) !== null) {
     const qty = Number(m[1]);
     const color = normalizeEFashionColorName_(m[2]);
     if (!Number.isFinite(qty) || qty <= 0 || !color) continue;
-    const split = splitQtyAcross2_(qty);
+    const split = splitColorQtyAcrossBalancedPair_(qty, oddSplitIndex);
+    if (qty % 2 !== 0) oddSplitIndex += 1;
     parts.push(color + "*" + split.join("-"));
   }
 
   return parts.join(",");
 }
 
-function splitQtyAcross2_(qty) {
+function splitColorQtyAcrossBalancedPair_(qty, oddSplitIndex) {
   const n = Math.max(0, Number(qty) || 0);
-  return [Math.ceil(n / 2), Math.floor(n / 2)];
+  if (n % 2 === 0) {
+    const half = n / 2;
+    return [half, half];
+  }
+
+  const high = Math.ceil(n / 2);
+  const low = Math.floor(n / 2);
+  return oddSplitIndex % 2 === 0 ? [high, low] : [low, high];
 }
 
 function normalizeEFashionColorName_(raw) {
@@ -561,23 +570,38 @@ function parseContenuColisSegment_(segment) {
   const s = String(segment || "").trim();
   if (!s) return null;
 
-  const withQty = s.match(/^(\d+)\s*[xX×*]?\s*([A-Za-z0-9]+(?:\/[A-Za-z0-9]+)*)$/);
+  const withQty = s.match(/^(\d+)\s*[xX×*]?\s*(.+)$/);
   if (withQty) {
+    const size = normalizeEFashionSizeToken_(withQty[2]);
+    if (!size) return null;
     return {
       qty: Number(withQty[1]),
-      size: withQty[2]
+      size: size
     };
   }
 
-  const sizeOnly = s.match(/^([A-Za-z0-9]+(?:\/[A-Za-z0-9]+)*)$/);
+  const sizeOnly = normalizeEFashionSizeToken_(s);
   if (sizeOnly) {
     return {
       qty: 6,
-      size: sizeOnly[1]
+      size: sizeOnly
     };
   }
 
   return null;
+}
+
+function normalizeEFashionSizeToken_(raw) {
+  const s = String(raw || "")
+    .replace(/\u00A0/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/\s*\/\s*/g, "/")
+    .trim()
+    .toUpperCase();
+
+  if (!s) return "";
+  if (!/^[A-Z0-9]+(?:\/[A-Z0-9]+)*$/.test(s)) return "";
+  return s;
 }
 
 /****************************************************

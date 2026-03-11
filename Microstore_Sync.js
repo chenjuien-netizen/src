@@ -306,6 +306,7 @@ function msRunSyncCore_() {
 
       if (stockIndex.hasOwnProperty(refKey)) {
         var idx = stockIndex[refKey];
+        var paysOrigine = msPreferIncomingNonEmpty_(rec2.paysOrigine, out["Pays d'origine"][idx][0]);
         msSetOutRow_(out, idx, {
           "货号": rec2.refRaw || rec2.ref,
           "Nom": rec2.nom,
@@ -321,7 +322,7 @@ function msRunSyncCore_() {
           "Nbr de pièces hors unité de colisage": rec2.horsColisage,
           "Poids (en gramme)": rec2.poidsG,
           "Prix": rec2.prix,
-          "Pays d'origine": rec2.paysOrigine,
+          "Pays d'origine": paysOrigine,
           "Remise (%)": rec2.remise,
           "Remarque": rec2.remarqueFinale,
           "Date de création": rec2.dateCreation,
@@ -398,6 +399,7 @@ function msRunSyncCore_() {
 
         if (disabledIndex[rref] && !seenInMs[rref]) {
           var recDisExisting = disabledMap[rref] || {};
+          var paysOrigineDisabled = msPreferIncomingNonEmpty_(recDisExisting.paysOrigine, out["Pays d'origine"][rr][0]);
           msSetOutRow_(out, rr, {
             "货号": recDisExisting.refRaw || rref,
             "Nom": recDisExisting.nom || "",
@@ -413,7 +415,7 @@ function msRunSyncCore_() {
             "Nbr de pièces hors unité de colisage": recDisExisting.horsColisage || "",
             "Poids (en gramme)": recDisExisting.poidsG || "",
             "Prix": recDisExisting.prix || "",
-            "Pays d'origine": recDisExisting.paysOrigine || "",
+            "Pays d'origine": paysOrigineDisabled,
             "Remise (%)": recDisExisting.remise || "",
             "Remarque": recDisExisting.remarqueFinale || recDisExisting.remarque || "",
             "Date de création": recDisExisting.dateCreation || "",
@@ -511,6 +513,12 @@ function msGetLastImportDateText_() {
   var lr = sh.getLastRow();
   if (lr < 2) return "";
   return sh.getRange(lr, 1).getDisplayValue() || "";
+}
+
+function msPreferIncomingNonEmpty_(incomingValue, fallbackValue) {
+  var incoming = (incomingValue === null || typeof incomingValue === "undefined") ? "" : String(incomingValue).trim();
+  if (incoming) return incoming;
+  return (fallbackValue === null || typeof fallbackValue === "undefined") ? "" : String(fallbackValue).trim();
 }
 
 function msInitOutColumns_(shStock, stockHeaderMap, stockNeed, nExisting) {

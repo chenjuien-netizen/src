@@ -72,7 +72,8 @@ function exportStockToMsExport() {
       "Remise (%)",
       "Date de création",
       "每箱件数2",
-      "包/箱"
+      "包/箱",
+      "Couleurs"
     ];
     ensureHeadersExist_(stockMap, stockNeed, "STOCK (ligne 1)");
 
@@ -107,6 +108,7 @@ function exportStockToMsExport() {
     var cPaysOrigine = stockMap["pays d'origine"] - 1;
     var cRemarque = stockMap["remarque"] ? (stockMap["remarque"] - 1) : -1;
     var cMsStatut = stockMap["ms_statut"] ? (stockMap["ms_statut"] - 1) : -1;
+    var cCouleursRemark = stockMap["couleurs"] ? (stockMap["couleurs"] - 1) : cCouleur;
 
     var rows = [];
     for (var i = 0; i < data.length; i++) {
@@ -132,6 +134,7 @@ function exportStockToMsExport() {
         saison: msString_(r[cSaison]),
         colisage: (r[cColisage] === null || typeof r[cColisage] === "undefined") ? "" : r[cColisage],
         couleur: msNormalizeCouleur_(r[cCouleur]),
+        couleursRaw: msString_(r[cCouleursRemark]),
         prix: (r[cPrix] === null || typeof r[cPrix] === "undefined") ? "" : r[cPrix],
         remise: (r[cRemise] === null || typeof r[cRemise] === "undefined") ? "" : r[cRemise],
         totalPcs: r[cTotalPcs],
@@ -176,7 +179,24 @@ function exportStockToMsExport() {
       line[expMap["prix"] - 1] = it.prix;
       line[expMap["pays d'origine"] - 1] = it.paysOrigine;
       line[expMap["remise (%)"] - 1] = it.remise;
-      line[expMap["remarque"] - 1] = contenu;
+      var remarqueBlocks = [];
+      if (it.remarque) remarqueBlocks.push(String(it.remarque).trim());
+      if (contenu) remarqueBlocks.push(contenu);
+      var couleursTexte = msBuildCouleursRemark_(it.couleursRaw);
+      if (couleursTexte) remarqueBlocks.push(couleursTexte);
+
+      // Déduplique les blocs tout en gardant l'ordre
+      var seenRemark = {};
+      var finalBlocks = [];
+      for (var rb = 0; rb < remarqueBlocks.length; rb++) {
+        var txt = String(remarqueBlocks[rb] || "").trim();
+        if (!txt) continue;
+        if (seenRemark[txt]) continue;
+        seenRemark[txt] = true;
+        finalBlocks.push(txt);
+      }
+
+      line[expMap["remarque"] - 1] = finalBlocks.join("\n");
 
       out.push(line);
     }
@@ -226,6 +246,30 @@ function msBuildContenuColis_(totalPieces, packs, pcsPerPack) {
 function msString_(v) {
   if (v === null || typeof v === "undefined") return "";
   return String(v).trim();
+}
+
+function msBuildCouleursRemark_(raw) {
+  var s = String(raw || "").trim();
+  if (!s) return "";
+
+  var re = /(\d+)\s+([A-Za-zÀ-ÿ]+)/g;
+  var parts = [];
+  var m;
+  while ((m = re.exec(s)) !== null) {
+    var qty = m[1];
+    var color = msTitleCaseColor_(m[2]);
+    parts.push(qty + " " + color);
+  }
+
+  if (!parts.length) return "";
+  return "Couleurs: " + parts.join(", ");
+}
+
+function msTitleCaseColor_(raw) {
+  var s = String(raw || "").trim();
+  if (!s) return "";
+  var low = s.toLowerCase();
+  return low.charAt(0).toUpperCase() + low.slice(1);
 }
 
 /**

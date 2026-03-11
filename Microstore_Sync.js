@@ -92,7 +92,8 @@ function msRunSyncCore_() {
     for (var i = 0; i < msData.length; i++) {
       var row = msData[i];
       var refRaw = msGetCell_(row, msHeaderMap["référence"]);
-      var ref = msNormalizeRef_(refRaw);
+      var refRawStored = String(refRaw || "").trim();
+      var ref = msNormalizeRef_(refRawStored);
       if (!ref) continue;
 
       msOrder.push(ref);
@@ -101,6 +102,7 @@ function msRunSyncCore_() {
 
       msMap[ref] = {
         ref: ref,
+        refRaw: refRawStored,
         nom: msGetCell_(row, msHeaderMap["nom"]),
         categorie: msGetCell_(row, msHeaderMap["catégorie"]),
         contenuColis: msGetCell_(row, msHeaderMap["contenu colis"]),
@@ -134,8 +136,7 @@ function msRunSyncCore_() {
     for (var r = 0; r < refsMs.length; r++) {
       var k = refsMs[r];
       var rec = msMap[k];
-      var merged = msMergeRemarqueNom_(rec.remarque, rec.nom);
-      rec.remarqueFinale = msApplyDoublonTag_(merged, doublonCount[k] || 1);
+      rec.remarqueFinale = msApplyDoublonTag_(rec.remarque, doublonCount[k] || 1);
     }
 
     ss.toast("Lecture MS_IMPORT_DISABLED…", "Microstore", 5);
@@ -178,7 +179,8 @@ function msRunSyncCore_() {
       for (var d = 0; d < disData.length; d++) {
         var rowDis = disData[d];
         var refRawDis = msGetCell_(rowDis, disHeaderMap["référence"]);
-        var refDis = msNormalizeRef_(refRawDis);
+        var refRawDisStored = String(refRawDis || "").trim();
+        var refDis = msNormalizeRef_(refRawDisStored);
         if (!refDis) continue;
 
         disabledIndex[refDis] = true;
@@ -188,6 +190,7 @@ function msRunSyncCore_() {
 
         disabledMap[refDis] = {
           ref: refDis,
+          refRaw: refRawDisStored,
           nom: msGetCell_(rowDis, disHeaderMap["nom"]),
           categorie: msGetCell_(rowDis, disHeaderMap["catégorie"]),
           contenuColis: msGetCell_(rowDis, disHeaderMap["contenu colis"]),
@@ -221,8 +224,7 @@ function msRunSyncCore_() {
       for (var dr = 0; dr < refsDisabled.length; dr++) {
         var dk = refsDisabled[dr];
         var drec = disabledMap[dk];
-        var dmerged = msMergeRemarqueNom_(drec.remarque, drec.nom);
-        drec.remarqueFinale = msApplyDoublonTag_(dmerged, disabledDoublonCount[dk] || 1);
+        drec.remarqueFinale = msApplyDoublonTag_(drec.remarque, disabledDoublonCount[dk] || 1);
       }
     }
 
@@ -305,7 +307,7 @@ function msRunSyncCore_() {
       if (stockIndex.hasOwnProperty(refKey)) {
         var idx = stockIndex[refKey];
         msSetOutRow_(out, idx, {
-          "货号": rec2.ref,
+          "货号": rec2.refRaw || rec2.ref,
           "Nom": rec2.nom,
           "Catégorie": rec2.categorie,
           "Contenu colis": rec2.contenuColis,
@@ -328,7 +330,7 @@ function msRunSyncCore_() {
         });
       } else {
         toAdd.push({
-          "货号": rec2.ref,
+          "货号": rec2.refRaw || rec2.ref,
           "Nom": rec2.nom,
           "Catégorie": rec2.categorie,
           "Contenu colis": rec2.contenuColis,
@@ -365,7 +367,7 @@ function msRunSyncCore_() {
 
       var recDis = disabledMap[refDis] || {};
       toAdd.push({
-        "货号": refDis,
+        "货号": recDis.refRaw || refDis,
         "Nom": recDis.nom || "",
         "Catégorie": recDis.categorie || "",
         "Contenu colis": recDis.contenuColis || "",
@@ -397,7 +399,7 @@ function msRunSyncCore_() {
         if (disabledIndex[rref] && !seenInMs[rref]) {
           var recDisExisting = disabledMap[rref] || {};
           msSetOutRow_(out, rr, {
-            "货号": rref,
+            "货号": recDisExisting.refRaw || rref,
             "Nom": recDisExisting.nom || "",
             "Catégorie": recDisExisting.categorie || "",
             "Contenu colis": recDisExisting.contenuColis || "",

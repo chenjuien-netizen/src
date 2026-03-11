@@ -25,7 +25,9 @@ function exportStockToEFashion() {
     "Contenu colis",
     "Poids (en gramme)",
     "Pays d'origine",
-    "Composition matérielle"
+    "Composition matérielle",
+    "Couleurs",
+    "Catégorie"
   ];
 
   ensureHeadersExist_(stockMap, need, "STOCK");
@@ -47,6 +49,8 @@ function exportStockToEFashion() {
   const cPoids = stockMap["poids (en gramme)"];
   const cPays = stockMap["pays d'origine"];
   const cCompo = stockMap["composition matérielle"];
+  const cCouleursStock = stockMap["couleurs"];
+  const cCategorieStock = stockMap["catégorie"];
 
   const refVals = stock.getRange(2, cRef, n, 1).getValues().flat();
   const prixVals = stock.getRange(2, cPrix, n, 1).getValues().flat();
@@ -56,6 +60,8 @@ function exportStockToEFashion() {
   const paysVals = stock.getRange(2, cPays, n, 1).getValues().flat();
   const compoVals = stock.getRange(2, cCompo, n, 1).getValues().flat();
   const selVals = stock.getRange(2, cSel, n, 1).getValues().flat();
+  const couleursStockVals = stock.getRange(2, cCouleursStock, n, 1).getValues().flat();
+  const categorieStockVals = stock.getRange(2, cCategorieStock, n, 1).getValues().flat();
 
   let rows = [];
 
@@ -68,8 +74,8 @@ function exportStockToEFashion() {
 
     const prix = formatPriceEFashionText_(prixVals[i]);
     const dt = normalizeDateForSortEf_(dateVals[i]);
-
-    const tailles = normalizeTaillesEFashion_(extractTaillesFromContenuColis_(contenuVals[i]));
+    const contenuColis = String(contenuVals[i] ?? "").trim();
+    const tailles = extractTaillesFromContenuColis_(contenuColis);
     const poids = String(poidsVals[i] ?? "").trim();
     const pays = String(paysVals[i] ?? "").trim();
 
@@ -80,6 +86,11 @@ function exportStockToEFashion() {
     } else {
       compo = normalizeCompositionEFashionFallback_(compoVals[i]);
     }
+
+    const couleursStock = String(couleursStockVals[i] ?? "").trim();
+    const catStock = String(categorieStockVals[i] ?? "").trim();
+    const efCat = mapStockCategoryToEFashion_(catStock);
+    const couleursEf = formatEFashionMixedColorsFromStock_(couleursStock);
 
     const sheetRow = 2 + i;
 
@@ -93,6 +104,9 @@ function exportStockToEFashion() {
       pays: pays,
       compo: compo,
       row: sheetRow,
+      couleursEf: couleursEf,
+      sousCategorie: efCat.sousCategorie,
+      sousSousCategorie: efCat.sousSousCategorie,
     });
 
   }
@@ -157,8 +171,8 @@ function exportStockToEFashion() {
     // Fixed values
     line[cMarque - 1] = "J&S FASHION";
     line[cCategorie - 1] = "Femme";
-    line[cSousCategorie - 1] = "Robes & Combinaisons";
-    line[cSousSousCategorie - 1] = "Robes longues";
+    line[cSousCategorie - 1] = it.sousCategorie;
+    line[cSousSousCategorie - 1] = it.sousSousCategorie;
 
     // User wants mixed-color selling with no minimum quantity for now
     line[cVenduPar - 1] = "melangees";
@@ -173,19 +187,18 @@ function exportStockToEFashion() {
     line[cReference - 1] = it.ref;
     line[cProvenances - 1] = it.pays;
 
-    // For test import, use the mixed-color style from their example
-    line[cTailles - 1] = "S,M,L";
-    line[cCouleurs - 1] = "Bleu*1-1-1,Noir*1-1-1,Rouge*1-1-1";
+    line[cTailles - 1] = it.tailles;
+    line[cCouleurs - 1] = it.couleursEf;
 
     // Extra safety: fixed-position J/K as well
-    if (hinfo.width >= 10) line[9] = "S,M,L";
-    if (hinfo.width >= 11) line[10] = "Bleu*1-1-1,Noir*1-1-1,Rouge*1-1-1";
+    if (hinfo.width >= 10) line[9] = it.tailles;
+    if (hinfo.width >= 11) line[10] = it.couleursEf;
 
     // Prix: write as TEXT "0.00" (dot)
     line[cPrixHT - 1] = it.prix;
 
-    // Poids: write as-is (no conversion)
-    line[cPoidsKG - 1] = it.poids;
+    // Poids: convert to KG text
+    line[cPoidsKG - 1] = formatWeightKgEFashionText_(it.poids);
 
     // Composition: normalized style with import normalizer
     line[cCompositions - 1] = normalizeCompositionEFashionImport_(it.compo) || "Viscose*90,Polyester*10";
@@ -194,16 +207,16 @@ function exportStockToEFashion() {
     if (hinfo.width >= 1)  line[0] = "J&S FASHION";         // A Marque
     if (hinfo.width >= 2)  line[1] = it.ref;                  // B Référence
     if (hinfo.width >= 3)  line[2] = "Femme";               // C Catégorie
-    if (hinfo.width >= 4)  line[3] = "Robes & Combinaisons";// D Sous catégorie
-    if (hinfo.width >= 5)  line[4] = "Robes longues";       // E Sous-sous Catégorie
+    if (hinfo.width >= 4)  line[3] = it.sousCategorie;       // D Sous catégorie
+    if (hinfo.width >= 5)  line[4] = it.sousSousCategorie;   // E Sous-sous Catégorie
     if (hinfo.width >= 6)  line[5] = it.pays;                 // F Provenances
     if (hinfo.width >= 7)  line[6] = "melangees";          // G Vendu Par
     if (hinfo.width >= 8)  line[7] = "";                   // H Qte min
     if (hinfo.width >= 9)  line[8] = "Printemps / Été";     // I Collection
-    if (hinfo.width >= 10) line[9] = "S,M,L";               // J Tailles
-    if (hinfo.width >= 11) line[10] = "Bleu,Jaune,vert";    // K Couleurs
+    if (hinfo.width >= 10) line[9] = it.tailles;             // J Tailles
+    if (hinfo.width >= 11) line[10] = it.couleursEf;         // K Couleurs
     if (hinfo.width >= 12) line[11] = it.prix;                // L Prix HT
-    if (hinfo.width >= 14) line[13] = it.poids;               // N Poids KG
+    if (hinfo.width >= 14) line[13] = formatWeightKgEFashionText_(it.poids); // N Poids KG
     if (hinfo.width >= 15) line[14] = normalizeCompositionEFashionImport_(it.compo) || "Viscose*90,Polyester*10"; // O Compositions
 
     out.push(line);
@@ -219,6 +232,7 @@ function exportStockToEFashion() {
     exp.getRange(2, 1, out.length, hinfo.width).setNumberFormat("@");
     exp.getRange(2, 1, out.length, hinfo.width).setValues(out);
     exp.getRange(2, 1, out.length, hinfo.width).setNumberFormat("@");
+    SpreadsheetApp.flush();
 
     // Auto-uncheck: décoche 选择 pour les lignes exportées
     try {
@@ -228,6 +242,16 @@ function exportStockToEFashion() {
       for (const it of rows) {
         stock.getRange(it.row, cSel).setValue(false);
       }
+    }
+
+    // Auto-export Drive after sheet generation
+    // Important: flush first so the XLSX export sees the newly written data, not stale previous values.
+    try {
+      SpreadsheetApp.flush();
+      Utilities.sleep(1200);
+      exportEFashionToDriveXlsx();
+    } catch (e) {
+      Logger.log("Auto export Drive eFashion failed: " + e);
     }
   }
 
@@ -375,17 +399,6 @@ function formatPriceEFashionText_(v) {
 }
 
 /****************************************************
- * Tailles eFashion
- * v1 focus: "6 x M/L - 6 x XL/XXL" -> "6*M/L,6*XL/XXL"
- ****************************************************/
-function normalizeTaillesEFashion_(v) {
-  const s = String(v || "").trim();
-  if (!s) return "";
-  // keep as star/comma list; remove spaces around commas
-  return s.replace(/\s*,\s*/g, ",");
-}
-
-/****************************************************
  * Fallback composition normalizer if PFS helper is not loaded
  ****************************************************/
 function normalizeCompositionEFashionFallback_(v) {
@@ -400,34 +413,37 @@ function normalizeCompositionEFashionFallback_(v) {
 }
 
 /****************************************************
- * Extract tailles from Contenu colis (v1 strict parser)
+ * Extract tailles from Contenu colis
+ * Examples:
+ * "6 x M/L - 6 x XL/XXL" -> "6*M/L,6*XL/XXL"
+ * "M/L - XL/XXL" -> "6*M/L,6*XL/XXL"
  ****************************************************/
 function extractTaillesFromContenuColis_(v) {
-  const s0 = String(v || "").trim();
-  if (!s0) return "";
+  const raw = String(v || "").trim();
+  if (!raw) return "";
 
-  // v1 strict: support principal
-  // "6 x M/L - 6 x XL/XXL" -> "6*M/L,6*XL/XXL"
-  let s = s0;
+  const normalized = raw
+    .replace(/\u00A0/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/\s*-\s*/g, "|")
+    .trim();
 
-  // 1) Convert "6 x" / "6x" / "6×" to "6*"
-  s = s.replace(/(\d+)\s*[xX×]\s*/g, "$1*");
+  const segments = normalized
+    .split("|")
+    .map(function (part) { return part.trim(); })
+    .filter(Boolean);
 
-  // 2) Convert " - " to comma list separator
-  s = s.replace(/\s*-\s*/g, ",");
+  if (!segments.length) return "";
 
-  // 3) Normalize commas
-  s = s.replace(/\s*,\s*/g, ",");
-
-  // Validate: must contain at least one "n*SIZE" block
-  const re = /(\d+)\*\s*([A-Za-z0-9]+(?:\/[A-Za-z0-9]+)*)/g;
   const parts = [];
-  let m;
-  while ((m = re.exec(s)) !== null) {
-    parts.push(`${m[1]}*${m[2]}`);
+
+  for (let i = 0; i < segments.length; i++) {
+    const parsed = parseContenuColisSegment_(segments[i]);
+    if (!parsed) return "";
+    parts.push(parsed.qty + "*" + parsed.size);
   }
 
-  return parts.length ? parts.join(",") : "";
+  return parts.join(",");
 }
 
 /****************************************************
@@ -489,4 +505,115 @@ function normalizeMaterialEfashion_(matRaw) {
   // Title-case fallback
   const low = s.toLowerCase();
   return low.charAt(0).toUpperCase() + low.slice(1);
+}
+
+/****************************************************
+ * Convert STOCK Couleurs to eFashion mixed-color format
+ * Input example: "4 ROUGE 2 VERT 2 MARRON 4 BLEU"
+ * Output example: "Rouge*2-2,Vert*1-1,Marron*1-1,Bleu*2-2"
+ ****************************************************/
+function formatEFashionMixedColorsFromStock_(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+
+  const re = /(\d+)\s+([A-Za-zÀ-ÿ]+)/g;
+  const parts = [];
+  let m;
+  while ((m = re.exec(s)) !== null) {
+    const qty = Number(m[1]);
+    const color = normalizeEFashionColorName_(m[2]);
+    if (!Number.isFinite(qty) || qty <= 0 || !color) continue;
+    const split = splitQtyAcross2_(qty);
+    parts.push(color + "*" + split.join("-"));
+  }
+
+  return parts.join(",");
+}
+
+function splitQtyAcross2_(qty) {
+  const n = Math.max(0, Number(qty) || 0);
+  return [Math.ceil(n / 2), Math.floor(n / 2)];
+}
+
+function normalizeEFashionColorName_(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  const up = s.toUpperCase();
+  const MAP = {
+    "ROUGE": "Rouge",
+    "VERT": "Vert",
+    "MARRON": "Marron",
+    "BLEU": "Bleu",
+    "TAUPE": "Taupe",
+    "NOIR": "Noir",
+    "KAKI": "Kaki",
+    "BLANC": "Blanc",
+    "BEIGE": "Beige",
+    "JAUNE": "Jaune",
+    "GRIS": "Gris"
+  };
+  if (MAP[up]) return MAP[up];
+  const low = s.toLowerCase();
+  return low.charAt(0).toUpperCase() + low.slice(1);
+}
+
+function parseContenuColisSegment_(segment) {
+  const s = String(segment || "").trim();
+  if (!s) return null;
+
+  const withQty = s.match(/^(\d+)\s*[xX×*]?\s*([A-Za-z0-9]+(?:\/[A-Za-z0-9]+)*)$/);
+  if (withQty) {
+    return {
+      qty: Number(withQty[1]),
+      size: withQty[2]
+    };
+  }
+
+  const sizeOnly = s.match(/^([A-Za-z0-9]+(?:\/[A-Za-z0-9]+)*)$/);
+  if (sizeOnly) {
+    return {
+      qty: 6,
+      size: sizeOnly[1]
+    };
+  }
+
+  return null;
+}
+
+/****************************************************
+ * Convert STOCK weight in grams to eFashion KG text
+ * Example: 250 -> "0.25"
+ ****************************************************/
+function formatWeightKgEFashionText_(v) {
+  const s = String(v ?? "").trim().replace(/\s+/g, "").replace(",", ".");
+  const n = Number(s);
+  if (!isFinite(n)) return "";
+  const kg = n / 1000;
+  return String(kg.toFixed(3)).replace(/\.0+$/, "").replace(/(\.\d*[1-9])0+$/, "$1");
+}
+
+/****************************************************
+ * Map STOCK category to eFashion Sous catégorie / Sous-sous catégorie
+ ****************************************************/
+function mapStockCategoryToEFashion_(raw) {
+  const s = String(raw || "").trim().toUpperCase();
+
+  const MAP = {
+    "CHEMISES / TUNIQUES": { sousCategorie: "Hauts", sousSousCategorie: "Tuniques" },
+    "COMBI PANTALON": { sousCategorie: "Robes & Combinaisons", sousSousCategorie: "Combinaisons" },
+    "COMBI SHORT": { sousCategorie: "Robes & Combinaisons", sousSousCategorie: "Combinaisons" },
+    "CROCHETS": { sousCategorie: "Hauts", sousSousCategorie: "Tops" },
+    "ENSEMBLES": { sousCategorie: "Robes & Combinaisons", sousSousCategorie: "Ensembles" },
+    "JUPES": { sousCategorie: "Bas", sousSousCategorie: "Jupes" },
+    "MANTEAUX / VESTES": { sousCategorie: "Extérieur", sousSousCategorie: "Vestes" },
+    "PANTALONS": { sousCategorie: "Bas", sousSousCategorie: "Pantalons" },
+    "PULLS / GILETS": { sousCategorie: "Hauts", sousSousCategorie: "Pulls" },
+    "ROBES COURTES": { sousCategorie: "Robes & Combinaisons", sousSousCategorie: "Robes courtes" },
+    "ROBES LONGUES": { sousCategorie: "Robes & Combinaisons", sousSousCategorie: "Robes longues" },
+    "SHORTS": { sousCategorie: "Bas", sousSousCategorie: "Shorts" },
+    "TOPS": { sousCategorie: "Hauts", sousSousCategorie: "Tops" },
+    "VÊTEMENTS PLAGE": { sousCategorie: "Maillots de bain", sousSousCategorie: "Vêtements de plage" }
+  };
+
+  return MAP[s] || { sousCategorie: "Robes & Combinaisons", sousSousCategorie: "Robes longues" };
 }

@@ -114,14 +114,14 @@ function exportStockToMsExport() {
 
       if (cMsStatut >= 0 && String(r[cMsStatut]).trim() === "MS_SUPPRIME") continue;
 
-      var ref = msNormalizeRef_(r[cRef]);
-      if (!ref) continue;
+      var refRaw = msString_(r[cRef]);
+      if (!refRaw) continue;
 
       var dtInfo = msNormalizeDateForSort_(r[cDate]);
       rows.push({
         sortEmpty: dtInfo.empty,
         sortTs: dtInfo.ts,
-        ref: ref,
+        ref: refRaw,
         msStatut: cMsStatut >= 0 ? String(r[cMsStatut] || "").trim() : "",
         nom: msString_(r[cNom]),
         cat: msString_(r[cCat]),
@@ -184,6 +184,9 @@ function exportStockToMsExport() {
     msClearMsExportData_(shExp, expLastCol);
     if (out.length) shExp.getRange(3, 1, out.length, expLastCol).setValues(out);
 
+    SpreadsheetApp.flush();
+    Utilities.sleep(1200);
+
     ss.toast("Export terminé: " + out.length + " lignes.", "Microstore", 6);
     exportMsExportSheetToDriveXlsx();
   } finally {
@@ -232,6 +235,9 @@ function exportMsExportSheetToDriveXlsx() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(SHEET_MS_EXPORT);
   if (!sheet) throw new Error("Feuille introuvable: " + SHEET_MS_EXPORT);
+
+  SpreadsheetApp.flush();
+  Utilities.sleep(1200);
 
   var folder = DriveApp.getFolderById(MS_EXPORT_DRIVE_FOLDER_ID);
   var spreadsheetId = ss.getId();

@@ -300,6 +300,13 @@ function exportStockToPFS() {
     Logger.log("Auto export Drive PFS failed: " + e);
   }
 
+  // Also generate photo helper files in the export Drive folder
+  try {
+    exportPfsPhotoDupHelperToDrive_(selected);
+  } catch (e) {
+    Logger.log("PFS photo helper export failed: " + e);
+  }
+
   ss.toast("PFS_EXPORT généré : " + out.length + " lignes", "PFS", 6);
 }
 
@@ -923,6 +930,163 @@ function formatWeightKgPFSText_(v) {
   if (!isFinite(n)) return "";
   const kg = n / 1000;
   return String(kg.toFixed(3)).replace(/\.0+$/, "").replace(/(\.\d*[1-9])0+$/, "$1");
+}
+
+/****************************************************
+ * Generate PFS photo helper files in Drive
+ * - pfs_photo_colors.json (always refreshed)
+ * - pfs_photo_dup.py (created only if missing)
+ ****************************************************/
+function exportPfsPhotoDupHelperToDrive_(selectedRows) {
+  const folder = DriveApp.getFolderById(PFS_EXPORT_FOLDER_ID);
+
+  const refs = (selectedRows || []).map(function (it) {
+    const entries = Array.isArray(it.colorPack && it.colorPack.entries) ? it.colorPack.entries : [];
+    return {
+      ref: String(it.ref || "").trim().toUpperCase(),
+      colors: entries.map(function (e) { return String(e.color || "").trim(); }).filter(Boolean)
+    };
+  }).filter(function (x) {
+    return x.ref && x.colors && x.colors.length;
+  });
+
+  const payload = {
+    generated_at: new Date().toISOString(),
+    refs: refs
+  };
+
+  // Always refresh the ref -> colors mapping
+  upsertDriveTextFilePFS_(folder, "pfs_photo_colors.json", JSON.stringify(payload, null, 2), MimeType.PLAIN_TEXT);
+
+  // Create the Python helper only once (or if missing)
+  ensureDriveTextFileExistsPFS_(folder, "pfs_photo_dup.py", buildPfsPhotoDupPythonScript_(), MimeType.PLAIN_TEXT);
+}
+
+function upsertDriveTextFilePFS_(folder, filename, content, mimeType) {
+  const existing = folder.getFilesByName(filename);
+  while (existing.hasNext()) {
+    existing.next().setTrashed(true);
+  }
+  folder.createFile(filename, content, mimeType || MimeType.PLAIN_TEXT);
+}
+
+function ensureDriveTextFileExistsPFS_(folder, filename, content, mimeType) {
+  const existing = folder.getFilesByName(filename);
+  if (existing.hasNext()) return;
+  folder.createFile(filename, content, mimeType || MimeType.PLAIN_TEXT);
+}
+
+function buildPfsPhotoDupPythonScript_() {
+  return [
+    "#!/usr/bin/env python3",
+    "# -*- coding: utf-8 -*-",
+    "from __future__ import annotations",
+    "",
+    "import argparse",
+    "import json",
+    "import re",
+    "from collections import defaultdict",
+    "from pathlib import Path",
+    "",
+    "try:",
+    "    from PIL import Image",
+    "except ImportError as exc:",
+    "    raise SystemExit('Pillow n\\'est pas installé. Installe-le avec: pip install pillow') from exc",
+    "",
+    "IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.webp'}",
+    "",
+    "def normalize_ref(ref: str) -> str:",
+    "    return ref.strip().upper()",
+    "",
+    "def parse_input_name(path: Path) -> tuple[str, int] | None:",
+    "    stem = path.stem.strip()",
+    "    m = re.fullmatch(r'(.+?)_(\\d+)$', stem)",
+    "    if m:",
+    "        ref = normalize_ref(m.group(1))",
+    "        raw_index = int(m.group(2))",
+    "        pos = max(0, raw_index - 1)",
+    "        return ref, pos",
+    "    return normalize_ref(stem), 0",
+    "",
+    "def load_mapping(mapping_path: Path | None) -> dict[str, list[str]]:",
+    "    if mapping_path is None or not mapping_path.exists():",
+    "        return {}",
+    "    data = json.loads(mapping_path.read_text(encoding='utf-8'))",
+    "    out: dict[str, list[str]] = {}",
+    "    if isinstance(data, dict) and isinstance(data.get('refs'), list):",
+    "        for item in data['refs']:",
+    "            if not isinstance(item, dict) or not item.get('ref'):",
+    "                continue",
+    "            ref = normalize_ref(str(item['ref']))",
+    "            colors = item.get('colors') if isinstance(item.get('colors'), list) else []",
+    "            out[ref] = [str(c).strip() for c in colors if str(c).strip()]",
+    "    return out",
+    "",
+    "def choose_source_images(input_dir: Path) -> dict[str, list[Path]]:",
+    "    by_ref: dict[str, list[tuple[int, Path]]] = defaultdict(list)",
+    "    for path in sorted(input_dir.iterdir(), key=lambda p: p.name.lower()):",
+    "        if not path.is_file() or path.suffix.lower() not in IMAGE_EXTS:",
+    "            continue",
+    "        parsed = parse_input_name(path)",
+    "        if parsed is None:",
+    "            continue",
+    "        ref, pos = parsed",
+    "        by_ref[ref].append((pos, path))",
+    "",
+    "    out: dict[str, list[Path]] = {}",
+    "    for ref, entries in by_ref.items():",
+    "        entries = sorted(entries, key=lambda x: (x[0], x[1].name.lower()))",
+    "        out[ref] = [p for _, p in entries]",
+    "    return out",
+    "",
+    "def duplicate_for_colors(input_dir: Path, output_dir: Path, mapping: dict[str, list[str]]) -> None:",
+    "    sources = choose_source_images(input_dir)",
+    "    output_dir.mkdir(parents=True, exist_ok=True)",
+    "",
+    "    for ref, colors in mapping.items():",
+    "        if not colors:",
+    "            print(f'IGNORÉ (pas de couleurs): {ref}')",
+    "            continue",
+    "        if ref not in sources or not sources[ref]:",
+    "            print(f'IGNORÉ (pas de photo source): {ref}')",
+    "            continue",
+    "",
+    "        src = sources[ref][0]",
+    "        with Image.open(src) as img:",
+    "            rgb = img.convert('RGB')",
+    "            for idx, color in enumerate(colors):",
+    "                suffix = 0 if idx == 0 else 1",
+    "                filename = f'{ref} {color} {suffix}.jpg'",
+    "                dst = output_dir / filename",
+    "                rgb.save(dst, 'JPEG', quality=95)",
+    "        print(f'OK : {ref} -> {len(colors)} fichier(s)')",
+    "",
+    "def main() -> int:",
+    "    parser = argparse.ArgumentParser(description='Duplique les photos PFS selon les couleurs exportées')",
+    "    parser.add_argument('--input', default='input', help='Dossier d\\'entrée contenant les photos source')",
+    "    parser.add_argument('--output', default='output', help='Dossier de sortie contenant les JPG renommés')",
+    "    parser.add_argument('--mapping', default='pfs_photo_colors.json', help='Fichier JSON de mapping ref -> couleurs')",
+    "    args = parser.parse_args()",
+    "",
+    "    input_dir = Path(args.input)",
+    "    output_dir = Path(args.output)",
+    "    mapping_path = Path(args.mapping) if args.mapping else None",
+    "",
+    "    if not input_dir.exists() or not input_dir.is_dir():",
+    "        raise SystemExit(f'Dossier input introuvable: {input_dir}')",
+    "",
+    "    mapping = load_mapping(mapping_path)",
+    "    if not mapping:",
+    "        raise SystemExit('Aucun mapping ref -> couleurs trouvé')",
+    "",
+    "    duplicate_for_colors(input_dir, output_dir, mapping)",
+    "    print(f'Terminé. Fichiers générés dans: {output_dir}')",
+    "    return 0",
+    "",
+    "if __name__ == '__main__':",
+    "    raise SystemExit(main())",
+    ""
+  ].join("\n");
 }
 function parseColisagePFS_(v) {
   const s = String(v ?? "").trim().replace(/\s+/g, "").replace(",", ".");

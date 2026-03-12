@@ -232,6 +232,9 @@ function exportStockToPFS() {
     if (!globalTailles.ok) {
       throw new Error("PFS export: structure tailles invalide pour " + it.ref + ": " + globalTailles.reason);
     }
+    if (globalTailles.total !== it.colisage) {
+      throw new Error("PFS export: tailles incohérentes avec le colisage pour " + it.ref + ": " + globalTailles.total + " au lieu de " + it.colisage);
+    }
 
     const entries = Array.isArray(it.colorPack && it.colorPack.entries) ? it.colorPack.entries : [];
     for (let idx = 0; idx < entries.length; idx++) {
@@ -874,18 +877,25 @@ function parsePfsTaillesStructure_(taillesStr) {
   if (!parts.length) return { ok: false, reason: "Tailles vides" };
 
   const out = [];
+  let total = 0;
+  let expectedQty = null;
   for (let i = 0; i < parts.length; i++) {
     const m = parts[i].match(/^(\d+)\*\s*(.+)$/);
     if (!m) return { ok: false, reason: "Format taille invalide: " + parts[i] };
     const qty = Number(m[1]);
-    const size = String(m[2] || "").trim();
+    const size = normalizePfsSizeToken_(m[2]);
     if (!Number.isFinite(qty) || qty <= 0 || !size) {
       return { ok: false, reason: "Format taille invalide: " + parts[i] };
     }
+    if (expectedQty === null) expectedQty = qty;
+    if (qty !== expectedQty) {
+      return { ok: false, reason: "Quantités tailles incohérentes" };
+    }
+    total += qty;
     out.push({ size: size, qty: qty });
   }
 
-  return { ok: true, sizes: out };
+  return { ok: true, sizes: out, total: total };
 }
 
 /****************************************************
@@ -901,22 +911,19 @@ function buildPfsColorTailles_(colorQty, sizes) {
   }
 
   const n = sizes.length;
-  const base = Math.floor(qty / n);
-  let remainder = qty % n;
-
-  const alloc = new Array(n).fill(base);
-
-  for (let i = 0; i < n && remainder > 0; i++, remainder--) {
-    alloc[i] += 1;
+  if (qty % n !== 0) {
+    return { ok: false, reason: "Quantité couleur " + qty + " non divisible par " + n + " taille(s)" };
   }
+
+  const qtyPerSize = qty / n;
 
   const parts = [];
 
   for (let i = 0; i < sizes.length; i++) {
-    if (alloc[i] > sizes[i].qty) {
+    if (qtyPerSize > sizes[i].qty) {
       return { ok: false, reason: "Quantité couleur " + qty + " incompatible avec la taille " + sizes[i].size };
     }
-    parts.push(alloc[i] + "*" + sizes[i].size);
+    parts.push(qtyPerSize + "*" + sizes[i].size);
   }
   return { ok: true, value: parts.join(", ") };
 }

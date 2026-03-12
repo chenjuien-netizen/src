@@ -43,7 +43,7 @@ function parseMixPartnerFromNoteSystem_(noteS) {
   return (typeof cleanRef_ === "function" ? cleanRef_(raw) : String(raw || "")).toUpperCase();
 }
 
-function normalizeHeaderKey_(header) {
+function normalizeSheetHeaderKey_(header) {
   if (header === null || typeof header === "undefined") return "";
   return String(header)
     .trim()
@@ -57,7 +57,7 @@ function headerMap_(headersRow) {
   for (var c = 0; c < headersRow.length; c++) {
     var h = headersRow[c];
     if (h === null || typeof h === "undefined") continue;
-    var key = normalizeHeaderKey_(h);
+    var key = normalizeSheetHeaderKey_(h);
     if (!key) continue;
     map[key] = c + 1; // 1-based
   }
@@ -68,7 +68,7 @@ function ensureHeadersExist_(map, requiredHeaders, where) {
   var missing = [];
   for (var i = 0; i < requiredHeaders.length; i++) {
     var k = requiredHeaders[i];
-    if (!map.hasOwnProperty(normalizeHeaderKey_(k))) missing.push(k);
+    if (!map.hasOwnProperty(normalizeSheetHeaderKey_(k))) missing.push(k);
   }
   if (missing.length) {
     throw new Error("Headers manquants dans " + where + ": " + missing.join(", "));

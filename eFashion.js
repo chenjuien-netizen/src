@@ -97,7 +97,6 @@ function exportStockToEFashion() {
     const couleursStock = String(couleursStockVals[i] ?? "").trim();
     const catStock = String(categorieStockVals[i] ?? "").trim();
     const efCat = mapStockCategoryToEFashion_(catStock);
-    const couleursEf = formatEFashionMixedColorsFromStock_(couleursStock);
 
     const sheetRow = 2 + i;
     if (!colisage.ok) {
@@ -108,9 +107,14 @@ function exportStockToEFashion() {
       bad.push({ row: sheetRow, ref: ref || "(vide)", reason: "Tailles introuvables ou invalides dans Contenu colis" });
       continue;
     }
-    const colorCheck = validateEFashionColorPack_(couleursStock, colisage.value);
+    const colorCheck = validateEFashionColorPack_(couleursStock, colisage.value, tailles);
     if (!colorCheck.ok) {
       bad.push({ row: sheetRow, ref: ref || "(vide)", reason: colorCheck.reason });
+      continue;
+    }
+    const couleursEf = formatEFashionMixedColorsFromStock_(couleursStock, tailles);
+    if (!couleursEf) {
+      bad.push({ row: sheetRow, ref: ref || "(vide)", reason: "Couleurs incompatibles avec la structure tailles" });
       continue;
     }
     rows.push({
@@ -562,36 +566,30 @@ function normalizeMaterialEfashion_(matRaw) {
  * Input example: "4 ROUGE 2 VERT 2 MARRON 4 BLEU"
  * Output example: "Rouge*2-2,Vert*1-1,Marron*1-1,Bleu*2-2"
  ****************************************************/
-function formatEFashionMixedColorsFromStock_(raw) {
+function formatEFashionMixedColorsFromStock_(raw, taillesStr) {
   const s = String(raw || "").trim();
   if (!s) return "";
 
+  const taillesInfo = parseEFashionTaillesStructure_(taillesStr);
+  if (!taillesInfo.ok) return "";
+
+  const sizeCount = taillesInfo.sizes.length;
+  if (!sizeCount) return "";
+
   const re = /(\d+)\s+([A-Za-zÀ-ÿ]+)/g;
   const parts = [];
-  let oddSplitIndex = 0;
   let m;
   while ((m = re.exec(s)) !== null) {
     const qty = Number(m[1]);
     const color = normalizeEFashionColorName_(m[2]);
     if (!Number.isFinite(qty) || qty <= 0 || !color) continue;
-    const split = splitColorQtyAcrossBalancedPair_(qty, oddSplitIndex);
-    if (qty % 2 !== 0) oddSplitIndex += 1;
+    if (qty % sizeCount !== 0) return "";
+    const qtyPerSize = qty / sizeCount;
+    const split = new Array(sizeCount).fill(qtyPerSize);
     parts.push(color + "*" + split.join("-"));
   }
 
   return parts.join(",");
-}
-
-function splitColorQtyAcrossBalancedPair_(qty, oddSplitIndex) {
-  const n = Math.max(0, Number(qty) || 0);
-  if (n % 2 === 0) {
-    const half = n / 2;
-    return [half, half];
-  }
-
-  const high = Math.ceil(n / 2);
-  const low = Math.floor(n / 2);
-  return oddSplitIndex % 2 === 0 ? [high, low] : [low, high];
 }
 
 function normalizeEFashionColorName_(raw) {
@@ -612,8 +610,10 @@ function normalizeEFashionColorName_(raw) {
     "GRIS": "Gris"
   };
   if (MAP[up]) return MAP[up];
-  const low = s.toLowerCase();
-  return low.charAt(0).toUpperCase() + low.slice(1);
+  if (typeof normalizePfsColorName_ === "function") {
+    return normalizePfsColorName_(s);
+  }
+  return "";
 }
 
 function parseContenuColisSegmentEFashion_(segment) {
@@ -705,10 +705,19 @@ function mapStockCategoryToEFashion_(raw) {
  * - syntax must be pairs like: 4 ROUGE 2 VERT 2 BLEU
  * - total quantity must equal 12
  ****************************************************/
-function validateEFashionColorPack_(raw, expectedTotal) {
+function validateEFashionColorPack_(raw, expectedTotal, taillesStr) {
   const s = String(raw || "").trim();
   if (!s) {
     return { ok: false, reason: "Couleurs vides" };
+  }
+
+  const taillesInfo = parseEFashionTaillesStructure_(taillesStr);
+  if (!taillesInfo.ok) {
+    return { ok: false, reason: "Structure tailles invalide: " + taillesInfo.reason };
+  }
+  const sizeCount = taillesInfo.sizes.length;
+  if (!sizeCount) {
+    return { ok: false, reason: "Structure tailles vide" };
   }
 
   const tokens = s.split(/\s+/).filter(Boolean);
@@ -719,13 +728,17 @@ function validateEFashionColorPack_(raw, expectedTotal) {
   let total = 0;
   for (let i = 0; i < tokens.length; i += 2) {
     const qty = Number(tokens[i]);
-    const color = String(tokens[i + 1] || "").trim();
+    const colorRaw = String(tokens[i + 1] || "").trim();
+    const color = normalizeEFashionColorName_(colorRaw);
 
     if (!Number.isFinite(qty) || qty <= 0 || !Number.isInteger(qty)) {
       return { ok: false, reason: "Quantité couleur invalide: '" + tokens[i] + "' dans '" + s + "'" };
     }
-    if (!color || /^\d+$/.test(color)) {
+    if (!color || /^\d+$/.test(colorRaw)) {
       return { ok: false, reason: "Couleurs mal formées (couleur manquante ou invalide) dans '" + s + "'" };
+    }
+    if (qty % sizeCount !== 0) {
+      return { ok: false, reason: "Quantité couleur " + qty + " non divisible par " + sizeCount + " taille(s)" };
     }
 
     total += qty;
@@ -741,6 +754,39 @@ function validateEFashionColorPack_(raw, expectedTotal) {
   }
 
   return { ok: true, total: total };
+}
+
+function parseEFashionTaillesStructure_(taillesStr) {
+  const s = String(taillesStr || "").trim();
+  if (!s) return { ok: false, reason: "Tailles vides" };
+
+  const parts = s.split(/\s*,\s*/).filter(Boolean);
+  if (!parts.length) return { ok: false, reason: "Tailles vides" };
+
+  const out = [];
+  let total = 0;
+  let expectedQty = null;
+
+  for (let i = 0; i < parts.length; i++) {
+    const m = parts[i].match(/^(\d+)\*\s*(.+)$/);
+    if (!m) return { ok: false, reason: "Format taille invalide: " + parts[i] };
+
+    const qty = Number(m[1]);
+    const size = normalizeEFashionSizeTokenEFashion_(m[2]);
+    if (!Number.isFinite(qty) || qty <= 0 || !size) {
+      return { ok: false, reason: "Format taille invalide: " + parts[i] };
+    }
+
+    if (expectedQty === null) expectedQty = qty;
+    if (qty !== expectedQty) {
+      return { ok: false, reason: "Quantités tailles incohérentes" };
+    }
+
+    total += qty;
+    out.push({ size: size, qty: qty });
+  }
+
+  return { ok: true, sizes: out, total: total };
 }
 
 function parseColisageEFashion_(v) {

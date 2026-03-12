@@ -146,7 +146,7 @@ function exportStockToEFashion() {
         return [
           "• Ligne " + x.row,
           "Ref : " + x.ref,
-          "Motif : " + x.reason
+          "Motif : " + appendValidationHint_(x.reason)
         ].join("\n");
       })
       .join("\n\n");
@@ -156,20 +156,12 @@ function exportStockToEFashion() {
       : "";
 
     const message = [
-      "eFashion export",
-      "",
       "Erreurs détectées dans STOCK :",
       "",
       details + more
     ].join("\n");
 
-    try {
-      SpreadsheetApp.getUi().alert(message);
-    } catch (e) {
-      Logger.log(message);
-    }
-
-    throw new Error(message.replace(/\n/g, " | "));
+    showValidationPopupAndThrowShort_("eFashion export", message, "eFashion export: validation échouée (voir popup pour détails)");
   }
 
   if (rows.length === 0) {
@@ -767,6 +759,31 @@ function parseEFashionTaillesStructure_(taillesStr) {
   }
 
   return { ok: true, sizes: out, total: total };
+}
+
+function appendValidationHint_(reason) {
+  const base = String(reason || "").trim();
+  if (!base) return "";
+
+  if (/non divisible par \d+ taille\(s\)/i.test(base)) {
+    return base + "\nExemple attendu : 1-2 ORANGE 1-2 VERT 2-1 BLEU 2-1 NOIR";
+  }
+
+  return base;
+}
+
+function showValidationPopupAndThrowShort_(title, details, shortError) {
+  const popupTitle = String(title || "Validation");
+  const popupBody = String(details || "").trim();
+  const shortMessage = String(shortError || "Validation échouée");
+
+  try {
+    SpreadsheetApp.getUi().alert(popupTitle, popupBody, SpreadsheetApp.getUi().ButtonSet.OK);
+  } catch (e) {
+    Logger.log(popupTitle + "\n" + popupBody);
+  }
+
+  throw new Error(shortMessage);
 }
 
 function parseColisageEFashion_(v) {

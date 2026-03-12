@@ -189,6 +189,7 @@ function exportStockToPFS() {
       details + more
     ].join("\n");
 
+    SpreadsheetApp.getUi().alert(message);
     throw new Error(message);
   }
 

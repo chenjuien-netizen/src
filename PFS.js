@@ -101,7 +101,10 @@ function exportStockToPFS() {
     const poids = String(poidsVals[i] ?? "").trim();
     const paysFab = String(paysVals[i] ?? "").trim();
     const couleursRaw = String(couleursVals[i] ?? "").trim();
-    const colorPack = parsePfsColorPackFromStock_(couleursRaw);
+    const taillesInfo = tailles ? parsePfsTaillesStructure_(tailles) : { ok: false, reason: "Tailles introuvables (Contenu colis)" };
+    const colorPack = taillesInfo.ok
+      ? parsePfsColorPackFromStock_(couleursRaw, taillesInfo.sizes, colisage.ok ? colisage.value : 0)
+      : { ok: false, reason: taillesInfo.reason };
 
     // Category normalization and validation
     const catRaw = String(catVals[i] || "").trim();
@@ -136,12 +139,12 @@ function exportStockToPFS() {
       bad.push({ row: sheetRow, ref: ref || "(vide)", reason: "Pays d’origine vide" });
       continue;
     }
-    if (!colorPack.ok) {
-      bad.push({ row: sheetRow, ref: ref || "(vide)", reason: colorPack.reason });
+    if (!taillesInfo.ok) {
+      bad.push({ row: sheetRow, ref: ref || "(vide)", reason: "Structure tailles invalide: " + taillesInfo.reason });
       continue;
     }
-    if (colorPack.total !== colisage.value) {
-      bad.push({ row: sheetRow, ref: ref || "(vide)", reason: "Somme des couleurs = " + colorPack.total + " au lieu de " + colisage.value });
+    if (!colorPack.ok) {
+      bad.push({ row: sheetRow, ref: ref || "(vide)", reason: colorPack.reason });
       continue;
     }
 
@@ -155,6 +158,7 @@ function exportStockToPFS() {
       compo: compoVals ? String(compoVals[i] || "").trim() : "",
       poids: poids,
       paysFab: paysFab,
+      taillesInfo: taillesInfo,
       colorPack: colorPack,
       colisage: colisage.value,
     });
@@ -226,7 +230,7 @@ function exportStockToPFS() {
   for (const it of selected) {
     const cat = it.cat || ""; // PFS normalized category
     const nomFr = String(it.catRaw || "").trim() || cat || it.ref; // use STOCK category for FR name
-    const globalTailles = parsePfsTaillesStructure_(it.tailles);
+    const globalTailles = it.taillesInfo || parsePfsTaillesStructure_(it.tailles);
     const compo = normalizeCompositionPFS_(it.compo) || "90% Viscose - 10% Polyester";
 
     if (!globalTailles.ok) {
@@ -239,7 +243,9 @@ function exportStockToPFS() {
     const entries = Array.isArray(it.colorPack && it.colorPack.entries) ? it.colorPack.entries : [];
     for (let idx = 0; idx < entries.length; idx++) {
       const entry = entries[idx];
-      const taillesColor = buildPfsColorTailles_(entry.qty, globalTailles.sizes);
+      const taillesColor = it.colorPack && it.colorPack.mode === "detailed"
+        ? buildPfsDetailedColorTailles_(entry.split, globalTailles.sizes)
+        : buildPfsColorTailles_(entry.qty, globalTailles.sizes);
       if (!taillesColor.ok) {
         throw new Error("PFS export: tailles/couleurs incompatibles pour " + it.ref + " / " + entry.color + ": " + taillesColor.reason);
       }
@@ -734,14 +740,36 @@ function normalizeMaterialName_(matRaw) {
 
 
 /****************************************************
- * Parse STOCK Couleurs into PFS color pack entries.
- * Input example: "4 ROUGE 2 VERT 2 MARRON 4 BLEU"
- * Output: { ok:true, total:12, entries:[{color:"Rouge", qty:4}, ...] }
+ * Parse STOCK Couleurs into a strict shared structure.
+ * Supported:
+ * - simple:   "4 ROUGE 2 VERT"
+ * - detailed: "1-2 ORANGE 2-1 BLEU"
  ****************************************************/
-function parsePfsColorPackFromStock_(raw) {
+function parsePfsColorPackFromStock_(raw, sizes, expectedTotal) {
+  return parseStockColorPackStrict_(raw, {
+    normalizeColor: normalizePfsColorName_,
+    invalidColorReason: "Couleur non reconnue dans le catalogue PFS",
+    sizes: sizes,
+    expectedTotal: expectedTotal
+  });
+}
+
+function parseStockColorPackStrict_(raw, options) {
   const s = String(raw || "").trim();
   if (!s) {
     return { ok: false, reason: "Couleurs vides" };
+  }
+
+  const opts = options || {};
+  const normalizeColor = typeof opts.normalizeColor === "function"
+    ? opts.normalizeColor
+    : function (x) { return String(x || "").trim(); };
+  const invalidColorReason = String(opts.invalidColorReason || "Couleur non reconnue");
+  const sizes = Array.isArray(opts.sizes) ? opts.sizes : [];
+  const expectedTotal = Number(opts.expectedTotal);
+
+  if (!sizes.length) {
+    return { ok: false, reason: "Structure tailles invalide pour validation couleurs" };
   }
 
   const tokens = s.split(/\s+/).filter(Boolean);
@@ -749,23 +777,92 @@ function parsePfsColorPackFromStock_(raw) {
     return { ok: false, reason: "Couleurs mal formées (paires quantité/couleur attendues): " + s };
   }
 
-  const entries = [];
+  let mode = "";
   let total = 0;
+  const sumsByPosition = new Array(sizes.length).fill(0);
+  const entries = [];
+
   for (let i = 0; i < tokens.length; i += 2) {
-    const qty = Number(tokens[i]);
+    const qtyToken = String(tokens[i] || "").trim();
     const colorRaw = String(tokens[i + 1] || "").trim();
-    if (!Number.isFinite(qty) || qty <= 0 || !Number.isInteger(qty)) {
-      return { ok: false, reason: "Quantité couleur invalide: '" + tokens[i] + "' dans '" + s + "'" };
+    const color = normalizeColor(colorRaw);
+
+    if (!color || /^\d/.test(colorRaw)) {
+      return { ok: false, reason: invalidColorReason + ": '" + colorRaw + "'" };
     }
-    const color = normalizePfsColorName_(colorRaw);
-    if (!color) {
-      return { ok: false, reason: "Couleur non reconnue dans le catalogue PFS: '" + colorRaw + "'" };
+
+    const tokenMode = detectStockColorQtyMode_(qtyToken);
+    if (!tokenMode) {
+      return { ok: false, reason: "Quantité couleur invalide: '" + qtyToken + "' dans '" + s + "'" };
     }
-    entries.push({ color: color, qty: qty });
-    total += qty;
+    if (!mode) mode = tokenMode;
+    if (mode !== tokenMode) {
+      return { ok: false, reason: "Couleurs mixtes non supportées (simple et détaillé mélangés): " + s };
+    }
+
+    if (mode === "simple") {
+      const qty = Number(qtyToken);
+      if (!Number.isFinite(qty) || qty <= 0 || !Number.isInteger(qty)) {
+        return { ok: false, reason: "Quantité couleur invalide: '" + qtyToken + "' dans '" + s + "'" };
+      }
+      if (qty % sizes.length !== 0) {
+        return { ok: false, reason: "Quantité couleur " + qty + " non divisible par " + sizes.length + " taille(s)" };
+      }
+
+      const qtyPerSize = qty / sizes.length;
+      for (let p = 0; p < sizes.length; p++) {
+        sumsByPosition[p] += qtyPerSize;
+      }
+
+      entries.push({ color: color, qty: qty, split: null });
+      total += qty;
+      continue;
+    }
+
+    const split = qtyToken.split("-").map(function (part) { return Number(part); });
+    if (split.length !== sizes.length) {
+      return { ok: false, reason: "Détail couleur incompatible avec le nombre de tailles pour '" + colorRaw + "'" };
+    }
+
+    let qtyDetailed = 0;
+    for (let p = 0; p < split.length; p++) {
+      const partQty = split[p];
+      if (!Number.isFinite(partQty) || partQty <= 0 || !Number.isInteger(partQty)) {
+        return { ok: false, reason: "Quantité détaillée invalide dans '" + qtyToken + " " + colorRaw + "'" };
+      }
+      sumsByPosition[p] += partQty;
+      qtyDetailed += partQty;
+    }
+
+    entries.push({ color: color, qty: qtyDetailed, split: split });
+    total += qtyDetailed;
   }
 
-  return { ok: true, total: total, entries: entries };
+  if (!Number.isFinite(expectedTotal) || expectedTotal <= 0) {
+    return { ok: false, reason: "Colisage invalide pour validation couleurs" };
+  }
+  if (total !== expectedTotal) {
+    return { ok: false, reason: "Somme des couleurs = " + total + " au lieu de " + expectedTotal };
+  }
+
+  for (let p = 0; p < sizes.length; p++) {
+    const expectedQty = Number(sizes[p] && sizes[p].qty);
+    if (!Number.isFinite(expectedQty) || expectedQty <= 0) {
+      return { ok: false, reason: "Structure tailles invalide pour validation couleurs" };
+    }
+    if (sumsByPosition[p] !== expectedQty) {
+      return { ok: false, reason: "Somme des couleurs incohérente pour la taille " + sizes[p].size + ": " + sumsByPosition[p] + " au lieu de " + expectedQty };
+    }
+  }
+
+  return { ok: true, mode: mode, total: total, sizeCount: sizes.length, entries: entries };
+}
+
+function detectStockColorQtyMode_(qtyToken) {
+  const s = String(qtyToken || "").trim();
+  if (/^\d+$/.test(s)) return "simple";
+  if (/^\d+(?:-\d+)+$/.test(s)) return "detailed";
+  return "";
 }
 
 /****************************************************
@@ -925,6 +1022,26 @@ function buildPfsColorTailles_(colorQty, sizes) {
     }
     parts.push(qtyPerSize + "*" + sizes[i].size);
   }
+  return { ok: true, value: parts.join(", ") };
+}
+
+function buildPfsDetailedColorTailles_(split, sizes) {
+  if (!Array.isArray(split) || !Array.isArray(sizes) || split.length !== sizes.length || !sizes.length) {
+    return { ok: false, reason: "Répartition détaillée invalide" };
+  }
+
+  const parts = [];
+  for (let i = 0; i < sizes.length; i++) {
+    const qty = Number(split[i]);
+    if (!Number.isFinite(qty) || qty <= 0 || !Number.isInteger(qty)) {
+      return { ok: false, reason: "Quantité détaillée invalide pour la taille " + sizes[i].size };
+    }
+    if (qty > sizes[i].qty) {
+      return { ok: false, reason: "Quantité détaillée incompatible avec la taille " + sizes[i].size };
+    }
+    parts.push(qty + "*" + sizes[i].size);
+  }
+
   return { ok: true, value: parts.join(", ") };
 }
 

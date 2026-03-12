@@ -97,6 +97,7 @@ function exportStockToEFashion() {
     const couleursStock = String(couleursStockVals[i] ?? "").trim();
     const catStock = String(categorieStockVals[i] ?? "").trim();
     const efCat = mapStockCategoryToEFashion_(catStock);
+    const taillesInfo = tailles ? parseEFashionTaillesStructure_(tailles) : { ok: false, reason: "Tailles introuvables ou invalides dans Contenu colis" };
 
     const sheetRow = 2 + i;
     if (!colisage.ok) {
@@ -107,12 +108,16 @@ function exportStockToEFashion() {
       bad.push({ row: sheetRow, ref: ref || "(vide)", reason: "Tailles introuvables ou invalides dans Contenu colis" });
       continue;
     }
-    const colorCheck = validateEFashionColorPack_(couleursStock, colisage.value, tailles);
-    if (!colorCheck.ok) {
-      bad.push({ row: sheetRow, ref: ref || "(vide)", reason: colorCheck.reason });
+    if (!taillesInfo.ok) {
+      bad.push({ row: sheetRow, ref: ref || "(vide)", reason: "Structure tailles invalide: " + taillesInfo.reason });
       continue;
     }
-    const couleursEf = formatEFashionMixedColorsFromStock_(couleursStock, tailles);
+    const colorPack = validateEFashionColorPack_(couleursStock, colisage.value, taillesInfo.sizes);
+    if (!colorPack.ok) {
+      bad.push({ row: sheetRow, ref: ref || "(vide)", reason: colorPack.reason });
+      continue;
+    }
+    const couleursEf = formatEFashionMixedColorsFromStock_(colorPack);
     if (!couleursEf) {
       bad.push({ row: sheetRow, ref: ref || "(vide)", reason: "Couleurs incompatibles avec la structure tailles" });
       continue;
@@ -140,8 +145,8 @@ function exportStockToEFashion() {
       .map(function (x) {
         return [
           "• Ligne " + x.row,
-          "  Ref : " + x.ref,
-          "  Motif : " + x.reason
+          "Ref : " + x.ref,
+          "Motif : " + x.reason
         ].join("\n");
       })
       .join("\n\n");
@@ -158,7 +163,13 @@ function exportStockToEFashion() {
       details + more
     ].join("\n");
 
-    throw new Error(message);
+    try {
+      SpreadsheetApp.getUi().alert(message);
+    } catch (e) {
+      Logger.log(message);
+    }
+
+    throw new Error(message.replace(/\n/g, " | "));
   }
 
   if (rows.length === 0) {
@@ -576,27 +587,25 @@ function normalizeMaterialEfashion_(matRaw) {
  * Input example: "4 ROUGE 2 VERT 2 MARRON 4 BLEU"
  * Output example: "Rouge*2-2,Vert*1-1,Marron*1-1,Bleu*2-2"
  ****************************************************/
-function formatEFashionMixedColorsFromStock_(raw, taillesStr) {
-  const s = String(raw || "").trim();
-  if (!s) return "";
+function formatEFashionMixedColorsFromStock_(colorPack) {
+  if (!colorPack || !colorPack.ok || !Array.isArray(colorPack.entries) || !colorPack.entries.length) return "";
 
-  const taillesInfo = parseEFashionTaillesStructure_(taillesStr);
-  if (!taillesInfo.ok) return "";
-
-  const sizeCount = taillesInfo.sizes.length;
-  if (!sizeCount) return "";
-
-  const re = /(\d+)\s+([A-Za-zÀ-ÿ]+)/g;
   const parts = [];
-  let m;
-  while ((m = re.exec(s)) !== null) {
-    const qty = Number(m[1]);
-    const color = normalizeEFashionColorName_(m[2]);
-    if (!Number.isFinite(qty) || qty <= 0 || !color) continue;
-    if (qty % sizeCount !== 0) return "";
-    const qtyPerSize = qty / sizeCount;
-    const split = new Array(sizeCount).fill(qtyPerSize);
-    parts.push(color + "*" + split.join("-"));
+  const sizeCount = Number(colorPack.sizeCount) || 0;
+
+  for (let i = 0; i < colorPack.entries.length; i++) {
+    const entry = colorPack.entries[i];
+    if (!entry || !entry.color) return "";
+
+    if (colorPack.mode === "detailed") {
+      if (!Array.isArray(entry.split) || !entry.split.length) return "";
+      parts.push(entry.color + "*" + entry.split.join("-"));
+      continue;
+    }
+
+    if (!sizeCount || !Number.isFinite(entry.qty) || entry.qty <= 0 || entry.qty % sizeCount !== 0) return "";
+    const qtyPerSize = entry.qty / sizeCount;
+    parts.push(entry.color + "*" + new Array(sizeCount).fill(qtyPerSize).join("-"));
   }
 
   return parts.join(",");
@@ -715,55 +724,16 @@ function mapStockCategoryToEFashion_(raw) {
  * - syntax must be pairs like: 4 ROUGE 2 VERT 2 BLEU
  * - total quantity must equal 12
  ****************************************************/
-function validateEFashionColorPack_(raw, expectedTotal, taillesStr) {
-  const s = String(raw || "").trim();
-  if (!s) {
-    return { ok: false, reason: "Couleurs vides" };
+function validateEFashionColorPack_(raw, expectedTotal, sizes) {
+  if (typeof parseStockColorPackStrict_ === "function") {
+    return parseStockColorPackStrict_(raw, {
+      normalizeColor: normalizeEFashionColorName_,
+      invalidColorReason: "Couleur non reconnue pour eFashion",
+      sizes: sizes,
+      expectedTotal: expectedTotal
+    });
   }
-
-  const taillesInfo = parseEFashionTaillesStructure_(taillesStr);
-  if (!taillesInfo.ok) {
-    return { ok: false, reason: "Structure tailles invalide: " + taillesInfo.reason };
-  }
-  const sizeCount = taillesInfo.sizes.length;
-  if (!sizeCount) {
-    return { ok: false, reason: "Structure tailles vide" };
-  }
-
-  const tokens = s.split(/\s+/).filter(Boolean);
-  if (tokens.length % 2 !== 0) {
-    return { ok: false, reason: "Couleurs mal formées (paires quantité/couleur attendues): " + s };
-  }
-
-  let total = 0;
-  for (let i = 0; i < tokens.length; i += 2) {
-    const qty = Number(tokens[i]);
-    const colorRaw = String(tokens[i + 1] || "").trim();
-    const color = normalizeEFashionColorName_(colorRaw);
-
-    if (!Number.isFinite(qty) || qty <= 0 || !Number.isInteger(qty)) {
-      return { ok: false, reason: "Quantité couleur invalide: '" + tokens[i] + "' dans '" + s + "'" };
-    }
-    if (!color || /^\d+$/.test(colorRaw)) {
-      return { ok: false, reason: "Couleurs mal formées (couleur manquante ou invalide) dans '" + s + "'" };
-    }
-    if (qty % sizeCount !== 0) {
-      return { ok: false, reason: "Quantité couleur " + qty + " non divisible par " + sizeCount + " taille(s)" };
-    }
-
-    total += qty;
-  }
-
-  const exp = Number(expectedTotal);
-  if (!Number.isFinite(exp) || exp <= 0) {
-    return { ok: false, reason: "Colisage invalide pour validation couleurs" };
-  }
-
-  if (total !== exp) {
-    return { ok: false, reason: "Somme des couleurs = " + total + " au lieu de " + exp + " dans '" + s + "'" };
-  }
-
-  return { ok: true, total: total };
+  return { ok: false, reason: "Parseur couleurs partagé introuvable" };
 }
 
 function parseEFashionTaillesStructure_(taillesStr) {

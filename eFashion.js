@@ -146,7 +146,7 @@ function exportStockToEFashion() {
         return [
           "• Ligne " + x.row,
           "Ref : " + x.ref,
-          "Motif : " + x.reason
+          "Motif : " + appendValidationHint_(x.reason)
         ].join("\n");
       })
       .join("\n\n");
@@ -163,13 +163,7 @@ function exportStockToEFashion() {
       details + more
     ].join("\n");
 
-    try {
-      SpreadsheetApp.getUi().alert(message);
-    } catch (e) {
-      Logger.log(message);
-    }
-
-    throw new Error(message.replace(/\n/g, " | "));
+    throw new Error(message);
   }
 
   if (rows.length === 0) {
@@ -767,6 +761,17 @@ function parseEFashionTaillesStructure_(taillesStr) {
   }
 
   return { ok: true, sizes: out, total: total };
+}
+
+function appendValidationHint_(reason) {
+  const base = String(reason || "").trim();
+  if (!base) return "";
+
+  if (/non divisible par \d+ taille\(s\)/i.test(base)) {
+    return base + "\nExemple attendu : 1-2 ORANGE 1-2 VERT 2-1 BLEU 2-1 NOIR";
+  }
+
+  return base;
 }
 
 function parseColisageEFashion_(v) {

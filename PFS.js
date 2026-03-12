@@ -166,9 +166,30 @@ function exportStockToPFS() {
 
   // If invalid selected rows exist, fail loudly (so tests are deterministic)
   if (bad.length) {
-    const head = bad.slice(0, 10).map(x => `L${x.row} ${x.ref}: ${x.reason}`).join("\n");
-    const more = bad.length > 10 ? `\n(+${bad.length - 10} autres)` : "";
-    throw new Error("PFS export: lignes sélectionnées invalides:\n" + head + more);
+    const details = bad
+      .slice(0, 10)
+      .map(function (x) {
+        return [
+          "• Ligne " + x.row,
+          "Ref : " + x.ref,
+          "Motif : " + appendValidationHint_(x.reason)
+        ].join("\n");
+      })
+      .join("\n\n");
+
+    const more = bad.length > 10
+      ? "\n\n(+" + (bad.length - 10) + " autres)"
+      : "";
+
+    const message = [
+      "PFS export",
+      "",
+      "Erreurs détectées dans STOCK :",
+      "",
+      details + more
+    ].join("\n");
+
+    throw new Error(message);
   }
 
   // Nothing selected

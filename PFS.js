@@ -77,24 +77,49 @@ function importPFSTemplateToSheet() {
 }
 
 function syncStockToPfsImport() {
+  return syncAllStockToPfsImport();
+}
+
+function syncSelectedStockToPfsImport() {
+  return pfsSyncStockToPfsImport_({
+    mode: "selected",
+    toastTitle: "PFS Sync",
+    summaryTitle: "Sync refs cochées → " + SHEET_PFS_IMPORT
+  });
+}
+
+function syncAllStockToPfsImport() {
+  return pfsSyncStockToPfsImport_({
+    mode: "all",
+    toastTitle: "PFS Sync",
+    summaryTitle: "Sync STOCK → " + SHEET_PFS_IMPORT
+  });
+}
+
+function pfsSyncStockToPfsImport_(options) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const stock = ss.getSheetByName(SHEET_STOCK);
   const pfs = ss.getSheetByName(SHEET_PFS_IMPORT);
+  const mode = options && options.mode === "selected" ? "selected" : "all";
+  const toastTitle = (options && options.toastTitle) || "PFS Sync";
+  const summaryTitle = (options && options.summaryTitle) || ("Sync STOCK → " + SHEET_PFS_IMPORT);
 
   if (!stock) throw new Error("Feuille introuvable: " + SHEET_STOCK);
   if (!pfs) throw new Error("Feuille introuvable: " + SHEET_PFS_IMPORT);
 
-  ss.toast("Sync STOCK → PFS_IMPORT : analyse…", "PFS Sync", 5);
+  ss.toast(summaryTitle + " : analyse…", toastTitle, 5);
 
   const stockLastRow = stock.getLastRow();
   const stockLastCol = stock.getLastColumn();
   if (stockLastRow < 2 || stockLastCol < 1) {
-    ss.toast("STOCK vide", "PFS Sync", 5);
+    ss.toast("STOCK vide", toastTitle, 5);
     return;
   }
 
   const stockHeaders = stock.getRange(1, 1, 1, stockLastCol).getValues()[0];
   const stockMap = headerMap_(stockHeaders);
+  ensureHeadersExist_(stockMap, ["货号"], "STOCK");
+  if (mode === "selected") ensureHeadersExist_(stockMap, ["选择"], "STOCK");
 
   const pfsAnalysis = pfsAnalyzeSheetStructure_(pfs);
   if (!pfsAnalysis.headerRow || !pfsAnalysis.usefulWidth) {
@@ -105,29 +130,25 @@ function syncStockToPfsImport() {
   const pfsDataStartRow = pfsAnalysis.headerRow + 1;
   const pfsRowCount = Math.max(0, pfsAnalysis.usefulRows - pfsAnalysis.headerRow);
   if (!pfsRowCount) {
-    ss.toast("PFS_IMPORT ne contient aucune ligne à mettre à jour", "PFS Sync", 6);
+    ss.toast("PFS_IMPORT ne contient aucune ligne à mettre à jour", toastTitle, 6);
     return;
   }
 
-  const pfsRefCol = pfsFindColumnByAliases_(pfsHeaders, [
-    "réf. produit",
-    "ref. produit",
-    "réf produit",
-    "ref produit",
-    "reference produit",
-    "sku"
-  ]);
+  const pfsSkuCol = pfsFindColumnByAliases_(pfsHeaders, ["sku", "sku parent", "reference sku"]);
   const stockRefCol = stockMap["货号"] || 0;
+  const stockSelCol = stockMap["选择"] || 0;
 
-  if (!stockRefCol) throw new Error("Colonne '货号' introuvable dans STOCK.");
-  if (!pfsRefCol) throw new Error("Colonne de référence introuvable dans " + SHEET_PFS_IMPORT + ".");
+  if (!pfsSkuCol) throw new Error("Colonne 'SKU' introuvable dans " + SHEET_PFS_IMPORT + ".");
 
   const stockValues = stock.getRange(2, 1, stockLastRow - 1, stockLastCol).getValues();
   const pfsValues = pfs.getRange(pfsDataStartRow, 1, pfsRowCount, pfsAnalysis.usefulWidth).getValues();
 
   const stockByRef = {};
   const duplicateStockRefs = [];
+
   for (let i = 0; i < stockValues.length; i++) {
+    if (mode === "selected" && stockValues[i][stockSelCol - 1] !== true) continue;
+
     const ref = pfsNormalizeRef_(stockValues[i][stockRefCol - 1]);
     if (!ref) continue;
     if (stockByRef[ref]) {
@@ -136,10 +157,33 @@ function syncStockToPfsImport() {
     }
     stockByRef[ref] = stockValues[i];
   }
+  const stockRefs = Object.keys(stockByRef);
+  if (!stockRefs.length) {
+    const msg = mode === "selected"
+      ? "Aucune ref cochée à synchroniser"
+      : "Aucune ref exploitable trouvée dans STOCK";
+    ss.toast(msg, toastTitle, 6);
+    Logger.log(summaryTitle + " : " + msg);
+    return {
+      mode: mode,
+      analyzedRefs: 0,
+      matchedRefs: 0,
+      missingRefs: [],
+      pfsRefsWithoutStock: [],
+      modifiedRows: 0,
+      updatedFields: {}
+    };
+  }
 
   const pfsRowsByRef = {};
+  const pfsRefsWithoutStock = [];
+  const seenPfsRefs = {};
   for (let i = 0; i < pfsValues.length; i++) {
-    const ref = pfsNormalizeRef_(pfsValues[i][pfsRefCol - 1]);
+    const sku = pfsNormalizeScalar_(pfsValues[i][pfsSkuCol - 1]);
+    const skuBaseRef = pfsExtractRefFromSku_(sku);
+    if (skuBaseRef) seenPfsRefs[skuBaseRef] = true;
+
+    const ref = pfsFindMatchingStockRefForSku_(sku, stockRefs);
     if (!ref) continue;
     if (!pfsRowsByRef[ref]) pfsRowsByRef[ref] = [];
     pfsRowsByRef[ref].push(i);
@@ -150,34 +194,37 @@ function syncStockToPfsImport() {
       key: "prix",
       label: "Prix",
       stockCol: stockMap["prix@"] || 0,
-      pfsCol: pfsFindColumnByAliases_(pfsHeaders, ["prix_vente gros", "prix vente gros", "prix"]),
+      pfsCol: pfsFindColumnByAliases_(pfsHeaders, ["prix_vente gros ht unit. eur", "prix vente gros ht unit. eur", "prix_vente gros", "prix vente gros"]),
       transform: function(row) { return pfsNormalizeScalar_(row[stockMap["prix@"] - 1]); }
+    },
+    {
+      key: "promo",
+      label: "Promo",
+      stockCol: stockMap["promo@"] || 0,
+      pfsCol: pfsFindColumnByAliases_(pfsHeaders, ["prix_vente réduit ht unit. eur", "prix vente réduit ht unit. eur", "prix_vente reduit ht unit. eur", "prix vente reduit ht unit. eur", "prix réduit", "prix reduit"]),
+      transform: function(row) { return pfsNormalizeScalar_(row[stockMap["promo@"] - 1]); }
+    },
+    {
+      key: "stock",
+      label: "Stock",
+      stockCol: stockMap["stock"] || 0,
+      pfsCol: pfsFindColumnByAliases_(pfsHeaders, ["quantité total stock pcs", "quantite total stock pcs", "stock pcs", "stock"]),
+      transform: function(row) { return pfsNormalizeScalar_(row[stockMap["stock"] - 1]); }
     },
     {
       key: "poids",
       label: "Poids",
       stockCol: stockMap["poids (en gramme)"] || 0,
-      pfsCol: pfsFindColumnByAliases_(pfsHeaders, ["poids_kg", "poids kg", "poids"]),
-      transform: function(row) { return formatWeightKgPFSText_(row[stockMap["poids (en gramme)"] - 1]); }
+      pfsCol: pfsFindColumnByAliases_(pfsHeaders, ["poids_kg / pc", "poids kg / pc", "poids_kg/pc", "poids kg/pc", "poids_kg", "poids kg"]),
+      transform: function(row) { return pfsFormatKgValueFromGrams_(row[stockMap["poids (en gramme)"] - 1]); }
     },
     {
-      key: "composition",
-      label: "Composition",
-      stockCol: stockMap["composition matérielle"] || 0,
-      pfsCol: pfsFindColumnByAliases_(pfsHeaders, ["composition matière", "composition matiere", "composition"]),
+      key: "active",
+      label: "Active",
+      stockCol: stockMap["ms_statut"] || 0,
+      pfsCol: pfsFindColumnByAliases_(pfsHeaders, ["active", "actif"]),
       transform: function(row) {
-        const raw = pfsNormalizeScalar_(row[stockMap["composition matérielle"] - 1]);
-        return raw ? (normalizeCompositionPFS_(raw) || raw) : "";
-      }
-    },
-    {
-      key: "pays",
-      label: "Pays",
-      stockCol: stockMap["pays d'origine"] || stockMap["pays d’origine"] || 0,
-      pfsCol: pfsFindColumnByAliases_(pfsHeaders, ["pays de fabrication", "pays fabrication", "pays"]),
-      transform: function(row) {
-        const col = stockMap["pays d'origine"] || stockMap["pays d’origine"] || 0;
-        return pfsNormalizeScalar_(row[col - 1]);
+        return pfsMapActiveFromMsStatus_(row[stockMap["ms_statut"] - 1]);
       }
     }
   ];
@@ -203,7 +250,8 @@ function syncStockToPfsImport() {
   const matchedRefs = [];
   const unmatchedRefs = [];
   const updatedFields = {};
-  let updatedRows = 0;
+  const skippedValueWarnings = [];
+  let touchedPfsRows = 0;
 
   Object.keys(stockByRef).forEach(function(ref) {
     const stockRow = stockByRef[ref];
@@ -214,15 +262,19 @@ function syncStockToPfsImport() {
     }
 
     matchedRefs.push(ref);
-    let rowChanged = false;
 
     for (let t = 0; t < targetRows.length; t++) {
       const targetIndex = targetRows[t];
+      let pfsRowChanged = false;
 
       for (let d = 0; d < availableDefs.length; d++) {
         const def = availableDefs[d];
-        const nextValue = def.transform(stockRow);
-        if (nextValue === "") continue;
+        const resolved = pfsResolveSyncValue_(def.transform(stockRow));
+        if (!resolved.write) {
+          if (resolved.reason) skippedValueWarnings.push(ref + " / " + def.label + ": " + resolved.reason);
+          continue;
+        }
+        const nextValue = resolved.value;
 
         const colValues = changedColumns[def.pfsCol];
         const prevValue = pfsNormalizeScalar_(colValues[targetIndex][0]);
@@ -230,11 +282,16 @@ function syncStockToPfsImport() {
 
         colValues[targetIndex][0] = nextValue;
         updatedFields[def.key] = (updatedFields[def.key] || 0) + 1;
-        rowChanged = true;
+        pfsRowChanged = true;
       }
+
+      if (pfsRowChanged) touchedPfsRows++;
     }
 
-    if (rowChanged) updatedRows += targetRows.length;
+  });
+
+  Object.keys(seenPfsRefs).forEach(function(ref) {
+    if (!stockByRef[ref]) pfsRefsWithoutStock.push(ref);
   });
 
   const changedCols = Object.keys(changedColumns)
@@ -250,20 +307,42 @@ function syncStockToPfsImport() {
   if (missingDefs.length) notes.push("Colonnes non syncées: " + missingDefs.join(", "));
   notes.push("Champs complexes laissés en attente: couleurs, tailles.");
   if (duplicateStockRefs.length) notes.push("Refs dupliquées dans STOCK ignorées après la première occurrence: " + pfsUniqueList_(duplicateStockRefs).slice(0, 10).join(", "));
-  if (unmatchedRefs.length) notes.push("Refs STOCK absentes du template: " + unmatchedRefs.slice(0, 10).join(", ") + (unmatchedRefs.length > 10 ? " …" : ""));
+  if (unmatchedRefs.length) notes.push("Refs absentes de PFS (aperçu): " + unmatchedRefs.slice(0, 15).join(", ") + (unmatchedRefs.length > 15 ? " …" : ""));
+  if (skippedValueWarnings.length) notes.push("Valeurs ignorées prudemment (aperçu): " + skippedValueWarnings.slice(0, 8).join(" | ") + (skippedValueWarnings.length > 8 ? " …" : ""));
+  if (mode === "all" && pfsRefsWithoutStock.length) notes.push("Bonus - refs PFS sans STOCK (aperçu): " + pfsRefsWithoutStock.slice(0, 15).join(", ") + (pfsRefsWithoutStock.length > 15 ? " …" : ""));
 
   const summary = [
-    "Sync STOCK → " + SHEET_PFS_IMPORT,
+    summaryTitle,
     "",
     "Header row PFS détecté: " + pfsAnalysis.headerRow,
-    "Refs matchées: " + matchedRefs.length,
-    "Lignes PFS touchées: " + updatedRows,
+    (mode === "selected" ? "Refs cochées analysées" : "Refs STOCK analysées") + ": " + Object.keys(stockByRef).length,
+    "Refs matchées PFS: " + matchedRefs.length,
+    "Refs absentes du catalogue PFS: " + unmatchedRefs.length,
+    "Lignes PFS modifiées: " + touchedPfsRows,
     "Mises à jour: " + pfsFormatUpdateStats_(updatedFields)
   ].concat(notes).join("\n");
 
+  if (unmatchedRefs.length) {
+    Logger.log((mode === "selected" ? "Refs cochées absentes de PFS" : "Refs STOCK absentes de PFS") + " (" + unmatchedRefs.length + "):\n" + unmatchedRefs.join("\n"));
+  }
+  if (skippedValueWarnings.length) {
+    Logger.log("Valeurs ignorées prudemment (" + skippedValueWarnings.length + "):\n" + skippedValueWarnings.join("\n"));
+  }
+  if (mode === "all" && pfsRefsWithoutStock.length) {
+    Logger.log("Refs PFS sans équivalent STOCK (" + pfsRefsWithoutStock.length + "):\n" + pfsRefsWithoutStock.join("\n"));
+  }
   Logger.log(summary);
-  ss.toast("Sync PFS terminée", "PFS Sync", 6);
+  ss.toast("Sync PFS terminée", toastTitle, 6);
   notify_("Sync PFS terminée", summary);
+  return {
+    mode: mode,
+    analyzedRefs: Object.keys(stockByRef).length,
+    matchedRefs: matchedRefs.length,
+    missingRefs: unmatchedRefs,
+    pfsRefsWithoutStock: mode === "all" ? pfsRefsWithoutStock : [],
+    modifiedRows: touchedPfsRows,
+    updatedFields: updatedFields
+  };
 }
 
 function exportPFSImportUpdateToDrive() {
@@ -876,6 +955,73 @@ function pfsNormalizeRef_(v) {
 function pfsNormalizeScalar_(v) {
   if (v === null || typeof v === "undefined") return "";
   return String(v).trim();
+}
+
+function pfsExtractRefFromSku_(sku) {
+  const raw = pfsNormalizeRef_(sku);
+  if (!raw) return "";
+  const pos = raw.indexOf("_");
+  return pos >= 0 ? raw.slice(0, pos) : raw;
+}
+
+function pfsSkuMatchesRef_(sku, ref) {
+  const skuNorm = pfsNormalizeRef_(sku);
+  const refNorm = pfsNormalizeRef_(ref);
+  if (!skuNorm || !refNorm) return false;
+  return skuNorm === refNorm || skuNorm.indexOf(refNorm + "_") === 0;
+}
+
+function pfsFindMatchingStockRefForSku_(sku, refs) {
+  const stockRefs = Array.isArray(refs) ? refs : [];
+  if (!stockRefs.length) return "";
+
+  const direct = pfsExtractRefFromSku_(sku);
+  if (direct && stockRefs.indexOf(direct) !== -1 && pfsSkuMatchesRef_(sku, direct)) {
+    return direct;
+  }
+
+  for (let i = 0; i < stockRefs.length; i++) {
+    if (pfsSkuMatchesRef_(sku, stockRefs[i])) return stockRefs[i];
+  }
+  return "";
+}
+
+function pfsResolveSyncValue_(value) {
+  if (value && typeof value === "object" && Object.prototype.hasOwnProperty.call(value, "write")) {
+    return {
+      write: value.write === true,
+      value: pfsNormalizeScalar_(value.value),
+      reason: value.reason ? String(value.reason) : ""
+    };
+  }
+  return {
+    write: true,
+    value: pfsNormalizeScalar_(value),
+    reason: ""
+  };
+}
+
+function pfsFormatKgValueFromGrams_(grams) {
+  if (grams === null || typeof grams === "undefined" || String(grams).trim() === "") return "";
+  return formatWeightKgPFSText_(grams);
+}
+
+function pfsMapActiveFromMsStatus_(status) {
+  const raw = pfsNormalizeScalar_(status).toUpperCase();
+  if (!raw) {
+    return { write: true, value: "" };
+  }
+  if (raw === "MS") {
+    return { write: true, value: "Oui" };
+  }
+  if (raw === "MS_DISABLED") {
+    return { write: true, value: "Non" };
+  }
+  return {
+    write: false,
+    value: "",
+    reason: "MS_STATUT non géré (" + raw + ")"
+  };
 }
 
 function pfsFindNamedFileInFolder_(folderId, fileName) {

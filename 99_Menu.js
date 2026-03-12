@@ -15,7 +15,8 @@ function onOpen() {
     .addSubMenu(
       ui.createMenu("Édition PFS")
         .addItem("PFS • Importer Template", "menuImportPFSTemplate")
-        .addItem("PFS • Sync STOCK → PFS_IMPORT", "menuSyncStockToPfsImport")
+        .addItem("PFS • Sync refs cochées", "menuSyncSelectedStockToPfsImport")
+        .addItem("PFS • Sync toutes les refs", "menuSyncAllStockToPfsImport")
         .addItem("PFS • Exporter fichier update", "menuExportPFSImportUpdate")
     )
     .addToUi();
@@ -66,6 +67,14 @@ function menuImportPFSTemplate() {
 
 function menuSyncStockToPfsImport() {
   syncStockToPfsImport();
+}
+
+function menuSyncSelectedStockToPfsImport() {
+  syncSelectedStockToPfsImport();
+}
+
+function menuSyncAllStockToPfsImport() {
+  syncAllStockToPfsImport();
 }
 
 function menuExportPFSImportUpdate() {

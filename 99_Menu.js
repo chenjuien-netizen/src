@@ -11,6 +11,13 @@ function onOpen() {
     .addItem("Exporter eFashion", "menuExportEFashion")
     .addItem("Exporter PFS", "menuExportPFS")
     .addItem("Exporter eFashion + PFS", "menuExportEFashionAndPFS")
+    .addSeparator()
+    .addSubMenu(
+      ui.createMenu("Édition PFS")
+        .addItem("PFS • Importer Template", "menuImportPFSTemplate")
+        .addItem("PFS • Sync STOCK → PFS_IMPORT", "menuSyncStockToPfsImport")
+        .addItem("PFS • Exporter fichier update", "menuExportPFSImportUpdate")
+    )
     .addToUi();
 
   ui.createMenu("Arrivages")
@@ -51,6 +58,18 @@ function menuExportEFashion() {
 
 function menuExportPFS() {
   exportStockToPFS();
+}
+
+function menuImportPFSTemplate() {
+  importPFSTemplateToSheet();
+}
+
+function menuSyncStockToPfsImport() {
+  syncStockToPfsImport();
+}
+
+function menuExportPFSImportUpdate() {
+  exportPFSImportUpdateToDrive();
 }
 
 function menuExportEFashionAndPFS() {

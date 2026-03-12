@@ -10,10 +10,14 @@
  ****************************************************/
 
 var SHEET_PFS_EXPORT = "pfs_export";
+var SHEET_PFS_IMPORT = "PFS_IMPORT";
 
 // Drive export settings
 var PFS_EXPORT_FOLDER_ID = "1CG_X598c8PPIOyCm3uEg-kzuV1BBa4pI";
 var PFS_EXPORT_FILENAME = "PFS_EXPORT.xlsx";
+var PFS_TEMPLATE_FOLDER_ID = "1_F3f3_24whJAGzj4RuPr5r7FH0cioKLL";
+var PFS_TEMPLATE_FILENAME = "Template_PFS.xlsx";
+var PFS_UPDATE_FILENAME = "Template_PFS_UPDATE.xlsx";
 
 // Debug
 var PFS_DEBUG = true;
@@ -21,6 +25,252 @@ var PFS_HEADER_MAX_COLS = 80; // enough for PFS template; avoids getLastColumn()
 
 // Minimum export width to cover fixed-position columns up to Pays (U = 21)
 var PFS_MIN_EXPORT_COLS = 21;
+
+function importPFSTemplateToSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const lock = LockService.getDocumentLock();
+  let tempFileId = "";
+  lock.waitLock(30000);
+
+  ss.toast("Import template PFS : démarrage…", "PFS Import", 5);
+
+  try {
+    const templateFile = pfsFindNamedFileInFolder_(PFS_TEMPLATE_FOLDER_ID, PFS_TEMPLATE_FILENAME);
+    if (!templateFile) {
+      throw new Error("Fichier introuvable dans Drive: " + PFS_TEMPLATE_FILENAME);
+    }
+
+    ss.toast("Conversion XLSX → Google Sheet temporaire…", "PFS Import", 5);
+    tempFileId = pfsConvertXlsxToGoogleSheet_(templateFile.id);
+
+    ss.toast("Ouverture du fichier converti…", "PFS Import", 5);
+    const tempSs = pfsOpenSpreadsheetWithRetry_(tempFileId, 8, 1500);
+    const sourceSheet = pfsSelectBestTemplateSheet_(tempSs);
+    if (!sourceSheet) {
+      throw new Error("Le template PFS converti ne contient aucune feuille exploitable.");
+    }
+
+    const analysis = pfsAnalyzeSheetStructure_(sourceSheet);
+    ss.toast("Remplacement de " + SHEET_PFS_IMPORT + "…", "PFS Import", 5);
+    const importedSheet = pfsReplaceSheetFromTemplate_(ss, SHEET_PFS_IMPORT, sourceSheet);
+
+    SpreadsheetApp.flush();
+
+    const summary = pfsBuildTemplateAnalysisSummary_(analysis, {
+      fileName: templateFile.name,
+      targetSheetName: importedSheet.getName()
+    });
+
+    ss.toast("Template PFS importé dans " + SHEET_PFS_IMPORT, "PFS Import", 6);
+    notify_("Import PFS terminé", summary);
+    Logger.log(summary);
+  } catch (err) {
+    const msg = (err && err.message) ? err.message : String(err);
+    ss.toast("Import PFS échoué: " + msg, "PFS Import", 10);
+    throw err;
+  } finally {
+    if (tempFileId) {
+      try { Drive.Files.remove(tempFileId); } catch (e) { Logger.log("Cleanup temp PFS failed: " + e); }
+    }
+    lock.releaseLock();
+  }
+}
+
+function syncStockToPfsImport() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const stock = ss.getSheetByName(SHEET_STOCK);
+  const pfs = ss.getSheetByName(SHEET_PFS_IMPORT);
+
+  if (!stock) throw new Error("Feuille introuvable: " + SHEET_STOCK);
+  if (!pfs) throw new Error("Feuille introuvable: " + SHEET_PFS_IMPORT);
+
+  ss.toast("Sync STOCK → PFS_IMPORT : analyse…", "PFS Sync", 5);
+
+  const stockLastRow = stock.getLastRow();
+  const stockLastCol = stock.getLastColumn();
+  if (stockLastRow < 2 || stockLastCol < 1) {
+    ss.toast("STOCK vide", "PFS Sync", 5);
+    return;
+  }
+
+  const stockHeaders = stock.getRange(1, 1, 1, stockLastCol).getValues()[0];
+  const stockMap = headerMap_(stockHeaders);
+
+  const pfsAnalysis = pfsAnalyzeSheetStructure_(pfs);
+  if (!pfsAnalysis.headerRow || !pfsAnalysis.usefulWidth) {
+    throw new Error("Impossible de détecter les headers de " + SHEET_PFS_IMPORT + ".");
+  }
+
+  const pfsHeaders = pfs.getRange(pfsAnalysis.headerRow, 1, 1, pfsAnalysis.usefulWidth).getValues()[0];
+  const pfsDataStartRow = pfsAnalysis.headerRow + 1;
+  const pfsRowCount = Math.max(0, pfsAnalysis.usefulRows - pfsAnalysis.headerRow);
+  if (!pfsRowCount) {
+    ss.toast("PFS_IMPORT ne contient aucune ligne à mettre à jour", "PFS Sync", 6);
+    return;
+  }
+
+  const pfsRefCol = pfsFindColumnByAliases_(pfsHeaders, [
+    "réf. produit",
+    "ref. produit",
+    "réf produit",
+    "ref produit",
+    "reference produit",
+    "sku"
+  ]);
+  const stockRefCol = stockMap["货号"] || 0;
+
+  if (!stockRefCol) throw new Error("Colonne '货号' introuvable dans STOCK.");
+  if (!pfsRefCol) throw new Error("Colonne de référence introuvable dans " + SHEET_PFS_IMPORT + ".");
+
+  const stockValues = stock.getRange(2, 1, stockLastRow - 1, stockLastCol).getValues();
+  const pfsValues = pfs.getRange(pfsDataStartRow, 1, pfsRowCount, pfsAnalysis.usefulWidth).getValues();
+
+  const stockByRef = {};
+  const duplicateStockRefs = [];
+  for (let i = 0; i < stockValues.length; i++) {
+    const ref = pfsNormalizeRef_(stockValues[i][stockRefCol - 1]);
+    if (!ref) continue;
+    if (stockByRef[ref]) {
+      duplicateStockRefs.push(ref);
+      continue;
+    }
+    stockByRef[ref] = stockValues[i];
+  }
+
+  const pfsRowsByRef = {};
+  for (let i = 0; i < pfsValues.length; i++) {
+    const ref = pfsNormalizeRef_(pfsValues[i][pfsRefCol - 1]);
+    if (!ref) continue;
+    if (!pfsRowsByRef[ref]) pfsRowsByRef[ref] = [];
+    pfsRowsByRef[ref].push(i);
+  }
+
+  const syncDefs = [
+    {
+      key: "prix",
+      label: "Prix",
+      stockCol: stockMap["prix@"] || 0,
+      pfsCol: pfsFindColumnByAliases_(pfsHeaders, ["prix_vente gros", "prix vente gros", "prix"]),
+      transform: function(row) { return pfsNormalizeScalar_(row[stockMap["prix@"] - 1]); }
+    },
+    {
+      key: "poids",
+      label: "Poids",
+      stockCol: stockMap["poids (en gramme)"] || 0,
+      pfsCol: pfsFindColumnByAliases_(pfsHeaders, ["poids_kg", "poids kg", "poids"]),
+      transform: function(row) { return formatWeightKgPFSText_(row[stockMap["poids (en gramme)"] - 1]); }
+    },
+    {
+      key: "composition",
+      label: "Composition",
+      stockCol: stockMap["composition matérielle"] || 0,
+      pfsCol: pfsFindColumnByAliases_(pfsHeaders, ["composition matière", "composition matiere", "composition"]),
+      transform: function(row) {
+        const raw = pfsNormalizeScalar_(row[stockMap["composition matérielle"] - 1]);
+        return raw ? (normalizeCompositionPFS_(raw) || raw) : "";
+      }
+    },
+    {
+      key: "pays",
+      label: "Pays",
+      stockCol: stockMap["pays d'origine"] || stockMap["pays d’origine"] || 0,
+      pfsCol: pfsFindColumnByAliases_(pfsHeaders, ["pays de fabrication", "pays fabrication", "pays"]),
+      transform: function(row) {
+        const col = stockMap["pays d'origine"] || stockMap["pays d’origine"] || 0;
+        return pfsNormalizeScalar_(row[col - 1]);
+      }
+    }
+  ];
+
+  const availableDefs = syncDefs.filter(function(def) {
+    return def.stockCol && def.pfsCol;
+  });
+
+  const missingDefs = syncDefs
+    .filter(function(def) { return !def.stockCol || !def.pfsCol; })
+    .map(function(def) { return def.label; });
+
+  if (!availableDefs.length) {
+    throw new Error("Aucune colonne syncable trouvée entre STOCK et " + SHEET_PFS_IMPORT + ".");
+  }
+
+  const changedColumns = {};
+  for (let i = 0; i < availableDefs.length; i++) {
+    const def = availableDefs[i];
+    changedColumns[def.pfsCol] = pfsValues.map(function(row) { return [row[def.pfsCol - 1]]; });
+  }
+
+  const matchedRefs = [];
+  const unmatchedRefs = [];
+  const updatedFields = {};
+  let updatedRows = 0;
+
+  Object.keys(stockByRef).forEach(function(ref) {
+    const stockRow = stockByRef[ref];
+    const targetRows = pfsRowsByRef[ref];
+    if (!targetRows || !targetRows.length) {
+      unmatchedRefs.push(ref);
+      return;
+    }
+
+    matchedRefs.push(ref);
+    let rowChanged = false;
+
+    for (let t = 0; t < targetRows.length; t++) {
+      const targetIndex = targetRows[t];
+
+      for (let d = 0; d < availableDefs.length; d++) {
+        const def = availableDefs[d];
+        const nextValue = def.transform(stockRow);
+        if (nextValue === "") continue;
+
+        const colValues = changedColumns[def.pfsCol];
+        const prevValue = pfsNormalizeScalar_(colValues[targetIndex][0]);
+        if (prevValue === nextValue) continue;
+
+        colValues[targetIndex][0] = nextValue;
+        updatedFields[def.key] = (updatedFields[def.key] || 0) + 1;
+        rowChanged = true;
+      }
+    }
+
+    if (rowChanged) updatedRows += targetRows.length;
+  });
+
+  const changedCols = Object.keys(changedColumns)
+    .map(function(v) { return Number(v); })
+    .sort(function(a, b) { return a - b; });
+
+  for (let i = 0; i < changedCols.length; i++) {
+    const col = changedCols[i];
+    pfs.getRange(pfsDataStartRow, col, pfsRowCount, 1).setValues(changedColumns[col]);
+  }
+
+  const notes = [];
+  if (missingDefs.length) notes.push("Colonnes non syncées: " + missingDefs.join(", "));
+  notes.push("Champs complexes laissés en attente: couleurs, tailles.");
+  if (duplicateStockRefs.length) notes.push("Refs dupliquées dans STOCK ignorées après la première occurrence: " + pfsUniqueList_(duplicateStockRefs).slice(0, 10).join(", "));
+  if (unmatchedRefs.length) notes.push("Refs STOCK absentes du template: " + unmatchedRefs.slice(0, 10).join(", ") + (unmatchedRefs.length > 10 ? " …" : ""));
+
+  const summary = [
+    "Sync STOCK → " + SHEET_PFS_IMPORT,
+    "",
+    "Header row PFS détecté: " + pfsAnalysis.headerRow,
+    "Refs matchées: " + matchedRefs.length,
+    "Lignes PFS touchées: " + updatedRows,
+    "Mises à jour: " + pfsFormatUpdateStats_(updatedFields)
+  ].concat(notes).join("\n");
+
+  Logger.log(summary);
+  ss.toast("Sync PFS terminée", "PFS Sync", 6);
+  notify_("Sync PFS terminée", summary);
+}
+
+function exportPFSImportUpdateToDrive() {
+  const url = pfsExportSheetToDriveXlsx_(SHEET_PFS_IMPORT, PFS_TEMPLATE_FOLDER_ID, PFS_UPDATE_FILENAME, "PFS Update");
+  Logger.log("PFS update exported: " + url);
+  return url;
+}
 
 function exportStockToPFS() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -499,6 +749,35 @@ function exportPFSToDriveXlsx() {
   return file.getUrl();
 }
 
+function pfsExportSheetToDriveXlsx_(sheetName, folderId, fileName, toastTitle) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(sheetName);
+
+  if (!sheet) throw new Error("Feuille introuvable: " + sheetName);
+
+  const folder = DriveApp.getFolderById(folderId);
+  const spreadsheetId = ss.getId();
+  const gid = sheet.getSheetId();
+  const url = "https://docs.google.com/spreadsheets/d/" + spreadsheetId + "/export?format=xlsx&gid=" + gid;
+  const token = ScriptApp.getOAuthToken();
+
+  const response = UrlFetchApp.fetch(url, {
+    headers: {
+      Authorization: "Bearer " + token
+    }
+  });
+
+  const blob = response.getBlob().setName(fileName);
+  const existing = folder.getFilesByName(fileName);
+  while (existing.hasNext()) {
+    existing.next().setTrashed(true);
+  }
+
+  const file = folder.createFile(blob);
+  SpreadsheetApp.getActive().toast("Export Drive terminé", toastTitle || "PFS", 5);
+  return file.getUrl();
+}
+
 /**
  * Read PFS_EXPORT headers robustly
  * - Doesn't rely on getLastColumn() which may be 1 if only A1 is filled
@@ -579,6 +858,281 @@ function buildPfsColumnIndex_(headers) {
     }
     return 0;
   };
+}
+
+function pfsFindColumnByAliases_(headers, aliases) {
+  const findCol = buildPfsColumnIndex_(headers || []);
+  for (let i = 0; i < aliases.length; i++) {
+    const col = findCol(aliases[i]);
+    if (col) return col;
+  }
+  return 0;
+}
+
+function pfsNormalizeRef_(v) {
+  return (typeof cleanRef_ === "function" ? cleanRef_(v) : String(v || "").trim()).toUpperCase();
+}
+
+function pfsNormalizeScalar_(v) {
+  if (v === null || typeof v === "undefined") return "";
+  return String(v).trim();
+}
+
+function pfsFindNamedFileInFolder_(folderId, fileName) {
+  const folder = DriveApp.getFolderById(folderId);
+  const files = folder.getFilesByName(fileName);
+  let best = null;
+
+  while (files.hasNext()) {
+    const file = files.next();
+    const meta = Drive.Files.get(file.getId(), { fields: "id,name,modifiedTime,createdTime" });
+    const stamp = meta.modifiedTime || meta.createdTime || "";
+    const when = stamp ? new Date(stamp) : new Date(0);
+
+    if (!best || when.getTime() > best.when.getTime()) {
+      best = {
+        id: meta.id,
+        name: meta.name,
+        when: when
+      };
+    }
+  }
+
+  return best;
+}
+
+function pfsConvertXlsxToGoogleSheet_(xlsxFileId) {
+  const meta = Drive.Files.get(xlsxFileId, { fields: "name" });
+  const resource = {
+    name: "TMP_PFS_CONVERT__" + meta.name + "__" + Utilities.getUuid(),
+    title: "TMP_PFS_CONVERT__" + meta.name + "__" + Utilities.getUuid(),
+    mimeType: MimeType.GOOGLE_SHEETS
+  };
+  const converted = Drive.Files.copy(resource, xlsxFileId);
+  return converted.id;
+}
+
+function pfsOpenSpreadsheetWithRetry_(fileId, attempts, sleepMs) {
+  if (typeof msOpenSpreadsheetWithRetry_ === "function") {
+    return msOpenSpreadsheetWithRetry_(fileId, attempts, sleepMs);
+  }
+
+  attempts = attempts || 6;
+  sleepMs = sleepMs || 1000;
+
+  let lastErr = null;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return SpreadsheetApp.openById(fileId);
+    } catch (e) {
+      lastErr = e;
+      Utilities.sleep(sleepMs);
+    }
+  }
+  throw lastErr || new Error("Impossible d'ouvrir le fichier converti.");
+}
+
+function pfsSelectBestTemplateSheet_(spreadsheet) {
+  const sheets = spreadsheet.getSheets();
+  if (!sheets || !sheets.length) return null;
+
+  let bestSheet = null;
+  let bestScore = -1;
+  for (let i = 0; i < sheets.length; i++) {
+    const analysis = pfsAnalyzeSheetStructure_(sheets[i]);
+    const score = analysis.headerTokenHits * 100 + analysis.usefulRows * 2 + analysis.usefulWidth;
+    if (score > bestScore) {
+      bestScore = score;
+      bestSheet = sheets[i];
+    }
+  }
+
+  return bestSheet || sheets[0];
+}
+
+function pfsAnalyzeSheetStructure_(sheet) {
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  const values = (lastRow > 0 && lastCol > 0)
+    ? sheet.getRange(1, 1, lastRow, lastCol).getDisplayValues()
+    : [];
+  const dims = (typeof msGetEffectiveDimensions_ === "function")
+    ? msGetEffectiveDimensions_(values)
+    : pfsGetEffectiveDimensionsLocal_(values);
+  const usefulRows = dims.rows;
+  const usefulWidth = dims.cols;
+  const headerGuess = pfsGuessHeaderRow_(values, usefulRows, usefulWidth);
+  const headerRow = headerGuess.row;
+  const headerValues = headerRow ? values[headerRow - 1].slice(0, usefulWidth) : [];
+  const mergedCount = (usefulRows > 0 && usefulWidth > 0)
+    ? sheet.getRange(1, 1, usefulRows, usefulWidth).getMergedRanges().length
+    : 0;
+  const specialRows = [];
+
+  for (let r = 0; r < Math.min(headerRow - 1, usefulRows); r++) {
+    const nonEmpty = pfsCountNonEmptyCells_(values[r], usefulWidth);
+    if (!nonEmpty) continue;
+    specialRows.push({
+      row: r + 1,
+      nonEmpty: nonEmpty,
+      sample: values[r].slice(0, Math.min(usefulWidth, 6)).join(" | ").trim()
+    });
+  }
+
+  return {
+    sheetName: sheet.getName(),
+    lastRow: lastRow,
+    lastCol: lastCol,
+    usefulRows: usefulRows,
+    usefulWidth: usefulWidth,
+    headerRow: headerRow,
+    headerValues: headerValues,
+    headerTokenHits: headerGuess.tokenHits,
+    frozenRows: sheet.getFrozenRows(),
+    frozenCols: sheet.getFrozenColumns(),
+    mergedCount: mergedCount,
+    specialRows: specialRows
+  };
+}
+
+function pfsGuessHeaderRow_(values, usefulRows, usefulWidth) {
+  const expectedTokens = [
+    "réf",
+    "ref",
+    "produit",
+    "prix",
+    "poids",
+    "composition",
+    "pays",
+    "couleurs",
+    "tailles",
+    "catégorie",
+    "categorie"
+  ];
+
+  let bestRow = 0;
+  let bestScore = -1;
+  let bestHits = 0;
+  const scanRows = Math.min(usefulRows || values.length || 0, 12);
+
+  for (let r = 0; r < scanRows; r++) {
+    const row = values[r] || [];
+    const nonEmpty = pfsCountNonEmptyCells_(row, usefulWidth);
+    if (!nonEmpty) continue;
+
+    let hits = 0;
+    for (let c = 0; c < Math.min(row.length, usefulWidth || row.length); c++) {
+      const cell = normalizeHeaderKey_(row[c]);
+      if (!cell) continue;
+      for (let t = 0; t < expectedTokens.length; t++) {
+        if (cell.indexOf(expectedTokens[t]) !== -1) {
+          hits++;
+          break;
+        }
+      }
+    }
+
+    const score = hits * 20 + nonEmpty;
+    if (score > bestScore) {
+      bestScore = score;
+      bestRow = r + 1;
+      bestHits = hits;
+    }
+  }
+
+  return { row: bestRow, tokenHits: bestHits };
+}
+
+function pfsCountNonEmptyCells_(row, usefulWidth) {
+  let count = 0;
+  const width = Math.min((row || []).length, usefulWidth || (row || []).length);
+  for (let i = 0; i < width; i++) {
+    if (String(row[i] || "").trim() !== "") count++;
+  }
+  return count;
+}
+
+function pfsGetEffectiveDimensionsLocal_(values) {
+  if (!values || !values.length) return { rows: 0, cols: 0 };
+
+  let lastRow = -1;
+  let lastCol = -1;
+  for (let r = 0; r < values.length; r++) {
+    let rowHasData = false;
+    for (let c = 0; c < values[r].length; c++) {
+      if (String(values[r][c] || "").trim() !== "") {
+        rowHasData = true;
+        if (c > lastCol) lastCol = c;
+      }
+    }
+    if (rowHasData) lastRow = r;
+  }
+
+  return {
+    rows: lastRow + 1,
+    cols: lastCol + 1
+  };
+}
+
+function pfsReplaceSheetFromTemplate_(spreadsheet, targetSheetName, sourceSheet) {
+  const existing = spreadsheet.getSheetByName(targetSheetName);
+  const targetIndex = existing ? existing.getIndex() : spreadsheet.getSheets().length + 1;
+  const tempName = targetSheetName + "__TMP__" + Utilities.getUuid().slice(0, 8);
+  const copied = sourceSheet.copyTo(spreadsheet).setName(tempName);
+
+  spreadsheet.setActiveSheet(copied);
+  spreadsheet.moveActiveSheet(Math.min(targetIndex, spreadsheet.getSheets().length));
+
+  if (existing) {
+    spreadsheet.deleteSheet(existing);
+  }
+
+  copied.setName(targetSheetName);
+  return copied;
+}
+
+function pfsBuildTemplateAnalysisSummary_(analysis, context) {
+  const headerPreview = (analysis.headerValues || [])
+    .slice(0, Math.min((analysis.headerValues || []).length, 12))
+    .map(function(v) { return String(v || "").trim(); })
+    .filter(Boolean)
+    .join(" | ");
+
+  const specialRows = (analysis.specialRows || []).slice(0, 5).map(function(info) {
+    return "Ligne " + info.row + " (" + info.nonEmpty + " cellules): " + info.sample;
+  });
+
+  return [
+    "Fichier importé: " + (context && context.fileName ? context.fileName : PFS_TEMPLATE_FILENAME),
+    "Feuille source retenue: " + analysis.sheetName,
+    "Feuille cible: " + (context && context.targetSheetName ? context.targetSheetName : SHEET_PFS_IMPORT),
+    "Dimensions utiles: " + analysis.usefulRows + " lignes × " + analysis.usefulWidth + " colonnes",
+    "Header row détecté: " + analysis.headerRow,
+    "Headers (aperçu): " + (headerPreview || "(aucun header lisible)"),
+    "Lignes avant header: " + ((analysis.specialRows || []).length ? (analysis.specialRows || []).length : 0),
+    "Lignes particulières (aperçu): " + (specialRows.length ? specialRows.join(" / ") : "aucune"),
+    "Volets figés: " + analysis.frozenRows + " ligne(s), " + analysis.frozenCols + " colonne(s)",
+    "Zones fusionnées détectées: " + analysis.mergedCount
+  ].join("\n");
+}
+
+function pfsFormatUpdateStats_(stats) {
+  const parts = Object.keys(stats || {}).map(function(key) {
+    return key + "=" + stats[key];
+  });
+  return parts.length ? parts.join(", ") : "aucune cellule modifiée";
+}
+
+function pfsUniqueList_(values) {
+  const out = [];
+  const seen = {};
+  for (let i = 0; i < values.length; i++) {
+    const key = String(values[i] || "");
+    if (!key || seen[key]) continue;
+    seen[key] = true;
+    out.push(key);
+  }
+  return out;
 }
 
 /****************************************************

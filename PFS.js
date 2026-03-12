@@ -346,7 +346,7 @@ function pfsSyncStockToPfsImport_(options) {
 }
 
 function exportPFSImportUpdateToDrive() {
-  const url = pfsExportSheetToDriveXlsx_(SHEET_PFS_IMPORT, PFS_TEMPLATE_FOLDER_ID, PFS_UPDATE_FILENAME, "PFS Update");
+  const url = pfsExportImportSheetAsTemplateWorkbookToDrive_();
   Logger.log("PFS update exported: " + url);
   return url;
 }
@@ -855,6 +855,61 @@ function pfsExportSheetToDriveXlsx_(sheetName, folderId, fileName, toastTitle) {
   const file = folder.createFile(blob);
   SpreadsheetApp.getActive().toast("Export Drive terminé", toastTitle || "PFS", 5);
   return file.getUrl();
+}
+
+function pfsExportImportSheetAsTemplateWorkbookToDrive_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sourceSheet = ss.getSheetByName(SHEET_PFS_IMPORT);
+  if (!sourceSheet) throw new Error("Feuille introuvable: " + SHEET_PFS_IMPORT);
+
+  const folder = DriveApp.getFolderById(PFS_TEMPLATE_FOLDER_ID);
+  const tempName = "TMP_PFS_UPDATE__" + Utilities.getUuid().slice(0, 8);
+  let tempSs = null;
+
+  try {
+    tempSs = SpreadsheetApp.create(tempName);
+
+    // Remove the default blank sheet and replace with a copy of PFS_IMPORT
+    const copied = sourceSheet.copyTo(tempSs).setName("Worksheet");
+    const sheets = tempSs.getSheets();
+    for (let i = 0; i < sheets.length; i++) {
+      const sh = sheets[i];
+      if (sh.getSheetId() !== copied.getSheetId()) {
+        tempSs.deleteSheet(sh);
+      }
+    }
+
+    SpreadsheetApp.flush();
+    Utilities.sleep(1200);
+
+    const file = DriveApp.getFileById(tempSs.getId());
+    const url = "https://docs.google.com/spreadsheets/d/" + tempSs.getId() + "/export?format=xlsx";
+    const token = ScriptApp.getOAuthToken();
+    const response = UrlFetchApp.fetch(url, {
+      headers: {
+        Authorization: "Bearer " + token
+      }
+    });
+
+    const blob = response.getBlob().setName(PFS_UPDATE_FILENAME);
+
+    const existing = folder.getFilesByName(PFS_UPDATE_FILENAME);
+    while (existing.hasNext()) {
+      existing.next().setTrashed(true);
+    }
+
+    const created = folder.createFile(blob);
+    SpreadsheetApp.getActive().toast("Export Drive terminé", "PFS Update", 5);
+    return created.getUrl();
+  } finally {
+    if (tempSs) {
+      try {
+        DriveApp.getFileById(tempSs.getId()).setTrashed(true);
+      } catch (e) {
+        Logger.log("Cleanup temp PFS update workbook failed: " + e);
+      }
+    }
+  }
 }
 
 /**

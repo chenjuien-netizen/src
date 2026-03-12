@@ -135,10 +135,14 @@ function exportStockToEFashion() {
 
   }
   if (bad.length) {
-    const msg = bad
+    const details = bad
       .slice(0, 15)
       .map(function (x) {
-        return "• Ligne " + x.row + " | Ref " + x.ref + "\n  " + x.reason;
+        return [
+          "• Ligne " + x.row,
+          "  Ref : " + x.ref,
+          "  Motif : " + x.reason
+        ].join("\n");
       })
       .join("\n\n");
 
@@ -146,9 +150,15 @@ function exportStockToEFashion() {
       ? "\n\n(" + (bad.length - 15) + " autres lignes avec erreur...)"
       : "";
 
-    throw new Error(
-      "eFashion export — erreurs détectées dans STOCK :\n\n" + msg + more
-    );
+    const message = [
+      "eFashion export",
+      "",
+      "Erreurs détectées dans STOCK :",
+      "",
+      details + more
+    ].join("\n");
+
+    throw new Error(message);
   }
 
   if (rows.length === 0) {

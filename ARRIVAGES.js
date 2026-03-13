@@ -192,13 +192,16 @@ if (isEdit) {
     const ref = (typeof cleanRef_ === "function" ? cleanRef_(rawRef) : String(rawRef || "")).toUpperCase();
     if (!ref) continue;
 
-    const tail = (typeof toIntSafe_ === "function" ? toIntSafe_(r[1]) : (Number(r[1]) || 0));
+    const tailParsed = ArrivagesDomain_parseTailInput_(r[1]);
+    const tail = Number(tailParsed.total || 0);
+    const tailDisplay = String(tailParsed.display || "").trim();
     const ppc = (typeof toIntSafe_ === "function" ? toIntSafe_(r[2]) : (Number(r[2]) || 0));
     const boxPackParsed = ArrivagesDomain_parseBoxesAndPacks_(r[3], ppc);
     const cartons = Number(boxPackParsed.boxesValue || 0);
     const missingPacks = Number(boxPackParsed.missingPacks || 0);
     const noteS = String(r[4] || "").trim();
-    const dbNoteSystem = ArrivagesDomain_mergeBoxPackRawIntoNoteSystem_(noteS, String(r[3] ?? "").trim());
+    let dbNoteSystem = ArrivagesDomain_mergeBoxPackRawIntoNoteSystem_(noteS, String(r[3] ?? "").trim());
+    dbNoteSystem = ArrivagesDomain_mergeTailRawIntoNoteSystem_(dbNoteSystem, tailParsed.raw);
     const noteU = String(r[5] || "").trim();
 
     // DB row (10 cols)
@@ -236,6 +239,7 @@ const mixUsed = (isMixStart && tail > 0);
   entrepot: entrepot,
   arrivageId: id,
   tail: tail || 0,
+  tailDisplay: tailDisplay,
   ppc: ppc || 0,
   cartons: cartons || 0,
   missingPacks: missingPacks || 0,
@@ -390,7 +394,7 @@ function ArrivagesStock_applyFromArrivagePayload_(shStock, shTpl, payload) {
     const fracTxt = String(fracRaw === null || typeof fracRaw === "undefined" ? "" : fracRaw).trim();
     return {
       ppc: colPpc2 ? ArrivagesStock_toNumber_(ppcCol[i]) : 0,
-      tailCur: colTailCur ? ArrivagesStock_toNumber_(tailCurCol[i]) : 0,
+      tailCur: colTailCur ? ArrivagesStock_tailDisplayToTotal_(tailCurCol[i]) : 0,
       boxesCur: colBoxesCur ? ArrivagesStock_toNumber_(boxesCurCol[i]) : 0,
       signCur: colSignCur ? String(signCurCol[i] || "").trim() : "",
       hasFractionCur: colFracCur ? (fracTxt !== "" && fracTxt !== "0") : false,
@@ -423,6 +427,7 @@ function ArrivagesStock_applyFromArrivagePayload_(shStock, shTpl, payload) {
 
     const newPpc = ArrivagesStock_toNumber_(item.ppc);
     const newTail = ArrivagesStock_toNumber_(item.tail);
+    const newTailDisplay = String(item.tailDisplay || "").trim();
     const newBoxes = ArrivagesStock_toNumber_(item.cartons);
     const newMissingPacks = ArrivagesStock_toNumber_(item.missingPacks);
     const newHasTail = newTail > 0;
@@ -498,6 +503,7 @@ function ArrivagesStock_applyFromArrivagePayload_(shStock, shTpl, payload) {
           noteSystem: safeStr(item.noteSystem),
           newPpc: newPpc,
           newTail: newTail,
+          newTailDisplay: newTailDisplay,
           newBoxes: newBoxes,
           newWholeBoxes: newBoxParts.whole,
           newBoxSign: newBoxParts.sign,
@@ -523,6 +529,7 @@ function ArrivagesStock_applyFromArrivagePayload_(shStock, shTpl, payload) {
         noteSystem: safeStr(item.noteSystem),
         newPpc: newPpc,
         newTail: newTail,
+        newTailDisplay: newTailDisplay,
         newBoxes: newBoxes,
         newWholeBoxes: newBoxParts.whole,
         newBoxSign: newBoxParts.sign,
@@ -607,7 +614,7 @@ ArrivagesStock_applyTemplateFormulasByHeaderNoteKey_(
     const d = meta.data;
 
     // Replace/Insert/Suffix all behave same for new line: set values fresh
-    if (colTailCur) pushWrite(row, colTailCur, d.newTail || 0);
+    if (colTailCur) pushWrite(row, colTailCur, d.newTailDisplay || "");
     if (colPpc2) pushWrite(row, colPpc2, d.newPpc || 0);
     if (colBoxesCur) pushWrite(row, colBoxesCur, d.newWholeBoxes || 0);
     if (colSignCur) pushWrite(row, colSignCur, d.newBoxSign || "");
@@ -671,7 +678,7 @@ ArrivagesStock_applyTemplateFormulasByHeaderNoteKey_(
 
     } else {
       // REPLACE (or any non-safe update on existing line): replace full set
-      if (colTailCur) pushWrite(row, colTailCur, up.newTail || 0);
+      if (colTailCur) pushWrite(row, colTailCur, up.newTailDisplay || "");
       if (colPpc2) pushWrite(row, colPpc2, up.newPpc || 0);
       if (colBoxesCur) pushWrite(row, colBoxesCur, up.newWholeBoxes || 0);
       if (colSignCur) pushWrite(row, colSignCur, up.newBoxSign || "");
@@ -742,7 +749,7 @@ ArrivagesStock_applyTemplateFormulasByHeaderNoteKey_(
 
     for (const r of uniqTouched) {
       const curBoxes = colBoxesCur ? ArrivagesStock_toNumber_(shStock.getRange(r, colBoxesCur).getValue()) : 0;
-      const curTail = colTailCur ? ArrivagesStock_toNumber_(shStock.getRange(r, colTailCur).getValue()) : 0;
+      const curTail = colTailCur ? ArrivagesStock_tailDisplayToTotal_(shStock.getRange(r, colTailCur).getValue()) : 0;
       const curSign = colSignCur ? String(shStock.getRange(r, colSignCur).getValue() || "").trim() : "";
       const fracRaw = colFracCur ? shStock.getRange(r, colFracCur).getValue() : "";
       const curFracText = toFracText(fracRaw);
@@ -866,6 +873,14 @@ function ArrivagesStock_toInt_(v) {
   if (!m) return 0;
   const n = Number(m[0]);
   return Number.isFinite(n) ? Math.trunc(n) : 0;
+}
+
+function ArrivagesStock_tailDisplayToTotal_(v) {
+  if (v === null || v === undefined || v === "") return 0;
+  if (typeof v === "number") return Number.isFinite(v) ? Math.trunc(v) : 0;
+  const matches = String(v).match(/-?\d+/g);
+  if (!matches || !matches.length) return 0;
+  return matches.reduce((sum, part) => sum + (Number(part) || 0), 0);
 }
 
 function ArrivagesStock_toNumber_(v) {
@@ -1341,6 +1356,16 @@ function ArrivagesDomain_parseBoxesAndPacks_(input, ppcInput) {
   // normalize spaces for other cases
   raw = noSpace;
 
+  // tolerate explicit carton markers: ×4箱, 4箱, ×4
+  m = raw.match(/^×?(\d+)箱?$/);
+  if (m) {
+    return {
+      boxesValue: Number(m[1]),
+      missingPacks: 0,
+      kind: "plain"
+    };
+  }
+
   // mixed fraction with packs delta (ex: 2+2/3-5, 2+2/3+5)
   m = raw.match(/^(\d+)\+(\d+)\/(\d+)([+-])(\d+)$/);
   if (m) {
@@ -1425,6 +1450,52 @@ function ArrivagesDomain_parseBoxesAndPacks_(input, ppcInput) {
   }
 
   throw new Error("箱数/包 格式不支持: " + raw);
+}
+
+function ArrivagesDomain_parseTailInput_(input) {
+  const raw = String(input || "").trim();
+  if (!raw) return { total: 0, display: "", raw: "" };
+
+  const matches = raw.match(/\d+/g);
+  if (!matches || !matches.length) throw new Error("尾箱格式不支持: " + raw);
+
+  const nums = matches.map(Number).filter(n => Number.isFinite(n));
+  if (!nums.length) throw new Error("尾箱格式不支持: " + raw);
+
+  return {
+    total: nums.reduce((sum, n) => sum + n, 0),
+    display: nums.join("+"),
+    raw: raw
+  };
+}
+
+function ArrivagesDomain_mergeTailRawIntoNoteSystem_(noteSystem, tailRaw) {
+  const note = String(noteSystem || "").trim();
+  const raw = String(tailRaw || "").trim();
+  if (!raw) return note;
+
+  const cleaned = note
+    .replace(/\s*\|\s*TAIL_RAW:[^|]*/gi, "")
+    .replace(/^\s*TAIL_RAW:[^|]*\s*\|?\s*/i, "")
+    .trim();
+
+  return cleaned ? (cleaned + " | TAIL_RAW:" + raw) : ("TAIL_RAW:" + raw);
+}
+
+function ArrivagesDomain_extractTailRawFromNoteSystem_(noteSystem) {
+  const s = String(noteSystem || "").trim();
+  if (!s) return { cleanNoteSystem: "", tailRaw: "" };
+
+  const m = s.match(/(?:^|\|)\s*TAIL_RAW:([^|]+)/i);
+  const tailRaw = m ? String(m[1] || "").trim() : "";
+  const cleanNoteSystem = s
+    .replace(/\s*\|\s*TAIL_RAW:[^|]*/gi, "")
+    .replace(/^\s*TAIL_RAW:[^|]*\s*\|?\s*/i, "")
+    .trim()
+    .replace(/^\|\s*|\s*\|$/g, "")
+    .trim();
+
+  return { cleanNoteSystem, tailRaw };
 }
 
 function ArrivagesDomain_mergeBoxPackRawIntoNoteSystem_(noteSystem, boxPackRaw) {
@@ -1560,6 +1631,7 @@ function ArrivagesDomain_buildUiModelFromDbRows_(rows) {
         ref,
         cartonsSum: 0,
         boxPackRawLatest: { at: new Date(0), v: "" },
+        tailRawLatest: { at: new Date(0), v: "" },
         tailLatest: { at: new Date(0), v: "" },
         ppcLatest:  { at: new Date(0), v: "" },
         noteULatest:{ at: new Date(0), v: "" },
@@ -1573,7 +1645,8 @@ function ArrivagesDomain_buildUiModelFromDbRows_(rows) {
     const ppc     = Math.max(0, toIntSafe(r[5]));
     const cartons = Math.max(0, toNumberSafe(r[6]));
     const noteRaw = String(r[8] || "").trim();
-    const noteInfo = ArrivagesDomain_extractBoxPackRawFromNoteSystem_(noteRaw);
+    const tailInfo = ArrivagesDomain_extractTailRawFromNoteSystem_(noteRaw);
+    const noteInfo = ArrivagesDomain_extractBoxPackRawFromNoteSystem_(tailInfo.cleanNoteSystem);
     const noteS   = noteInfo.cleanNoteSystem;
     const noteU   = String(r[9] || "").trim();
 
@@ -1585,6 +1658,7 @@ function ArrivagesDomain_buildUiModelFromDbRows_(rows) {
 
     // Tail latest (toutes lignes)
     if (surplus > 0 && at > o.tailLatest.at) o.tailLatest = { at, v: surplus };
+    if (tailInfo.tailRaw && at > o.tailRawLatest.at) o.tailRawLatest = { at, v: tailInfo.tailRaw };
     if (noteInfo.boxPackRaw && at > o.boxPackRawLatest.at) o.boxPackRawLatest = { at, v: noteInfo.boxPackRaw };
 
     // Note user latest
@@ -1603,7 +1677,7 @@ function ArrivagesDomain_buildUiModelFromDbRows_(rows) {
     const o = byRef.get(ref);
     if (!o) continue;
 
-    const tail = o.tailLatest.v || "";
+    const tail = o.tailRawLatest.v || o.tailLatest.v || "";
     const ppc  = o.ppcLatest.v || "";
     const cartons = o.boxPackRawLatest.v || (o.cartonsSum > 0 ? o.cartonsSum : 1);
 

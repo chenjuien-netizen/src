@@ -886,6 +886,14 @@ function StockMoves_toInt_(v) {
   return m ? Number(m[0]) : 0;
 }
 
+function StockMoves_tailDisplayToTotal_(v) {
+  if (v === null || v === undefined || v === "") return 0;
+  if (typeof v === "number") return Number.isFinite(v) ? Math.trunc(v) : 0;
+  const matches = String(v).match(/-?\d+/g);
+  if (!matches || !matches.length) return 0;
+  return matches.reduce((sum, part) => sum + (Number(part) || 0), 0);
+}
+
 function StockMoves_toNumber_(v) {
   if (v === null || v === undefined || v === "") return 0;
   if (typeof v === "number") return Number.isFinite(v) ? v : 0;
@@ -947,7 +955,7 @@ function StockMoves_stateFromRowValues_(rowValues, map) {
   const colPackPerBox = StockMoves_col_(map, "包/箱");
 
   return StockMoves_normalizeState_({
-    tail: colTail ? StockMoves_toInt_(rowValues[colTail - 1]) : 0,
+    tail: colTail ? StockMoves_tailDisplayToTotal_(rowValues[colTail - 1]) : 0,
     ppc: colPpc ? StockMoves_toInt_(rowValues[colPpc - 1]) : 0,
     boxes: colBoxes ? StockMoves_toInt_(rowValues[colBoxes - 1]) : 0,
     sign: colSign ? String(rowValues[colSign - 1] || "").trim() : "",
@@ -993,7 +1001,7 @@ function StockMoves_hasOpenState_(state) {
 
 function StockMoves_getAllowedOutValues_(stateInput, openRestInput) {
   const state = StockMoves_normalizeState_(stateInput || {});
-  const curTail = StockMoves_toInt_(state.tail);
+  const curTail = StockMoves_tailDisplayToTotal_(state.tail);
   const curBoxes = StockMoves_toInt_(state.boxes);
   const curSign = String(state.sign || "").trim();
   const curFracText = StockMoves_fractionToText_(state.fraction);

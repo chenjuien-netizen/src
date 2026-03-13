@@ -138,11 +138,16 @@ function compareStockWithPfsImport() {
   }
 
   const pfsRowsByRef = {};
+  const pfsRowsByBaseRef = {};
   const seenPfsRefs = {};
   for (let i = 0; i < pfsValues.length; i++) {
     const sku = pfsNormalizeScalar_(pfsValues[i][pfsSkuCol - 1]);
     const skuBaseRef = pfsExtractRefFromSku_(sku);
-    if (skuBaseRef) seenPfsRefs[skuBaseRef] = true;
+    if (skuBaseRef) {
+      seenPfsRefs[skuBaseRef] = true;
+      if (!pfsRowsByBaseRef[skuBaseRef]) pfsRowsByBaseRef[skuBaseRef] = [];
+      pfsRowsByBaseRef[skuBaseRef].push(pfsValues[i]);
+    }
 
     const ref = pfsFindMatchingStockRefForSku_(sku, stockRefs);
     if (!ref) continue;
@@ -204,7 +209,7 @@ function compareStockWithPfsImport() {
     throw new Error("Aucune colonne comparable trouvée entre STOCK et " + SHEET_PFS_IMPORT + ".");
   }
 
-  const diffRows = [];
+  const outRows = [];
   const matchedRefs = [];
   const absentPfsRefs = [];
   const pfsRefsWithoutStock = [];
@@ -217,93 +222,116 @@ function compareStockWithPfsImport() {
 
     if (!targetRows || !targetRows.length) {
       absentPfsRefs.push(ref);
-      diffRows.push([
-        ref,
-        "",
-        "",
-        "REF",
-        ref,
-        "",
-        "ABSENT_PFS",
-        "Aucune ligne PFS trouvée pour cette ref"
-      ]);
+      outRows.push(pfsBuildAuditOutputRow_({
+        ref: ref,
+        typeVente: "",
+        sku: "",
+        fields: pfsBuildEmptyAuditFields_(availableDefs, stockRow),
+        status: "ABSENT_PFS",
+        comment: "Ref absente de PFS"
+      }));
       continue;
     }
 
     matchedRefs.push(ref);
+    const groupRows = targetRows.map(function(index) { return pfsValues[index]; });
+    const primaryInfo = pfsPickPrimaryPfsRow_(groupRows, pfsTypeVenteCol);
+    const primarySnapshot = pfsBuildAuditSnapshot_(ref, stockRow, primaryInfo.row, availableDefs, {
+      skuCol: pfsSkuCol,
+      typeVenteCol: pfsTypeVenteCol
+    });
+    const primaryComment = pfsBuildAuditComment_(primarySnapshot, [], {
+      packMissing: !primaryInfo.isPack
+    });
 
-    for (let t = 0; t < targetRows.length; t++) {
-      const targetIndex = targetRows[t];
-      const pfsRow = pfsValues[targetIndex];
-      const sku = pfsNormalizeScalar_(pfsRow[pfsSkuCol - 1]);
-      const typeVente = pfsTypeVenteCol ? pfsNormalizeScalar_(pfsRow[pfsTypeVenteCol - 1]) : "";
-
-      for (let d = 0; d < availableDefs.length; d++) {
-        const def = availableDefs[d];
-        const stockPrepared = pfsPrepareComparableValue_(def.stockValue(stockRow), def.type);
-        const pfsPrepared = pfsPrepareComparableValue_(pfsRow[def.pfsCol - 1], def.type);
-
-        if (!stockPrepared.comparable || !pfsPrepared.comparable) {
-          const comment = stockPrepared.reason || pfsPrepared.reason || "Valeur non comparable";
-          diffRows.push([
-            ref,
-            sku,
-            typeVente,
-            def.label,
-            stockPrepared.display,
-            pfsPrepared.display,
-            "NON_COMPARE",
-            comment
-          ]);
-          nonComparableWarnings.push(ref + " / " + def.label + ": " + comment);
-          continue;
-        }
-
-        if (pfsComparableValuesEqual_(stockPrepared, pfsPrepared, def.type)) continue;
-
-        diffRows.push([
-          ref,
-          sku,
-          typeVente,
-          def.label,
-          stockPrepared.display,
-          pfsPrepared.display,
-          "DIFF",
-          ""
-        ]);
+    if (primarySnapshot.nonComparable.length) {
+      for (let w = 0; w < primarySnapshot.nonComparable.length; w++) {
+        nonComparableWarnings.push(ref + " / " + primarySnapshot.nonComparable[w].label + ": " + primarySnapshot.nonComparable[w].reason);
       }
+    }
+
+    outRows.push(pfsBuildAuditOutputRow_({
+      ref: ref,
+      typeVente: primarySnapshot.typeVente || (primaryInfo.isPack ? "PACK" : ""),
+      sku: primarySnapshot.sku,
+      fields: primarySnapshot.fields,
+      status: primarySnapshot.diffLabels.length || primarySnapshot.nonComparable.length ? "DIFF" : "OK",
+      comment: primaryComment
+    }));
+
+    for (let t = 0; t < groupRows.length; t++) {
+      const row = groupRows[t];
+      if (row === primaryInfo.row) continue;
+
+      const subSnapshot = pfsBuildAuditSnapshot_(ref, stockRow, row, availableDefs, {
+        skuCol: pfsSkuCol,
+        typeVenteCol: pfsTypeVenteCol
+      });
+      const subPackDiffLabels = pfsDiffLabelsBetweenPfsSnapshots_(primarySnapshot, subSnapshot, availableDefs);
+      if (!subPackDiffLabels.length) continue;
+
+      if (subSnapshot.nonComparable.length) {
+        for (let w = 0; w < subSnapshot.nonComparable.length; w++) {
+          nonComparableWarnings.push(ref + " / " + subSnapshot.nonComparable[w].label + ": " + subSnapshot.nonComparable[w].reason);
+        }
+      }
+
+      outRows.push(pfsBuildAuditOutputRow_({
+        ref: ref,
+        typeVente: subSnapshot.typeVente,
+        sku: subSnapshot.sku,
+        fields: subSnapshot.fields,
+        status: (subSnapshot.diffLabels.length || subSnapshot.nonComparable.length || subPackDiffLabels.length) ? "DIFF" : "OK",
+        comment: pfsBuildAuditComment_(subSnapshot, subPackDiffLabels, {})
+      }));
     }
   }
 
   Object.keys(seenPfsRefs).forEach(function(ref) {
     if (stockByRef[ref]) return;
     pfsRefsWithoutStock.push(ref);
-    const rows = pfsValuesByMatchedBaseRef_(pfsValues, pfsSkuCol, ref);
-    for (let i = 0; i < rows.length; i++) {
-      const pfsRow = rows[i];
-      const sku = pfsNormalizeScalar_(pfsRow[pfsSkuCol - 1]);
-      const typeVente = pfsTypeVenteCol ? pfsNormalizeScalar_(pfsRow[pfsTypeVenteCol - 1]) : "";
-      diffRows.push([
-        ref,
-        sku,
-        typeVente,
-        "REF",
-        "",
-        ref,
-        "ABSENT_STOCK",
-        "Ref présente dans PFS_IMPORT mais absente de STOCK"
-      ]);
-    }
+    const rows = pfsRowsByBaseRef[ref] || [];
+    if (!rows.length) return;
+
+    const primaryInfo = pfsPickPrimaryPfsRow_(rows, pfsTypeVenteCol);
+    const snapshot = pfsBuildAuditSnapshot_(ref, null, primaryInfo.row, availableDefs, {
+      skuCol: pfsSkuCol,
+      typeVenteCol: pfsTypeVenteCol
+    });
+    outRows.push(pfsBuildAuditOutputRow_({
+      ref: ref,
+      typeVente: snapshot.typeVente || (primaryInfo.isPack ? "PACK" : ""),
+      sku: snapshot.sku,
+      fields: snapshot.fields,
+      status: "ABSENT_STOCK",
+      comment: "Ref absente de STOCK"
+    }));
   });
 
   const diffSheet = pfsRecreateSheet_(ss, SHEET_PFS_DIFF);
-  const header = [["Ref", "SKU", "Type vente", "Champ", "Valeur STOCK", "Valeur PFS", "Statut", "Commentaire"]];
+  const header = [[
+    "Ref",
+    "Type vente",
+    "Prix STOCK",
+    "Prix PFS",
+    "Promo STOCK",
+    "Promo PFS",
+    "Stock STOCK",
+    "Stock PFS",
+    "Poids STOCK",
+    "Poids PFS",
+    "Active STOCK",
+    "Active PFS",
+    "Statut",
+    "Commentaire",
+    "SKU"
+  ]];
   diffSheet.getRange(1, 1, 1, header[0].length).setValues(header);
   diffSheet.getRange(1, 1, 1, header[0].length).setFontWeight("bold");
   diffSheet.setFrozenRows(1);
 
-  if (diffRows.length) {
-    diffSheet.getRange(2, 1, diffRows.length, header[0].length).setValues(diffRows);
+  if (outRows.length) {
+    diffSheet.getRange(2, 1, outRows.length, header[0].length).setValues(outRows);
   }
 
   for (let c = 1; c <= header[0].length; c++) {
@@ -323,7 +351,7 @@ function compareStockWithPfsImport() {
     "Refs STOCK analysées : " + stockRefs.length,
     "Refs matchées PFS : " + matchedRefs.length,
     "Refs absentes de PFS : " + absentPfsRefs.length,
-    "Lignes avec écarts : " + diffRows.length
+    "Lignes avec écarts : " + outRows.filter(function(row) { return row[12] !== "OK"; }).length
   ].concat(notes).join("\n");
 
   if (absentPfsRefs.length) {
@@ -344,7 +372,7 @@ function compareStockWithPfsImport() {
     matchedRefs: matchedRefs.length,
     absentPfsRefs: absentPfsRefs,
     pfsRefsWithoutStock: pfsRefsWithoutStock,
-    diffCount: diffRows.length
+    diffCount: outRows.filter(function(row) { return row[12] !== "OK"; }).length
   };
 }
 
@@ -1051,6 +1079,150 @@ function pfsComparableValuesEqual_(left, right, compareType) {
   return String(left.value || "") === String(right.value || "");
 }
 
+function pfsPickPrimaryPfsRow_(rows, typeVenteCol) {
+  const list = Array.isArray(rows) ? rows : [];
+  for (let i = 0; i < list.length; i++) {
+    const typeVente = typeVenteCol ? pfsNormalizeScalar_(list[i][typeVenteCol - 1]).toUpperCase() : "";
+    if (typeVente === "PACK") {
+      return { row: list[i], isPack: true };
+    }
+  }
+  return {
+    row: list.length ? list[0] : null,
+    isPack: false
+  };
+}
+
+function pfsBuildAuditSnapshot_(ref, stockRow, pfsRow, defs, options) {
+  const compareDefs = Array.isArray(defs) ? defs : [];
+  const opts = options || {};
+  const fields = {};
+  const diffLabels = [];
+  const nonComparable = [];
+
+  for (let i = 0; i < compareDefs.length; i++) {
+    const def = compareDefs[i];
+    const stockPrepared = stockRow
+      ? pfsPrepareComparableValue_(def.stockValue(stockRow), def.type)
+      : { comparable: true, value: "", display: "" };
+    const pfsPrepared = pfsPrepareComparableValue_(pfsRow ? pfsRow[def.pfsCol - 1] : "", def.type);
+
+    fields[def.key] = {
+      label: def.label,
+      stock: stockPrepared,
+      pfs: pfsPrepared,
+      type: def.type
+    };
+
+    if (!stockPrepared.comparable || !pfsPrepared.comparable) {
+      nonComparable.push({
+        key: def.key,
+        label: def.label,
+        reason: stockPrepared.reason || pfsPrepared.reason || "Valeur non comparable"
+      });
+      continue;
+    }
+
+    if (!pfsComparableValuesEqual_(stockPrepared, pfsPrepared, def.type)) {
+      diffLabels.push(def.label);
+    }
+  }
+
+  return {
+    ref: ref,
+    sku: pfsRow && opts.skuCol ? pfsNormalizeScalar_(pfsRow[opts.skuCol - 1]) : "",
+    typeVente: pfsRow && opts.typeVenteCol ? pfsNormalizeScalar_(pfsRow[opts.typeVenteCol - 1]) : "",
+    fields: fields,
+    diffLabels: diffLabels,
+    nonComparable: nonComparable
+  };
+}
+
+function pfsDiffLabelsBetweenPfsSnapshots_(baseSnapshot, otherSnapshot, defs) {
+  const compareDefs = Array.isArray(defs) ? defs : [];
+  const labels = [];
+
+  for (let i = 0; i < compareDefs.length; i++) {
+    const def = compareDefs[i];
+    const left = baseSnapshot && baseSnapshot.fields ? baseSnapshot.fields[def.key] : null;
+    const right = otherSnapshot && otherSnapshot.fields ? otherSnapshot.fields[def.key] : null;
+    if (!left || !right) continue;
+
+    if (!left.pfs.comparable || !right.pfs.comparable) {
+      if (left.pfs.display !== right.pfs.display) labels.push(def.label);
+      continue;
+    }
+
+    if (!pfsComparableValuesEqual_(left.pfs, right.pfs, def.type)) {
+      labels.push(def.label);
+    }
+  }
+
+  return labels;
+}
+
+function pfsBuildAuditComment_(snapshot, packDiffLabels, options) {
+  const parts = [];
+  const opts = options || {};
+
+  if (opts.packMissing) parts.push("PACK introuvable, première ligne utilisée");
+  if (snapshot && snapshot.diffLabels && snapshot.diffLabels.length) {
+    parts.push("Écarts STOCK/PFS: " + snapshot.diffLabels.join(", "));
+  }
+  if (snapshot && snapshot.nonComparable && snapshot.nonComparable.length) {
+    parts.push("Non comparable: " + snapshot.nonComparable.map(function(item) { return item.label; }).join(", "));
+  }
+  if (Array.isArray(packDiffLabels) && packDiffLabels.length) {
+    parts.push("Sous-pack différent du PACK: " + packDiffLabels.join(", "));
+  }
+
+  return parts.join(" | ");
+}
+
+function pfsBuildAuditOutputRow_(info) {
+  const data = info || {};
+  const fields = data.fields || {};
+  const getDisplay = function(key, side) {
+    const cell = fields[key] && fields[key][side];
+    return cell ? pfsNormalizeScalar_(cell.display) : "";
+  };
+
+  return [
+    data.ref || "",
+    data.typeVente || "",
+    getDisplay("prix", "stock"),
+    getDisplay("prix", "pfs"),
+    getDisplay("promo", "stock"),
+    getDisplay("promo", "pfs"),
+    getDisplay("stock", "stock"),
+    getDisplay("stock", "pfs"),
+    getDisplay("poids", "stock"),
+    getDisplay("poids", "pfs"),
+    getDisplay("active", "stock"),
+    getDisplay("active", "pfs"),
+    data.status || "",
+    data.comment || "",
+    data.sku || ""
+  ];
+}
+
+function pfsBuildEmptyAuditFields_(defs, stockRow) {
+  const compareDefs = Array.isArray(defs) ? defs : [];
+  const fields = {};
+
+  for (let i = 0; i < compareDefs.length; i++) {
+    const def = compareDefs[i];
+    fields[def.key] = {
+      label: def.label,
+      stock: stockRow ? pfsPrepareComparableValue_(def.stockValue(stockRow), def.type) : { comparable: true, value: "", display: "" },
+      pfs: { comparable: true, value: "", display: "" },
+      type: def.type
+    };
+  }
+
+  return fields;
+}
+
 function pfsToComparableNumber_(value) {
   const raw = pfsNormalizeScalar_(value);
   if (!raw) return null;
@@ -1071,17 +1243,6 @@ function pfsRecreateSheet_(spreadsheet, sheetName) {
 
   const safeIndex = Math.max(1, Math.min(index, spreadsheet.getSheets().length + 1));
   return spreadsheet.insertSheet(sheetName, safeIndex);
-}
-
-function pfsValuesByMatchedBaseRef_(rows, skuCol, ref) {
-  const out = [];
-  const targetRef = pfsNormalizeRef_(ref);
-  for (let i = 0; i < rows.length; i++) {
-    const sku = pfsNormalizeScalar_(rows[i][skuCol - 1]);
-    if (!pfsSkuMatchesRef_(sku, targetRef)) continue;
-    out.push(rows[i]);
-  }
-  return out;
 }
 
 function pfsFindNamedFileInFolder_(folderId, fileName) {

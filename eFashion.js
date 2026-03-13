@@ -3,6 +3,750 @@
  ****************************************************/
 
 var SHEET_E_EXPORT = "e_export";
+var SHEET_E_IMPORT = "E_IMPORT";
+var SHEET_E_DIFF = "E_DIFF";
+var EFASHION_IMPORT_FOLDER_ID = "1oamwmVGHzns3yh2tPE_WpezCKkNhTqJX";
+var EFASHION_IMPORT_PREFIX = "efashion_produits_";
+
+function importEFashionTemplateToSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const lock = LockService.getDocumentLock();
+  let tempFileId = "";
+  lock.waitLock(30000);
+
+  ss.toast("Import template eFashion : démarrage…", "eFashion Audit", 5);
+
+  try {
+    const importFile = efFindLatestImportXlsx_();
+    if (!importFile) {
+      throw new Error("Aucun export eFashion .xlsx récent trouvé dans le dossier Drive.");
+    }
+
+    ss.toast("Conversion XLSX → Google Sheet temporaire…", "eFashion Audit", 5);
+    tempFileId = efConvertXlsxToGoogleSheet_(importFile.id);
+
+    ss.toast("Ouverture du fichier converti…", "eFashion Audit", 5);
+    const tempSs = efOpenSpreadsheetWithRetry_(tempFileId, 8, 1500);
+    const sourceSheet = efSelectBestImportSheet_(tempSs);
+    if (!sourceSheet) {
+      throw new Error("Le fichier eFashion converti ne contient aucune feuille exploitable.");
+    }
+
+    const analysis = efAnalyzeSheetStructure_(sourceSheet);
+    const importedSheet = efReplaceSheetFromTemplate_(ss, SHEET_E_IMPORT, sourceSheet);
+    SpreadsheetApp.flush();
+
+    const summary = efBuildImportAnalysisSummary_(analysis, {
+      fileName: importFile.name,
+      targetSheetName: importedSheet.getName()
+    });
+
+    ss.toast("Template eFashion importé dans " + SHEET_E_IMPORT, "eFashion Audit", 6);
+    notify_("Import eFashion terminé", summary);
+    Logger.log(summary);
+  } catch (err) {
+    const msg = err && err.message ? err.message : String(err);
+    ss.toast("Import eFashion échoué: " + msg, "eFashion Audit", 10);
+    throw err;
+  } finally {
+    if (tempFileId) {
+      try { Drive.Files.remove(tempFileId); } catch (e) { Logger.log("Cleanup temp eFashion failed: " + e); }
+    }
+    lock.releaseLock();
+  }
+}
+
+function compareStockWithEFashionImport() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const stock = ss.getSheetByName(SHEET_STOCK);
+  const imp = ss.getSheetByName(SHEET_E_IMPORT);
+
+  if (!stock) throw new Error("Feuille introuvable: " + SHEET_STOCK);
+  if (!imp) throw new Error("Feuille introuvable: " + SHEET_E_IMPORT);
+
+  ss.toast("Comparaison STOCK ↔ E_IMPORT : analyse…", "eFashion Audit", 5);
+
+  const stockLastRow = stock.getLastRow();
+  const stockLastCol = stock.getLastColumn();
+  if (stockLastRow < 2 || stockLastCol < 1) {
+    ss.toast("STOCK vide", "eFashion Audit", 5);
+    return;
+  }
+
+  const stockHeaders = stock.getRange(1, 1, 1, stockLastCol).getValues()[0];
+  const stockMap = headerMap_(stockHeaders);
+  ensureHeadersExist_(stockMap, ["货号"], "STOCK");
+
+  const impAnalysis = efAnalyzeSheetStructure_(imp);
+  if (!impAnalysis.headerRow || !impAnalysis.usefulWidth) {
+    throw new Error("Impossible de détecter les headers de " + SHEET_E_IMPORT + ".");
+  }
+
+  const impHeaders = imp.getRange(impAnalysis.headerRow, 1, 1, impAnalysis.usefulWidth).getValues()[0];
+  const impDataStartRow = impAnalysis.headerRow + 1;
+  const impRowCount = Math.max(0, impAnalysis.usefulRows - impAnalysis.headerRow);
+  if (!impRowCount) {
+    ss.toast("E_IMPORT ne contient aucune ligne à comparer", "eFashion Audit", 6);
+    return;
+  }
+
+  const matchCols = efFindColumnsByAliases_(impHeaders, [
+    "référence",
+    "reference",
+    "réf",
+    "ref",
+    "sku"
+  ]);
+  const typeCol = efFindColumnByAliases_(impHeaders, ["type", "type produit", "type vente", "vendu par"]);
+  const stockRefCol = stockMap["货号"] || 0;
+
+  if (!matchCols.length) {
+    throw new Error("Aucune colonne de matching claire trouvée dans " + SHEET_E_IMPORT + " (référence/ref/sku).");
+  }
+
+  const stockValues = stock.getRange(2, 1, stockLastRow - 1, stockLastCol).getValues();
+  const impValues = imp.getRange(impDataStartRow, 1, impRowCount, impAnalysis.usefulWidth).getValues();
+
+  const stockByRef = {};
+  const duplicateStockRefs = [];
+  for (let i = 0; i < stockValues.length; i++) {
+    const ref = efNormalizeRef_(stockValues[i][stockRefCol - 1]);
+    if (!ref) continue;
+    if (stockByRef[ref]) {
+      duplicateStockRefs.push(ref);
+      continue;
+    }
+    stockByRef[ref] = stockValues[i];
+  }
+
+  const stockRefs = Object.keys(stockByRef);
+  if (!stockRefs.length) {
+    ss.toast("Aucune ref exploitable trouvée dans STOCK", "eFashion Audit", 6);
+    return;
+  }
+
+  const impRowsByRef = {};
+  const impRowsByBaseRef = {};
+  const seenImportRefs = {};
+
+  for (let i = 0; i < impValues.length; i++) {
+    const row = impValues[i];
+    const baseRef = efExtractBaseRefFromRow_(row, matchCols);
+    if (baseRef) {
+      seenImportRefs[baseRef] = true;
+      if (!impRowsByBaseRef[baseRef]) impRowsByBaseRef[baseRef] = [];
+      impRowsByBaseRef[baseRef].push(row);
+    }
+
+    const ref = efFindMatchingStockRefForImportRow_(row, stockRefs, matchCols);
+    if (!ref) continue;
+    if (!impRowsByRef[ref]) impRowsByRef[ref] = [];
+    impRowsByRef[ref].push(row);
+  }
+
+  const compareDefs = [
+    {
+      key: "prix",
+      label: "Prix",
+      stockCol: stockMap["prix@"] || 0,
+      importCol: efFindColumnByAliases_(impHeaders, ["prix de vente ht", "prix ht", "prix de vente"]),
+      type: "number",
+      stockValue: function(row) { return row[stockMap["prix@"] - 1]; }
+    },
+    {
+      key: "promo",
+      label: "Promo",
+      stockCol: stockMap["promo@"] || 0,
+      importCol: efFindColumnByAliases_(impHeaders, ["prix promo / prix réduit", "prix promo/prix réduit", "prix promo / prix reduit", "prix promo", "prix réduit", "prix reduit"]),
+      type: "number",
+      stockValue: function(row) { return row[stockMap["promo@"] - 1]; }
+    },
+    {
+      key: "stock",
+      label: "Stock",
+      stockCol: stockMap["stock"] || 0,
+      importCol: efFindColumnByAliases_(impHeaders, ["stock", "quantité", "quantite"]),
+      type: "number",
+      stockValue: function(row) { return row[stockMap["stock"] - 1]; }
+    },
+    {
+      key: "poids",
+      label: "Poids",
+      stockCol: stockMap["poids (en gramme)"] || 0,
+      importCol: efFindColumnByAliases_(impHeaders, ["poids", "poids kg", "poids_kg"]),
+      type: "number",
+      stockValue: function(row) { return formatWeightKgEFashionText_(row[stockMap["poids (en gramme)"] - 1]); }
+    },
+    {
+      key: "active",
+      label: "Active",
+      stockCol: stockMap["ms_statut"] || 0,
+      importCol: efFindColumnByAliases_(impHeaders, ["actif", "active", "statut", "status"]),
+      type: "status",
+      stockValue: function(row) { return efMapActiveFromMsStatus_(row[stockMap["ms_statut"] - 1]); }
+    }
+  ];
+
+  const availableDefs = compareDefs.filter(function(def) {
+    return def.stockCol && def.importCol;
+  });
+  const missingDefs = compareDefs
+    .filter(function(def) { return !def.stockCol || !def.importCol; })
+    .map(function(def) { return def.label; });
+
+  if (!availableDefs.length) {
+    throw new Error("Aucune colonne comparable claire trouvée entre STOCK et " + SHEET_E_IMPORT + ".");
+  }
+
+  const outRows = [];
+  const matchedRefs = [];
+  const absentImportRefs = [];
+  const absentStockRefs = [];
+  const nonComparableWarnings = [];
+
+  for (let i = 0; i < stockRefs.length; i++) {
+    const ref = stockRefs[i];
+    const stockRow = stockByRef[ref];
+    const targetRows = impRowsByRef[ref];
+
+    if (!targetRows || !targetRows.length) {
+      absentImportRefs.push(ref);
+      outRows.push(efBuildAuditOutputRow_({
+        ref: ref,
+        typeValue: "",
+        sku: "",
+        fields: efBuildEmptyAuditFields_(availableDefs, stockRow),
+        status: "ABSENT_EFASHION",
+        comment: "Ref absente de eFashion"
+      }));
+      continue;
+    }
+
+    matchedRefs.push(ref);
+
+    for (let r = 0; r < targetRows.length; r++) {
+      const snapshot = efBuildAuditSnapshot_(ref, stockRow, targetRows[r], availableDefs, {
+        matchCols: matchCols,
+        typeCol: typeCol
+      });
+
+      if (snapshot.nonComparable.length) {
+        for (let w = 0; w < snapshot.nonComparable.length; w++) {
+          nonComparableWarnings.push(ref + " / " + snapshot.nonComparable[w].label + ": " + snapshot.nonComparable[w].reason);
+        }
+      }
+
+      outRows.push(efBuildAuditOutputRow_({
+        ref: ref,
+        typeValue: snapshot.typeValue,
+        sku: snapshot.debugSku,
+        fields: snapshot.fields,
+        status: snapshot.diffLabels.length || snapshot.nonComparable.length ? "DIFF" : "OK",
+        comment: efBuildAuditComment_(snapshot)
+      }));
+    }
+  }
+
+  Object.keys(seenImportRefs).forEach(function(ref) {
+    if (stockByRef[ref]) return;
+    absentStockRefs.push(ref);
+    const rows = impRowsByBaseRef[ref] || [];
+    if (!rows.length) return;
+
+    const snapshot = efBuildAuditSnapshot_(ref, null, rows[0], availableDefs, {
+      matchCols: matchCols,
+      typeCol: typeCol
+    });
+    outRows.push(efBuildAuditOutputRow_({
+      ref: ref,
+      typeValue: snapshot.typeValue,
+      sku: snapshot.debugSku,
+      fields: snapshot.fields,
+      status: "ABSENT_STOCK",
+      comment: "Ref absente de STOCK"
+    }));
+  });
+
+  const diffSheet = efRecreateSheet_(ss, SHEET_E_DIFF);
+  const header = [[
+    "Ref",
+    "Type",
+    "Prix STOCK",
+    "Prix eFashion",
+    "Promo STOCK",
+    "Promo eFashion",
+    "Stock STOCK",
+    "Stock eFashion",
+    "Poids STOCK",
+    "Poids eFashion",
+    "Active STOCK",
+    "Active eFashion",
+    "Statut",
+    "Commentaire",
+    "SKU"
+  ]];
+  diffSheet.getRange(1, 1, 1, header[0].length).setValues(header);
+  diffSheet.getRange(1, 1, 1, header[0].length).setFontWeight("bold");
+  diffSheet.setFrozenRows(1);
+
+  if (outRows.length) {
+    diffSheet.getRange(2, 1, outRows.length, header[0].length).setValues(outRows);
+  }
+  for (let c = 1; c <= header[0].length; c++) {
+    diffSheet.autoResizeColumn(c);
+  }
+
+  const summary = [
+    "Comparaison STOCK ↔ " + SHEET_E_IMPORT,
+    "",
+    "Fichier matché via colonnes: " + matchCols.map(function(col) { return impHeaders[col - 1]; }).join(", "),
+    "Refs STOCK analysées : " + stockRefs.length,
+    "Refs matchées eFashion : " + matchedRefs.length,
+    "Refs absentes de eFashion : " + absentImportRefs.length,
+    "Lignes avec écarts : " + outRows.filter(function(row) { return row[12] !== 'OK'; }).length
+  ];
+
+  if (missingDefs.length) summary.push("Colonnes non comparées: " + missingDefs.join(", "));
+  if (duplicateStockRefs.length) summary.push("Refs dupliquées dans STOCK ignorées: " + efUniqueList_(duplicateStockRefs).slice(0, 10).join(", "));
+  if (absentImportRefs.length) summary.push("Refs absentes de eFashion (aperçu): " + absentImportRefs.slice(0, 15).join(", ") + (absentImportRefs.length > 15 ? " …" : ""));
+  if (absentStockRefs.length) summary.push("Bonus - refs eFashion absentes de STOCK (aperçu): " + absentStockRefs.slice(0, 15).join(", ") + (absentStockRefs.length > 15 ? " …" : ""));
+  if (nonComparableWarnings.length) summary.push("Valeurs non comparables (aperçu): " + efUniqueList_(nonComparableWarnings).slice(0, 8).join(" | ") + (nonComparableWarnings.length > 8 ? " …" : ""));
+
+  const message = summary.join("\n");
+
+  if (absentImportRefs.length) {
+    Logger.log("Refs STOCK absentes de eFashion (" + absentImportRefs.length + "):\n" + absentImportRefs.join("\n"));
+  }
+  if (absentStockRefs.length) {
+    Logger.log("Refs eFashion absentes de STOCK (" + absentStockRefs.length + "):\n" + absentStockRefs.join("\n"));
+  }
+  if (nonComparableWarnings.length) {
+    Logger.log("Valeurs eFashion non comparables (" + nonComparableWarnings.length + "):\n" + efUniqueList_(nonComparableWarnings).join("\n"));
+  }
+  Logger.log(message);
+
+  ss.toast("Comparaison eFashion terminée", "eFashion Audit", 6);
+  notify_("Comparaison eFashion terminée", message);
+  return {
+    analyzedRefs: stockRefs.length,
+    matchedRefs: matchedRefs.length,
+    absentImportRefs: absentImportRefs,
+    absentStockRefs: absentStockRefs,
+    diffCount: outRows.filter(function(row) { return row[12] !== 'OK'; }).length
+  };
+}
+
+function efFindLatestImportXlsx_() {
+  const folder = DriveApp.getFolderById(EFASHION_IMPORT_FOLDER_ID);
+  const files = folder.getFiles();
+  let best = null;
+
+  while (files.hasNext()) {
+    const file = files.next();
+    const name = String(file.getName() || "");
+    const lower = name.toLowerCase();
+    if (lower.indexOf(EFASHION_IMPORT_PREFIX) !== 0) continue;
+    if (lower.slice(-5) !== ".xlsx") continue;
+
+    const meta = Drive.Files.get(file.getId(), { fields: "id,name,modifiedTime,createdTime" });
+    const stamp = meta.modifiedTime || meta.createdTime || "";
+    const when = stamp ? new Date(stamp) : new Date(0);
+    if (!best || when.getTime() > best.when.getTime()) {
+      best = {
+        id: meta.id,
+        name: meta.name,
+        when: when
+      };
+    }
+  }
+
+  return best;
+}
+
+function efConvertXlsxToGoogleSheet_(xlsxFileId) {
+  const meta = Drive.Files.get(xlsxFileId, { fields: "name" });
+  const resource = {
+    name: "TMP_EFASHION_IMPORT__" + meta.name + "__" + Utilities.getUuid(),
+    title: "TMP_EFASHION_IMPORT__" + meta.name + "__" + Utilities.getUuid(),
+    mimeType: MimeType.GOOGLE_SHEETS
+  };
+  const converted = Drive.Files.copy(resource, xlsxFileId);
+  return converted.id;
+}
+
+function efOpenSpreadsheetWithRetry_(fileId, attempts, sleepMs) {
+  if (typeof msOpenSpreadsheetWithRetry_ === "function") {
+    return msOpenSpreadsheetWithRetry_(fileId, attempts, sleepMs);
+  }
+
+  attempts = attempts || 6;
+  sleepMs = sleepMs || 1000;
+  let lastErr = null;
+
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return SpreadsheetApp.openById(fileId);
+    } catch (e) {
+      lastErr = e;
+      Utilities.sleep(sleepMs);
+    }
+  }
+  throw lastErr || new Error("Impossible d'ouvrir le fichier eFashion converti.");
+}
+
+function efAnalyzeSheetStructure_(sheet) {
+  if (typeof pfsAnalyzeSheetStructure_ === "function") {
+    return pfsAnalyzeSheetStructure_(sheet);
+  }
+  throw new Error("Helper d'analyse de feuille indisponible.");
+}
+
+function efSelectBestImportSheet_(spreadsheet) {
+  const sheets = spreadsheet.getSheets();
+  if (!sheets || !sheets.length) return null;
+
+  const tokens = ["référence", "reference", "prix", "stock", "poids", "actif", "statut", "collection", "vendu"];
+  let bestSheet = null;
+  let bestScore = -1;
+
+  for (let i = 0; i < sheets.length; i++) {
+    const analysis = efAnalyzeSheetStructure_(sheets[i]);
+    const headerPreview = (analysis.headerValues || []).map(function(v) {
+      return String(v || "").toLowerCase();
+    });
+    let hits = 0;
+    for (let t = 0; t < tokens.length; t++) {
+      for (let h = 0; h < headerPreview.length; h++) {
+        if (headerPreview[h].indexOf(tokens[t]) !== -1) {
+          hits++;
+          break;
+        }
+      }
+    }
+    const score = hits * 100 + analysis.usefulRows * 2 + analysis.usefulWidth;
+    if (score > bestScore) {
+      bestScore = score;
+      bestSheet = sheets[i];
+    }
+  }
+
+  return bestSheet || sheets[0];
+}
+
+function efBuildImportAnalysisSummary_(analysis, context) {
+  const preview = (analysis.headerValues || [])
+    .slice(0, Math.min((analysis.headerValues || []).length, 12))
+    .map(function(v) { return String(v || "").trim(); })
+    .filter(Boolean)
+    .join(" | ");
+
+  return [
+    "Fichier importé: " + (context && context.fileName ? context.fileName : ""),
+    "Feuille source retenue: " + analysis.sheetName,
+    "Feuille cible: " + (context && context.targetSheetName ? context.targetSheetName : SHEET_E_IMPORT),
+    "Dimensions utiles: " + analysis.usefulRows + " lignes × " + analysis.usefulWidth + " colonnes",
+    "Header row détecté: " + analysis.headerRow,
+    "Headers (aperçu): " + (preview || "(aucun header lisible)")
+  ].join("\n");
+}
+
+function efReplaceSheetFromTemplate_(spreadsheet, targetSheetName, sourceSheet) {
+  if (typeof pfsReplaceSheetFromTemplate_ === "function") {
+    return pfsReplaceSheetFromTemplate_(spreadsheet, targetSheetName, sourceSheet);
+  }
+  throw new Error("Helper de remplacement de feuille indisponible.");
+}
+
+function efFindColumnByAliases_(headers, aliases) {
+  const findCol = buildEFashionColumnIndex_(headers || []);
+  for (let i = 0; i < aliases.length; i++) {
+    const col = findCol(aliases[i]);
+    if (col) return col;
+  }
+  return 0;
+}
+
+function efFindColumnsByAliases_(headers, aliases) {
+  const out = [];
+  const seen = {};
+  for (let i = 0; i < aliases.length; i++) {
+    const col = efFindColumnByAliases_(headers, [aliases[i]]);
+    if (col && !seen[col]) {
+      seen[col] = true;
+      out.push(col);
+    }
+  }
+  return out;
+}
+
+function efNormalizeRef_(value) {
+  return (typeof cleanRef_ === "function" ? cleanRef_(value) : String(value || "").trim()).toUpperCase();
+}
+
+function efCellMatchesStockRef_(cellValue, ref) {
+  const cell = efNormalizeRef_(cellValue);
+  const stockRef = efNormalizeRef_(ref);
+  if (!cell || !stockRef) return false;
+  return cell === stockRef || cell.indexOf(stockRef + "_") === 0;
+}
+
+function efExtractBaseRefFromRow_(row, cols) {
+  const list = Array.isArray(cols) ? cols : [];
+  for (let i = 0; i < list.length; i++) {
+    const raw = efNormalizeRef_(row[list[i] - 1]);
+    if (!raw) continue;
+    const pos = raw.indexOf("_");
+    return pos >= 0 ? raw.slice(0, pos) : raw;
+  }
+  return "";
+}
+
+function efFindMatchingStockRefForImportRow_(row, stockRefs, cols) {
+  const refs = Array.isArray(stockRefs) ? stockRefs : [];
+  const list = Array.isArray(cols) ? cols : [];
+  for (let c = 0; c < list.length; c++) {
+    const value = row[list[c] - 1];
+    for (let i = 0; i < refs.length; i++) {
+      if (efCellMatchesStockRef_(value, refs[i])) return refs[i];
+    }
+  }
+  return "";
+}
+
+function efResolveComparableValue_(value) {
+  if (value && typeof value === "object" && Object.prototype.hasOwnProperty.call(value, "write")) {
+    return {
+      write: value.write === true,
+      value: String(value.value || "").trim(),
+      reason: value.reason ? String(value.reason) : ""
+    };
+  }
+  return {
+    write: true,
+    value: String(value === null || typeof value === "undefined" ? "" : value).trim(),
+    reason: ""
+  };
+}
+
+function efPrepareComparableValue_(value, compareType) {
+  const resolved = efResolveComparableValue_(value);
+  if (!resolved.write) {
+    return {
+      comparable: false,
+      value: "",
+      display: resolved.value,
+      reason: resolved.reason || "Valeur non comparable"
+    };
+  }
+
+  const raw = resolved.value;
+  if (compareType === "number") {
+    if (raw === "") return { comparable: true, value: "", display: "" };
+    const num = efToComparableNumber_(raw);
+    if (num === null) {
+      return {
+        comparable: false,
+        value: raw,
+        display: raw,
+        reason: "Valeur numérique invalide (" + raw + ")"
+      };
+    }
+    return {
+      comparable: true,
+      value: num,
+      display: raw
+    };
+  }
+
+  if (compareType === "status") {
+    if (raw === "") return { comparable: true, value: "", display: "" };
+    const mapped = efNormalizeActiveValue_(raw);
+    if (!mapped) {
+      return {
+        comparable: false,
+        value: raw,
+        display: raw,
+        reason: "Valeur actif/statut invalide (" + raw + ")"
+      };
+    }
+    return {
+      comparable: true,
+      value: mapped,
+      display: raw
+    };
+  }
+
+  return {
+    comparable: true,
+    value: raw,
+    display: raw
+  };
+}
+
+function efMapActiveFromMsStatus_(status) {
+  const raw = String(status || "").trim().toUpperCase();
+  if (!raw) return { write: true, value: "" };
+  if (raw === "MS") return { write: true, value: "Oui" };
+  if (raw === "MS_DISABLED") return { write: true, value: "Non" };
+  return {
+    write: false,
+    value: "",
+    reason: "MS_STATUT non géré (" + raw + ")"
+  };
+}
+
+function efNormalizeActiveValue_(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return "";
+  if (["oui", "yes", "true", "1", "actif", "active", "enabled"].indexOf(raw) !== -1) return "oui";
+  if (["non", "no", "false", "0", "inactif", "inactive", "disabled"].indexOf(raw) !== -1) return "non";
+  return "";
+}
+
+function efComparableValuesEqual_(left, right, compareType) {
+  if (compareType === "number") {
+    if (left.value === "" && right.value === "") return true;
+    if (typeof left.value !== "number" || typeof right.value !== "number") return false;
+    return Math.abs(left.value - right.value) < 1e-9;
+  }
+  return String(left.value || "") === String(right.value || "");
+}
+
+function efToComparableNumber_(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  const normalized = raw.replace(/\s+/g, "").replace(",", ".");
+  if (!/^-?\d+(?:\.\d+)?$/.test(normalized)) return null;
+  const num = Number(normalized);
+  return Number.isFinite(num) ? num : null;
+}
+
+function efBuildAuditSnapshot_(ref, stockRow, importRow, defs, options) {
+  const compareDefs = Array.isArray(defs) ? defs : [];
+  const opts = options || {};
+  const fields = {};
+  const diffLabels = [];
+  const nonComparable = [];
+
+  for (let i = 0; i < compareDefs.length; i++) {
+    const def = compareDefs[i];
+    const stockPrepared = stockRow
+      ? efPrepareComparableValue_(def.stockValue(stockRow), def.type)
+      : { comparable: true, value: "", display: "" };
+    const importPrepared = efPrepareComparableValue_(importRow ? importRow[def.importCol - 1] : "", def.type);
+
+    fields[def.key] = {
+      stock: stockPrepared,
+      imp: importPrepared
+    };
+
+    if (!stockPrepared.comparable || !importPrepared.comparable) {
+      nonComparable.push({
+        label: def.label,
+        reason: stockPrepared.reason || importPrepared.reason || "Valeur non comparable"
+      });
+      continue;
+    }
+
+    if (!efComparableValuesEqual_(stockPrepared, importPrepared, def.type)) {
+      diffLabels.push(def.label);
+    }
+  }
+
+  return {
+    ref: ref,
+    typeValue: importRow && opts.typeCol ? String(importRow[opts.typeCol - 1] || "").trim() : "",
+    debugSku: importRow ? efBuildDebugSkuFromRow_(importRow, opts.matchCols) : "",
+    fields: fields,
+    diffLabels: diffLabels,
+    nonComparable: nonComparable
+  };
+}
+
+function efBuildDebugSkuFromRow_(row, cols) {
+  const list = Array.isArray(cols) ? cols : [];
+  for (let i = 0; i < list.length; i++) {
+    const value = String(row[list[i] - 1] || "").trim();
+    if (value) return value;
+  }
+  return "";
+}
+
+function efBuildAuditComment_(snapshot) {
+  const parts = [];
+  if (snapshot && snapshot.diffLabels && snapshot.diffLabels.length) {
+    parts.push("Écarts STOCK/eFashion: " + snapshot.diffLabels.join(", "));
+  }
+  if (snapshot && snapshot.nonComparable && snapshot.nonComparable.length) {
+    parts.push("Non comparable: " + snapshot.nonComparable.map(function(item) { return item.label; }).join(", "));
+  }
+  return parts.join(" | ");
+}
+
+function efBuildAuditOutputRow_(info) {
+  const data = info || {};
+  const fields = data.fields || {};
+  const getDisplay = function(key, side) {
+    const cell = fields[key] && fields[key][side];
+    return cell ? String(cell.display || "").trim() : "";
+  };
+
+  return [
+    data.ref || "",
+    data.typeValue || "",
+    getDisplay("prix", "stock"),
+    getDisplay("prix", "imp"),
+    getDisplay("promo", "stock"),
+    getDisplay("promo", "imp"),
+    getDisplay("stock", "stock"),
+    getDisplay("stock", "imp"),
+    getDisplay("poids", "stock"),
+    getDisplay("poids", "imp"),
+    getDisplay("active", "stock"),
+    getDisplay("active", "imp"),
+    data.status || "",
+    data.comment || "",
+    data.sku || ""
+  ];
+}
+
+function efBuildEmptyAuditFields_(defs, stockRow) {
+  const compareDefs = Array.isArray(defs) ? defs : [];
+  const fields = {};
+  for (let i = 0; i < compareDefs.length; i++) {
+    const def = compareDefs[i];
+    fields[def.key] = {
+      stock: stockRow ? efPrepareComparableValue_(def.stockValue(stockRow), def.type) : { comparable: true, value: "", display: "" },
+      imp: { comparable: true, value: "", display: "" }
+    };
+  }
+  return fields;
+}
+
+function efRecreateSheet_(spreadsheet, sheetName) {
+  const existing = spreadsheet.getSheetByName(sheetName);
+  let index = spreadsheet.getSheets().length + 1;
+
+  if (existing) {
+    index = existing.getIndex();
+    spreadsheet.deleteSheet(existing);
+  }
+
+  const safeIndex = Math.max(1, Math.min(index, spreadsheet.getSheets().length + 1));
+  return spreadsheet.insertSheet(sheetName, safeIndex);
+}
+
+function efUniqueList_(values) {
+  const out = [];
+  const seen = {};
+  for (let i = 0; i < values.length; i++) {
+    const key = String(values[i] || "");
+    if (!key || seen[key]) continue;
+    seen[key] = true;
+    out.push(key);
+  }
+  return out;
+}
 
 function exportStockToEFashion() {
 

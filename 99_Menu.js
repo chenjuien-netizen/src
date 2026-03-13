@@ -13,6 +13,11 @@ function onOpen() {
     .addItem("Exporter eFashion + PFS", "menuExportEFashionAndPFS")
     .addSeparator()
     .addSubMenu(
+      ui.createMenu("Édition eFashion")
+        .addItem("eFashion • Importer Template", "menuImportEFashionTemplate")
+        .addItem("eFashion • Comparer STOCK ↔ E_IMPORT", "menuCompareStockWithEFashionImport")
+    )
+    .addSubMenu(
       ui.createMenu("Édition PFS")
         .addItem("PFS • Importer Template", "menuImportPFSTemplate")
         .addItem("PFS • Comparer STOCK ↔ PFS_IMPORT", "menuCompareStockWithPfsImport")
@@ -61,6 +66,14 @@ function menuExportPFS() {
 
 function menuImportPFSTemplate() {
   importPFSTemplateToSheet();
+}
+
+function menuImportEFashionTemplate() {
+  importEFashionTemplateToSheet();
+}
+
+function menuCompareStockWithEFashionImport() {
+  compareStockWithEFashionImport();
 }
 
 function menuCompareStockWithPfsImport() {

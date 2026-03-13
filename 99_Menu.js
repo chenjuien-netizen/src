@@ -15,9 +15,7 @@ function onOpen() {
     .addSubMenu(
       ui.createMenu("Édition PFS")
         .addItem("PFS • Importer Template", "menuImportPFSTemplate")
-        .addItem("PFS • Sync refs cochées", "menuSyncSelectedStockToPfsImport")
-        .addItem("PFS • Sync toutes les refs", "menuSyncAllStockToPfsImport")
-        .addItem("PFS • Exporter fichier update", "menuExportPFSImportUpdate")
+        .addItem("PFS • Comparer STOCK ↔ PFS_IMPORT", "menuCompareStockWithPfsImport")
     )
     .addToUi();
 
@@ -65,20 +63,8 @@ function menuImportPFSTemplate() {
   importPFSTemplateToSheet();
 }
 
-function menuSyncStockToPfsImport() {
-  syncStockToPfsImport();
-}
-
-function menuSyncSelectedStockToPfsImport() {
-  syncSelectedStockToPfsImport();
-}
-
-function menuSyncAllStockToPfsImport() {
-  syncAllStockToPfsImport();
-}
-
-function menuExportPFSImportUpdate() {
-  exportPFSImportUpdateToDrive();
+function menuCompareStockWithPfsImport() {
+  compareStockWithPfsImport();
 }
 
 function menuExportEFashionAndPFS() {

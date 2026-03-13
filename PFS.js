@@ -11,13 +11,13 @@
 
 var SHEET_PFS_EXPORT = "pfs_export";
 var SHEET_PFS_IMPORT = "PFS_IMPORT";
+var SHEET_PFS_DIFF = "PFS_DIFF";
 
 // Drive export settings
 var PFS_EXPORT_FOLDER_ID = "1CG_X598c8PPIOyCm3uEg-kzuV1BBa4pI";
 var PFS_EXPORT_FILENAME = "PFS_EXPORT.xlsx";
 var PFS_TEMPLATE_FOLDER_ID = "1_F3f3_24whJAGzj4RuPr5r7FH0cioKLL";
 var PFS_TEMPLATE_FILENAME = "Template_PFS.xlsx";
-var PFS_UPDATE_FILENAME = "Template_PFS_UPDATE.xlsx";
 
 // Debug
 var PFS_DEBUG = true;
@@ -76,50 +76,26 @@ function importPFSTemplateToSheet() {
   }
 }
 
-function syncStockToPfsImport() {
-  return syncAllStockToPfsImport();
-}
-
-function syncSelectedStockToPfsImport() {
-  return pfsSyncStockToPfsImport_({
-    mode: "selected",
-    toastTitle: "PFS Sync",
-    summaryTitle: "Sync refs cochées → " + SHEET_PFS_IMPORT
-  });
-}
-
-function syncAllStockToPfsImport() {
-  return pfsSyncStockToPfsImport_({
-    mode: "all",
-    toastTitle: "PFS Sync",
-    summaryTitle: "Sync STOCK → " + SHEET_PFS_IMPORT
-  });
-}
-
-function pfsSyncStockToPfsImport_(options) {
+function compareStockWithPfsImport() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const stock = ss.getSheetByName(SHEET_STOCK);
   const pfs = ss.getSheetByName(SHEET_PFS_IMPORT);
-  const mode = options && options.mode === "selected" ? "selected" : "all";
-  const toastTitle = (options && options.toastTitle) || "PFS Sync";
-  const summaryTitle = (options && options.summaryTitle) || ("Sync STOCK → " + SHEET_PFS_IMPORT);
 
   if (!stock) throw new Error("Feuille introuvable: " + SHEET_STOCK);
   if (!pfs) throw new Error("Feuille introuvable: " + SHEET_PFS_IMPORT);
 
-  ss.toast(summaryTitle + " : analyse…", toastTitle, 5);
+  ss.toast("Comparaison STOCK ↔ PFS_IMPORT : analyse…", "PFS Audit", 5);
 
   const stockLastRow = stock.getLastRow();
   const stockLastCol = stock.getLastColumn();
   if (stockLastRow < 2 || stockLastCol < 1) {
-    ss.toast("STOCK vide", toastTitle, 5);
+    ss.toast("STOCK vide", "PFS Audit", 5);
     return;
   }
 
   const stockHeaders = stock.getRange(1, 1, 1, stockLastCol).getValues()[0];
   const stockMap = headerMap_(stockHeaders);
   ensureHeadersExist_(stockMap, ["货号"], "STOCK");
-  if (mode === "selected") ensureHeadersExist_(stockMap, ["选择"], "STOCK");
 
   const pfsAnalysis = pfsAnalyzeSheetStructure_(pfs);
   if (!pfsAnalysis.headerRow || !pfsAnalysis.usefulWidth) {
@@ -130,13 +106,13 @@ function pfsSyncStockToPfsImport_(options) {
   const pfsDataStartRow = pfsAnalysis.headerRow + 1;
   const pfsRowCount = Math.max(0, pfsAnalysis.usefulRows - pfsAnalysis.headerRow);
   if (!pfsRowCount) {
-    ss.toast("PFS_IMPORT ne contient aucune ligne à mettre à jour", toastTitle, 6);
+    ss.toast("PFS_IMPORT ne contient aucune ligne à comparer", "PFS Audit", 6);
     return;
   }
 
   const pfsSkuCol = pfsFindColumnByAliases_(pfsHeaders, ["sku", "sku parent", "reference sku"]);
+  const pfsTypeVenteCol = pfsFindColumnByAliases_(pfsHeaders, ["type vente", "type de vente"]);
   const stockRefCol = stockMap["货号"] || 0;
-  const stockSelCol = stockMap["选择"] || 0;
 
   if (!pfsSkuCol) throw new Error("Colonne 'SKU' introuvable dans " + SHEET_PFS_IMPORT + ".");
 
@@ -145,10 +121,7 @@ function pfsSyncStockToPfsImport_(options) {
 
   const stockByRef = {};
   const duplicateStockRefs = [];
-
   for (let i = 0; i < stockValues.length; i++) {
-    if (mode === "selected" && stockValues[i][stockSelCol - 1] !== true) continue;
-
     const ref = pfsNormalizeRef_(stockValues[i][stockRefCol - 1]);
     if (!ref) continue;
     if (stockByRef[ref]) {
@@ -157,26 +130,14 @@ function pfsSyncStockToPfsImport_(options) {
     }
     stockByRef[ref] = stockValues[i];
   }
+
   const stockRefs = Object.keys(stockByRef);
   if (!stockRefs.length) {
-    const msg = mode === "selected"
-      ? "Aucune ref cochée à synchroniser"
-      : "Aucune ref exploitable trouvée dans STOCK";
-    ss.toast(msg, toastTitle, 6);
-    Logger.log(summaryTitle + " : " + msg);
-    return {
-      mode: mode,
-      analyzedRefs: 0,
-      matchedRefs: 0,
-      missingRefs: [],
-      pfsRefsWithoutStock: [],
-      modifiedRows: 0,
-      updatedFields: {}
-    };
+    ss.toast("Aucune ref exploitable trouvée dans STOCK", "PFS Audit", 6);
+    return;
   }
 
   const pfsRowsByRef = {};
-  const pfsRefsWithoutStock = [];
   const seenPfsRefs = {};
   for (let i = 0; i < pfsValues.length; i++) {
     const sku = pfsNormalizeScalar_(pfsValues[i][pfsSkuCol - 1]);
@@ -189,166 +150,202 @@ function pfsSyncStockToPfsImport_(options) {
     pfsRowsByRef[ref].push(i);
   }
 
-  const syncDefs = [
+  const compareDefs = [
     {
       key: "prix",
       label: "Prix",
       stockCol: stockMap["prix@"] || 0,
       pfsCol: pfsFindColumnByAliases_(pfsHeaders, ["prix_vente gros ht unit. eur", "prix vente gros ht unit. eur", "prix_vente gros", "prix vente gros"]),
-      transform: function(row) { return pfsNormalizeScalar_(row[stockMap["prix@"] - 1]); }
+      type: "number",
+      stockValue: function(row) { return row[stockMap["prix@"] - 1]; }
     },
     {
       key: "promo",
       label: "Promo",
       stockCol: stockMap["promo@"] || 0,
       pfsCol: pfsFindColumnByAliases_(pfsHeaders, ["prix_vente réduit ht unit. eur", "prix vente réduit ht unit. eur", "prix_vente reduit ht unit. eur", "prix vente reduit ht unit. eur", "prix réduit", "prix reduit"]),
-      transform: function(row) { return pfsNormalizeScalar_(row[stockMap["promo@"] - 1]); }
+      type: "number",
+      stockValue: function(row) { return row[stockMap["promo@"] - 1]; }
     },
     {
       key: "stock",
       label: "Stock",
       stockCol: stockMap["stock"] || 0,
       pfsCol: pfsFindColumnByAliases_(pfsHeaders, ["quantité total stock pcs", "quantite total stock pcs", "stock pcs", "stock"]),
-      transform: function(row) { return pfsNormalizeScalar_(row[stockMap["stock"] - 1]); }
+      type: "number",
+      stockValue: function(row) { return row[stockMap["stock"] - 1]; }
     },
     {
       key: "poids",
       label: "Poids",
       stockCol: stockMap["poids (en gramme)"] || 0,
       pfsCol: pfsFindColumnByAliases_(pfsHeaders, ["poids_kg / pc", "poids kg / pc", "poids_kg/pc", "poids kg/pc", "poids_kg", "poids kg"]),
-      transform: function(row) { return pfsFormatKgValueFromGrams_(row[stockMap["poids (en gramme)"] - 1]); }
+      type: "number",
+      stockValue: function(row) { return pfsFormatKgValueFromGrams_(row[stockMap["poids (en gramme)"] - 1]); }
     },
     {
       key: "active",
       label: "Active",
       stockCol: stockMap["ms_statut"] || 0,
       pfsCol: pfsFindColumnByAliases_(pfsHeaders, ["active", "actif"]),
-      transform: function(row) {
-        return pfsMapActiveFromMsStatus_(row[stockMap["ms_statut"] - 1]);
-      }
+      type: "yesno",
+      stockValue: function(row) { return pfsMapActiveFromMsStatus_(row[stockMap["ms_statut"] - 1]); }
     }
   ];
 
-  const availableDefs = syncDefs.filter(function(def) {
+  const availableDefs = compareDefs.filter(function(def) {
     return def.stockCol && def.pfsCol;
   });
-
-  const missingDefs = syncDefs
+  const missingDefs = compareDefs
     .filter(function(def) { return !def.stockCol || !def.pfsCol; })
     .map(function(def) { return def.label; });
 
   if (!availableDefs.length) {
-    throw new Error("Aucune colonne syncable trouvée entre STOCK et " + SHEET_PFS_IMPORT + ".");
+    throw new Error("Aucune colonne comparable trouvée entre STOCK et " + SHEET_PFS_IMPORT + ".");
   }
 
-  const changedColumns = {};
-  for (let i = 0; i < availableDefs.length; i++) {
-    const def = availableDefs[i];
-    changedColumns[def.pfsCol] = pfsValues.map(function(row) { return [row[def.pfsCol - 1]]; });
-  }
-
+  const diffRows = [];
   const matchedRefs = [];
-  const unmatchedRefs = [];
-  const updatedFields = {};
-  const skippedValueWarnings = [];
-  let touchedPfsRows = 0;
+  const absentPfsRefs = [];
+  const pfsRefsWithoutStock = [];
+  const nonComparableWarnings = [];
 
-  Object.keys(stockByRef).forEach(function(ref) {
+  for (let i = 0; i < stockRefs.length; i++) {
+    const ref = stockRefs[i];
     const stockRow = stockByRef[ref];
     const targetRows = pfsRowsByRef[ref];
+
     if (!targetRows || !targetRows.length) {
-      unmatchedRefs.push(ref);
-      return;
+      absentPfsRefs.push(ref);
+      diffRows.push([
+        ref,
+        "",
+        "",
+        "REF",
+        ref,
+        "",
+        "ABSENT_PFS",
+        "Aucune ligne PFS trouvée pour cette ref"
+      ]);
+      continue;
     }
 
     matchedRefs.push(ref);
 
     for (let t = 0; t < targetRows.length; t++) {
       const targetIndex = targetRows[t];
-      let pfsRowChanged = false;
+      const pfsRow = pfsValues[targetIndex];
+      const sku = pfsNormalizeScalar_(pfsRow[pfsSkuCol - 1]);
+      const typeVente = pfsTypeVenteCol ? pfsNormalizeScalar_(pfsRow[pfsTypeVenteCol - 1]) : "";
 
       for (let d = 0; d < availableDefs.length; d++) {
         const def = availableDefs[d];
-        const resolved = pfsResolveSyncValue_(def.transform(stockRow));
-        if (!resolved.write) {
-          if (resolved.reason) skippedValueWarnings.push(ref + " / " + def.label + ": " + resolved.reason);
+        const stockPrepared = pfsPrepareComparableValue_(def.stockValue(stockRow), def.type);
+        const pfsPrepared = pfsPrepareComparableValue_(pfsRow[def.pfsCol - 1], def.type);
+
+        if (!stockPrepared.comparable || !pfsPrepared.comparable) {
+          const comment = stockPrepared.reason || pfsPrepared.reason || "Valeur non comparable";
+          diffRows.push([
+            ref,
+            sku,
+            typeVente,
+            def.label,
+            stockPrepared.display,
+            pfsPrepared.display,
+            "NON_COMPARE",
+            comment
+          ]);
+          nonComparableWarnings.push(ref + " / " + def.label + ": " + comment);
           continue;
         }
-        const nextValue = resolved.value;
 
-        const colValues = changedColumns[def.pfsCol];
-        const prevValue = pfsNormalizeScalar_(colValues[targetIndex][0]);
-        if (prevValue === nextValue) continue;
+        if (pfsComparableValuesEqual_(stockPrepared, pfsPrepared, def.type)) continue;
 
-        colValues[targetIndex][0] = nextValue;
-        updatedFields[def.key] = (updatedFields[def.key] || 0) + 1;
-        pfsRowChanged = true;
+        diffRows.push([
+          ref,
+          sku,
+          typeVente,
+          def.label,
+          stockPrepared.display,
+          pfsPrepared.display,
+          "DIFF",
+          ""
+        ]);
       }
-
-      if (pfsRowChanged) touchedPfsRows++;
     }
-
-  });
+  }
 
   Object.keys(seenPfsRefs).forEach(function(ref) {
-    if (!stockByRef[ref]) pfsRefsWithoutStock.push(ref);
+    if (stockByRef[ref]) return;
+    pfsRefsWithoutStock.push(ref);
+    const rows = pfsValuesByMatchedBaseRef_(pfsValues, pfsSkuCol, ref);
+    for (let i = 0; i < rows.length; i++) {
+      const pfsRow = rows[i];
+      const sku = pfsNormalizeScalar_(pfsRow[pfsSkuCol - 1]);
+      const typeVente = pfsTypeVenteCol ? pfsNormalizeScalar_(pfsRow[pfsTypeVenteCol - 1]) : "";
+      diffRows.push([
+        ref,
+        sku,
+        typeVente,
+        "REF",
+        "",
+        ref,
+        "ABSENT_STOCK",
+        "Ref présente dans PFS_IMPORT mais absente de STOCK"
+      ]);
+    }
   });
 
-  const changedCols = Object.keys(changedColumns)
-    .map(function(v) { return Number(v); })
-    .sort(function(a, b) { return a - b; });
+  const diffSheet = pfsRecreateSheet_(ss, SHEET_PFS_DIFF);
+  const header = [["Ref", "SKU", "Type vente", "Champ", "Valeur STOCK", "Valeur PFS", "Statut", "Commentaire"]];
+  diffSheet.getRange(1, 1, 1, header[0].length).setValues(header);
+  diffSheet.getRange(1, 1, 1, header[0].length).setFontWeight("bold");
+  diffSheet.setFrozenRows(1);
 
-  for (let i = 0; i < changedCols.length; i++) {
-    const col = changedCols[i];
-    pfs.getRange(pfsDataStartRow, col, pfsRowCount, 1).setValues(changedColumns[col]);
+  if (diffRows.length) {
+    diffSheet.getRange(2, 1, diffRows.length, header[0].length).setValues(diffRows);
+  }
+
+  for (let c = 1; c <= header[0].length; c++) {
+    diffSheet.autoResizeColumn(c);
   }
 
   const notes = [];
-  if (missingDefs.length) notes.push("Colonnes non syncées: " + missingDefs.join(", "));
-  notes.push("Champs complexes laissés en attente: couleurs, tailles.");
+  if (missingDefs.length) notes.push("Colonnes non comparées: " + missingDefs.join(", "));
   if (duplicateStockRefs.length) notes.push("Refs dupliquées dans STOCK ignorées après la première occurrence: " + pfsUniqueList_(duplicateStockRefs).slice(0, 10).join(", "));
-  if (unmatchedRefs.length) notes.push("Refs absentes de PFS (aperçu): " + unmatchedRefs.slice(0, 15).join(", ") + (unmatchedRefs.length > 15 ? " …" : ""));
-  if (skippedValueWarnings.length) notes.push("Valeurs ignorées prudemment (aperçu): " + skippedValueWarnings.slice(0, 8).join(" | ") + (skippedValueWarnings.length > 8 ? " …" : ""));
-  if (mode === "all" && pfsRefsWithoutStock.length) notes.push("Bonus - refs PFS sans STOCK (aperçu): " + pfsRefsWithoutStock.slice(0, 15).join(", ") + (pfsRefsWithoutStock.length > 15 ? " …" : ""));
+  if (absentPfsRefs.length) notes.push("Refs absentes de PFS (aperçu): " + absentPfsRefs.slice(0, 15).join(", ") + (absentPfsRefs.length > 15 ? " …" : ""));
+  if (pfsRefsWithoutStock.length) notes.push("Bonus - refs PFS absentes de STOCK (aperçu): " + pfsRefsWithoutStock.slice(0, 15).join(", ") + (pfsRefsWithoutStock.length > 15 ? " …" : ""));
+  if (nonComparableWarnings.length) notes.push("Valeurs non comparables (aperçu): " + pfsUniqueList_(nonComparableWarnings).slice(0, 8).join(" | ") + (nonComparableWarnings.length > 8 ? " …" : ""));
 
   const summary = [
-    summaryTitle,
+    "Comparaison STOCK ↔ " + SHEET_PFS_IMPORT,
     "",
-    "Header row PFS détecté: " + pfsAnalysis.headerRow,
-    (mode === "selected" ? "Refs cochées analysées" : "Refs STOCK analysées") + ": " + Object.keys(stockByRef).length,
-    "Refs matchées PFS: " + matchedRefs.length,
-    "Refs absentes du catalogue PFS: " + unmatchedRefs.length,
-    "Lignes PFS modifiées: " + touchedPfsRows,
-    "Mises à jour: " + pfsFormatUpdateStats_(updatedFields)
+    "Refs STOCK analysées : " + stockRefs.length,
+    "Refs matchées PFS : " + matchedRefs.length,
+    "Refs absentes de PFS : " + absentPfsRefs.length,
+    "Lignes avec écarts : " + diffRows.length
   ].concat(notes).join("\n");
 
-  if (unmatchedRefs.length) {
-    Logger.log((mode === "selected" ? "Refs cochées absentes de PFS" : "Refs STOCK absentes de PFS") + " (" + unmatchedRefs.length + "):\n" + unmatchedRefs.join("\n"));
+  if (absentPfsRefs.length) {
+    Logger.log("Refs STOCK absentes de PFS (" + absentPfsRefs.length + "):\n" + absentPfsRefs.join("\n"));
   }
-  if (skippedValueWarnings.length) {
-    Logger.log("Valeurs ignorées prudemment (" + skippedValueWarnings.length + "):\n" + skippedValueWarnings.join("\n"));
+  if (pfsRefsWithoutStock.length) {
+    Logger.log("Refs PFS absentes de STOCK (" + pfsRefsWithoutStock.length + "):\n" + pfsRefsWithoutStock.join("\n"));
   }
-  if (mode === "all" && pfsRefsWithoutStock.length) {
-    Logger.log("Refs PFS sans équivalent STOCK (" + pfsRefsWithoutStock.length + "):\n" + pfsRefsWithoutStock.join("\n"));
+  if (nonComparableWarnings.length) {
+    Logger.log("Valeurs non comparables (" + nonComparableWarnings.length + "):\n" + pfsUniqueList_(nonComparableWarnings).join("\n"));
   }
   Logger.log(summary);
-  ss.toast("Sync PFS terminée", toastTitle, 6);
-  notify_("Sync PFS terminée", summary);
-  return {
-    mode: mode,
-    analyzedRefs: Object.keys(stockByRef).length,
-    matchedRefs: matchedRefs.length,
-    missingRefs: unmatchedRefs,
-    pfsRefsWithoutStock: mode === "all" ? pfsRefsWithoutStock : [],
-    modifiedRows: touchedPfsRows,
-    updatedFields: updatedFields
-  };
-}
 
-function exportPFSImportUpdateToDrive() {
-  const url = pfsExportImportSheetAsTemplateWorkbookToDrive_();
-  Logger.log("PFS update exported: " + url);
-  return url;
+  ss.toast("Comparaison PFS terminée", "PFS Audit", 6);
+  notify_("Comparaison PFS terminée", summary);
+  return {
+    analyzedRefs: stockRefs.length,
+    matchedRefs: matchedRefs.length,
+    absentPfsRefs: absentPfsRefs,
+    pfsRefsWithoutStock: pfsRefsWithoutStock,
+    diffCount: diffRows.length
+  };
 }
 
 function exportStockToPFS() {
@@ -828,90 +825,6 @@ function exportPFSToDriveXlsx() {
   return file.getUrl();
 }
 
-function pfsExportSheetToDriveXlsx_(sheetName, folderId, fileName, toastTitle) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(sheetName);
-
-  if (!sheet) throw new Error("Feuille introuvable: " + sheetName);
-
-  const folder = DriveApp.getFolderById(folderId);
-  const spreadsheetId = ss.getId();
-  const gid = sheet.getSheetId();
-  const url = "https://docs.google.com/spreadsheets/d/" + spreadsheetId + "/export?format=xlsx&gid=" + gid;
-  const token = ScriptApp.getOAuthToken();
-
-  const response = UrlFetchApp.fetch(url, {
-    headers: {
-      Authorization: "Bearer " + token
-    }
-  });
-
-  const blob = response.getBlob().setName(fileName);
-  const existing = folder.getFilesByName(fileName);
-  while (existing.hasNext()) {
-    existing.next().setTrashed(true);
-  }
-
-  const file = folder.createFile(blob);
-  SpreadsheetApp.getActive().toast("Export Drive terminé", toastTitle || "PFS", 5);
-  return file.getUrl();
-}
-
-function pfsExportImportSheetAsTemplateWorkbookToDrive_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sourceSheet = ss.getSheetByName(SHEET_PFS_IMPORT);
-  if (!sourceSheet) throw new Error("Feuille introuvable: " + SHEET_PFS_IMPORT);
-
-  const folder = DriveApp.getFolderById(PFS_TEMPLATE_FOLDER_ID);
-  const tempName = "TMP_PFS_UPDATE__" + Utilities.getUuid().slice(0, 8);
-  let tempSs = null;
-
-  try {
-    tempSs = SpreadsheetApp.create(tempName);
-
-    // Remove the default blank sheet and replace with a copy of PFS_IMPORT
-    const copied = sourceSheet.copyTo(tempSs).setName("Worksheet");
-    const sheets = tempSs.getSheets();
-    for (let i = 0; i < sheets.length; i++) {
-      const sh = sheets[i];
-      if (sh.getSheetId() !== copied.getSheetId()) {
-        tempSs.deleteSheet(sh);
-      }
-    }
-
-    SpreadsheetApp.flush();
-    Utilities.sleep(1200);
-
-    const file = DriveApp.getFileById(tempSs.getId());
-    const url = "https://docs.google.com/spreadsheets/d/" + tempSs.getId() + "/export?format=xlsx";
-    const token = ScriptApp.getOAuthToken();
-    const response = UrlFetchApp.fetch(url, {
-      headers: {
-        Authorization: "Bearer " + token
-      }
-    });
-
-    const blob = response.getBlob().setName(PFS_UPDATE_FILENAME);
-
-    const existing = folder.getFilesByName(PFS_UPDATE_FILENAME);
-    while (existing.hasNext()) {
-      existing.next().setTrashed(true);
-    }
-
-    const created = folder.createFile(blob);
-    SpreadsheetApp.getActive().toast("Export Drive terminé", "PFS Update", 5);
-    return created.getUrl();
-  } finally {
-    if (tempSs) {
-      try {
-        DriveApp.getFileById(tempSs.getId()).setTrashed(true);
-      } catch (e) {
-        Logger.log("Cleanup temp PFS update workbook failed: " + e);
-      }
-    }
-  }
-}
-
 /**
  * Read PFS_EXPORT headers robustly
  * - Doesn't rely on getLastColumn() which may be 1 if only A1 is filled
@@ -1077,6 +990,98 @@ function pfsMapActiveFromMsStatus_(status) {
     value: "",
     reason: "MS_STATUT non géré (" + raw + ")"
   };
+}
+
+function pfsPrepareComparableValue_(value, compareType) {
+  const resolved = pfsResolveSyncValue_(value);
+  if (!resolved.write) {
+    return {
+      comparable: false,
+      value: "",
+      display: pfsNormalizeScalar_(resolved.value),
+      reason: resolved.reason || "Valeur non comparable"
+    };
+  }
+
+  const raw = pfsNormalizeScalar_(resolved.value);
+  if (compareType === "number") {
+    if (raw === "") return { comparable: true, value: "", display: "" };
+    const num = pfsToComparableNumber_(raw);
+    if (num === null) {
+      return {
+        comparable: false,
+        value: raw,
+        display: raw,
+        reason: "Valeur numérique invalide (" + raw + ")"
+      };
+    }
+    return {
+      comparable: true,
+      value: num,
+      display: raw
+    };
+  }
+
+  if (compareType === "yesno") {
+    if (raw === "") return { comparable: true, value: "", display: "" };
+    const low = raw.toLowerCase();
+    if (low === "oui") return { comparable: true, value: "oui", display: raw };
+    if (low === "non") return { comparable: true, value: "non", display: raw };
+    return {
+      comparable: false,
+      value: raw,
+      display: raw,
+      reason: "Valeur Oui/Non invalide (" + raw + ")"
+    };
+  }
+
+  return {
+    comparable: true,
+    value: raw,
+    display: raw
+  };
+}
+
+function pfsComparableValuesEqual_(left, right, compareType) {
+  if (compareType === "number") {
+    if (left.value === "" && right.value === "") return true;
+    if (typeof left.value !== "number" || typeof right.value !== "number") return false;
+    return Math.abs(left.value - right.value) < 1e-9;
+  }
+  return String(left.value || "") === String(right.value || "");
+}
+
+function pfsToComparableNumber_(value) {
+  const raw = pfsNormalizeScalar_(value);
+  if (!raw) return null;
+  const normalized = raw.replace(/\s+/g, "").replace(",", ".");
+  if (!/^-?\d+(?:\.\d+)?$/.test(normalized)) return null;
+  const num = Number(normalized);
+  return Number.isFinite(num) ? num : null;
+}
+
+function pfsRecreateSheet_(spreadsheet, sheetName) {
+  const existing = spreadsheet.getSheetByName(sheetName);
+  let index = spreadsheet.getSheets().length + 1;
+
+  if (existing) {
+    index = existing.getIndex();
+    spreadsheet.deleteSheet(existing);
+  }
+
+  const safeIndex = Math.max(1, Math.min(index, spreadsheet.getSheets().length + 1));
+  return spreadsheet.insertSheet(sheetName, safeIndex);
+}
+
+function pfsValuesByMatchedBaseRef_(rows, skuCol, ref) {
+  const out = [];
+  const targetRef = pfsNormalizeRef_(ref);
+  for (let i = 0; i < rows.length; i++) {
+    const sku = pfsNormalizeScalar_(rows[i][skuCol - 1]);
+    if (!pfsSkuMatchesRef_(sku, targetRef)) continue;
+    out.push(rows[i]);
+  }
+  return out;
 }
 
 function pfsFindNamedFileInFolder_(folderId, fileName) {
@@ -1315,13 +1320,6 @@ function pfsBuildTemplateAnalysisSummary_(analysis, context) {
     "Volets figés: " + analysis.frozenRows + " ligne(s), " + analysis.frozenCols + " colonne(s)",
     "Zones fusionnées détectées: " + analysis.mergedCount
   ].join("\n");
-}
-
-function pfsFormatUpdateStats_(stats) {
-  const parts = Object.keys(stats || {}).map(function(key) {
-    return key + "=" + stats[key];
-  });
-  return parts.length ? parts.join(", ") : "aucune cellule modifiée";
 }
 
 function pfsUniqueList_(values) {
@@ -1654,68 +1652,104 @@ function normalizePfsColorName_(raw) {
     "ECRU": "Écru",
     "ÉCRU": "Écru",
     "IVOIRE": "Ivoire",
-    "VANILLE": "Vanille",
     "NUDE": "Nude",
-    "CREME": "Crême",
-    "CRÈME": "Crême",
+    "CREME": "Beige",
+    "CRÈME": "Beige",
+    "VANILLE": "Beige",
     "BEIGE": "Beige",
     "BLANC": "Blanc",
-    "BLEU CIEL": "Bleu Ciel",
-    "BLEU CLAIR": "Bleu Clair",
+    "TRANSPARENT": "Blanc",
+    "BLEU CIEL": "Bleu",
+    "BLEU CLAIR": "Bleu",
     "BLEU": "Bleu",
     "CYAN": "Cyan",
     "TURQUOISE": "Turquoise",
-    "BLEU ROI": "Bleu Roi",
-    "JEANS": "Jeans",
-    "DENIM": "Denim",
-    "BLEU CANARD": "Bleu Canard",
-    "BLEU PETROLE": "Bleu Pétrole",
-    "BLEU PÉTROLE": "Bleu Pétrole",
-    "BLEU FONCE": "Bleu Foncé",
-    "BLEU FONCÉ": "Bleu Foncé",
-    "BLEU IRISE": "Bleu Irisé",
-    "BLEU IRISÉ": "Bleu Irisé",
+    "BLEU ROI": "Bleu",
+    "JEANS": "Bleu",
+    "DENIM": "Bleu",
+    "BLEU CANARD": "Bleu",
+    "BLEU PETROLE": "Bleu",
+    "BLEU PÉTROLE": "Bleu",
+    "BLEU FONCE": "Marine",
+    "BLEU FONCÉ": "Marine",
+    "BLEU IRISE": "Bleu",
+    "BLEU IRISÉ": "Bleu",
     "MARINE": "Marine",
-    "GRIS CLAIR": "Gris Clair",
-    "GRIS PERLE": "Gris Perle",
+    "CIEL NOCTURNE": "Marine",
+    "GRIS CLAIR": "Gris",
+    "GRIS PERLE": "Gris",
     "ARGENT": "Argent",
     "GRIS": "Gris",
-    "GRIS FONCE": "Gris Foncé",
-    "GRIS FONCÉ": "Gris Foncé",
-    "ANTHRACITE": "Anthracite",
-    "JAUNE CLAIR": "Jaune Clair",
-    "JAUNE CITRON": "Jaune Citron",
+    "GRIS SOURIS": "Gris",
+    "ACIER": "Gris",
+    "GRIS FONCE": "Gris",
+    "GRIS FONCÉ": "Gris",
+    "CARBONE": "Gris",
+    "GRIS ARDOISE": "Gris",
+    "ANTHRACITE": "Gris",
+    "JAUNE CLAIR": "Jaune",
+    "JAUNE CITRON": "Jaune",
     "JAUNE": "Jaune",
-    "JAUNE FONCE": "Jaune Foncé",
-    "JAUNE FONCÉ": "Jaune Foncé",
-    "JAUNE SOLEIL": "Jaune Soleil",
+    "JAUNE FONCE": "Jaune",
+    "JAUNE FONCÉ": "Jaune",
+    "JAUNE SOLEIL": "Jaune",
+    "JAUNE FLUO": "Jaune",
+    "OR": "Doré",
+    "DORÉ": "Doré",
     "MOUTARDE": "Moutarde",
     "CAMEL": "Camel",
     "CHAMPAGNE": "Champagne",
     "TAUPE": "Taupe",
     "BRUN": "Brun",
-    "MARRON": "Marron Foncé",
-    "NOIR IRISE": "Noir Irisé",
-    "NOIR IRISÉ": "Noir Irisé",
+    "COGNAC": "Brun",
+    "CARAMEL": "Brun",
+    "BRONZE": "Brun",
+    "TERRACOTTA": "Brun",
+    "MARRON": "Brun",
+    "MARRON CLAIR": "Brun",
+    "MARRON FONCE": "Brun",
+    "MARRON FONCÉ": "Brun",
+    "CHOCOLAT": "Brun",
+    "BRUN FONCE": "Brun",
+    "BRUN FONCÉ": "Brun",
+    "NOIR IRISE": "Noir",
+    "NOIR IRISÉ": "Noir",
     "NOIR": "Noir",
     "ROSE": "Rose",
     "FUCHSIA": "Fuchsia",
-    "ROUGE CLAIR": "Rouge Clair",
+    "ROSE FLUO": "Rose",
+    "BLUSH": "Rose",
+    "VIEUX ROSE": "Rose",
+    "MAGENTA": "Fuchsia",
+    "FRAMBOISE": "Fuchsia",
+    "ROUGE CLAIR": "Rouge",
     "ROUGE": "Rouge",
-    "CARMIN": "Carmin",
-    "ROUGE FONCE": "Rouge Foncé",
-    "ROUGE FONCÉ": "Rouge Foncé",
+    "CORAIL": "Corail",
+    "SAUMON": "Corail",
+    "ABRICOT": "Corail",
+    "ORANGE FLUO": "Orange",
+    "ORANGE": "Orange",
+    "ROUGE ORANGÉ": "Orange",
+    "CUIVRE": "Orange",
+    "BRIQUE": "Rouge",
+    "ROUILLE": "Rouge",
+    "CARMIN": "Rouge",
+    "ROUGE FONCE": "Rouge",
+    "ROUGE FONCÉ": "Rouge",
     "BORDEAUX": "Bordeaux",
-    "VERT CLAIR": "Vert Clair",
-    "VERT D'EAU": "Vert d'Eau",
-    "VERT D EAU": "Vert d'Eau",
-    "VERT POMME": "Vert Pomme",
+    "VERT CLAIR": "Vert",
+    "VERT D'EAU": "Vert",
+    "VERT D EAU": "Vert",
+    "CÉLADON": "Vert",
+    "CELADON": "Vert",
+    "VERT FLUO": "Vert",
+    "VERT POMME": "Vert",
     "VERT": "Vert",
-    "VERT FONCE": "Vert Foncé",
-    "VERT FONCÉ": "Vert Foncé",
-    "VERT BOUTEILLE": "Vert Bouteille",
-    "VERT SAPIN": "Vert Sapin",
-    "VERT CANARD": "Vert Canard",
+    "VERT FONCE": "Vert",
+    "VERT FONCÉ": "Vert",
+    "VERT BOUTEILLE": "Vert",
+    "VERT SAPIN": "Vert",
+    "VERT CANARD": "Vert",
     "OLIVE": "Olive",
     "KAKI": "Kaki",
     "LILAS": "Lilas",
@@ -1736,7 +1770,7 @@ function normalizePfsColorName_(raw) {
 }
 
 var PFS_COLOR_CATALOG = [
-  "Écru","Ivoire","Vanille","Nude","Crême","Beige","Blanc","Transparent","Bleu Ciel","Bleu Clair","Bleu","Cyan","Turquoise","Bleu Roi","Jeans","Denim","Bleu Canard","Bleu Pétrole","Bleu Foncé","Bleu Irisé","Marine","Ciel nocturne","Gris Clair","Gris Perle","Argent","Gris","Gris Souris","Acier","Gris Foncé","Carbone","Gris Ardoise","Anthracite","Jaune Clair","Jaune Citron","Jaune","Jaune Foncé","Jaune Soleil","Jaune Fluo","Or","Moutarde","Doré","Ocre","Caramel","Bronze","Camel","Champagne","Taupe","Cognac","Brun","Terracotta","Brun foncé","Marron Clair","Chocolat","Marron Foncé","Multicolore","Bicolore","Noir Irisé","Noir","Saumon","Corail","Abricot","Orange Fluo","Orange","Rouge Orangé","Cuivre","Brique","Rouille","Blush","Rose","Rose Fluo","Fuchsia","Magenta","Framboise","Vieux Rose","Rouge Clair","Rouge","Carmin","Rouge Foncé","Bordeaux","Vert Clair","Vert d'Eau","Céladon","Vert Fluo","Vert Pomme","Vert","Vert Foncé","Vert Bouteille","Vert Sapin","Vert Canard","Olive","Kaki","Lilas","Lavande","Mauve","Violet","Indigo","Prune"
+  "Écru","Ivoire","Nude","Beige","Blanc","Bleu","Cyan","Turquoise","Marine","Gris","Argent","Jaune","Moutarde","Doré","Camel","Champagne","Taupe","Brun","Noir","Corail","Orange","Rose","Fuchsia","Rouge","Bordeaux","Vert","Olive","Kaki","Lilas","Lavande","Mauve","Violet","Indigo","Prune"
 ];
 
 /****************************************************

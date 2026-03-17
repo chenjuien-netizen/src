@@ -182,7 +182,7 @@ if (isEdit) {
   if (!(createdAt instanceof Date)) createdAt = isNew ? now : "";
 
   // --- read UI lines A4:F305
-  const grid = ui.getRange(UI_TABLE_RANGE).getValues(); // A..F
+  const grid = ui.getRange(UI_TABLE_RANGE).getDisplayValues(); // A..F
   const dbRows = [];
   const payload = []; // for STOCK sync (only rows w/ ref)
 
@@ -195,13 +195,15 @@ if (isEdit) {
     const tailParsed = ArrivagesDomain_parseTailInput_(r[1]);
     const tail = Number(tailParsed.total || 0);
     const tailDisplay = String(tailParsed.display || "").trim();
-    const ppc = (typeof toIntSafe_ === "function" ? toIntSafe_(r[2]) : (Number(r[2]) || 0));
+    const ppcParsed = ArrivagesDomain_parsePpcInput_(r[2]);
+    const ppc = Number(ppcParsed.primary || 0);
     const boxPackParsed = ArrivagesDomain_parseBoxesAndPacks_(r[3], ppc);
     const cartons = Number(boxPackParsed.boxesValue || 0);
     const missingPacks = Number(boxPackParsed.missingPacks || 0);
     const noteS = String(r[4] || "").trim();
     let dbNoteSystem = ArrivagesDomain_mergeBoxPackRawIntoNoteSystem_(noteS, String(r[3] ?? "").trim());
     dbNoteSystem = ArrivagesDomain_mergeTailRawIntoNoteSystem_(dbNoteSystem, tailParsed.raw);
+    dbNoteSystem = ArrivagesDomain_mergePpcRawIntoNoteSystem_(dbNoteSystem, ppcParsed.values.length > 1 ? ppcParsed.raw : "");
     const noteU = String(r[5] || "").trim();
 
     // DB row (10 cols)
@@ -441,7 +443,8 @@ function ArrivagesStock_applyFromArrivagePayload_(shStock, shTpl, payload) {
       newBoxParts.sign,
       newBoxParts.fraction,
       newMissingPacks,
-      newTail
+      newTail,
+      newTailDisplay
     );
 
     // Decide target
@@ -1002,7 +1005,7 @@ function ArrivagesStock_fractionToText_(v) {
   const n = Number(v);
   if (!Number.isFinite(n) || n <= 0) return "";
 
-  const candidates = [2, 3, 4, 6, 8, 12];
+  const candidates = [2, 3, 4, 5, 6, 8, 12];
   let best = null;
   let bestErr = Infinity;
 
@@ -1021,7 +1024,7 @@ function ArrivagesStock_fractionToText_(v) {
   return reduced.num + "/" + reduced.den;
 }
 
-function ArrivagesStock_buildIncomingHistoryEntry_(dt, ppc, whole, sign, fraction, missingPacks, tail) {
+function ArrivagesStock_buildIncomingHistoryEntry_(dt, ppc, whole, sign, fraction, missingPacks, tail, tailDisplay) {
   const tz = Session.getScriptTimeZone() || "Europe/Paris";
   const stamp = Utilities.formatDate(dt instanceof Date ? dt : new Date(), tz, "yyyy-MM-dd HH:mm");
 
@@ -1031,6 +1034,7 @@ function ArrivagesStock_buildIncomingHistoryEntry_(dt, ppc, whole, sign, fractio
   const fracTxt = ArrivagesStock_fractionToText_(fraction);
   const missN = Number(missingPacks) || 0;
   const tailN = Number(tail) || 0;
+  const tailDisplayTxt = String(tailDisplay || "").trim();
 
   let core = "";
   if (ppcTxt) {
@@ -1046,7 +1050,15 @@ function ArrivagesStock_buildIncomingHistoryEntry_(dt, ppc, whole, sign, fractio
   }
 
   if (tailN > 0) {
-    core = "(" + String(Math.trunc(tailN)) + "p)" + (core ? "+" + core : "");
+    const tailText = tailDisplayTxt
+      ? tailDisplayTxt
+          .split("+")
+          .map(part => String(part || "").trim())
+          .filter(Boolean)
+          .map(part => "(" + part + "p)")
+          .join("+")
+      : "(" + String(Math.trunc(tailN)) + "p)";
+    core = tailText + (core ? "+" + core : "");
   }
 
   return stamp + " | " + core;
@@ -1297,12 +1309,14 @@ function ArrivagesRepo_existsArrivageId_(dbSheet, id) {
  ***********************/
 
 function ArrivagesDomain_parseBoxesAndPacks_(input, ppcInput) {
-  let raw = String(input || "").trim();
+  let raw = String(input || "").trim().replace(/^'+\s*/, "");
 
-  // rule: empty means 1 carton
+  // rule: empty 箱数/包 means:
+  // - 1 carton if 每箱件数 exists
+  // - 0 carton if 每箱件数 is empty
   if (!raw) {
     return {
-      boxesValue: 1,
+      boxesValue: Number(ppcInput) > 0 ? 1 : 0,
       missingPacks: 0,
       kind: "plain"
     };
@@ -1353,6 +1367,21 @@ function ArrivagesDomain_parseBoxesAndPacks_(input, ppcInput) {
     };
   }
 
+  // leading +fraction with packs delta (ex: +3/4-5包, +1/2+3包)
+  m = noSpace.match(/^\+(\d+)\/(\d+)([+-])(\d+)包$/);
+  if (m) {
+    const n = Number(m[1]);
+    const d = Number(m[2]);
+    const op = m[3];
+    const packs = Number(m[4]);
+    if (!d) throw new Error("箱数/包 分数格式错误: " + raw);
+    return {
+      boxesValue: 1 + n / d,
+      missingPacks: op === "+" ? packs : -packs,
+      kind: "fractional"
+    };
+  }
+
   // normalize spaces for other cases
   raw = noSpace;
 
@@ -1363,6 +1392,59 @@ function ArrivagesDomain_parseBoxesAndPacks_(input, ppcInput) {
       boxesValue: Number(m[1]),
       missingPacks: 0,
       kind: "plain"
+    };
+  }
+
+  // explicit cartons + fraction (ex: ×10+1/2, ×2+2/3)
+  m = raw.match(/^×(\d+)\+(\d+)\/(\d+)$/);
+  if (m) {
+    const whole = Number(m[1]);
+    const n = Number(m[2]);
+    const d = Number(m[3]);
+    if (!d) throw new Error("箱数/包 分数格式错误: " + raw);
+    return {
+      boxesValue: whole + n / d,
+      missingPacks: 0,
+      kind: "fractional"
+    };
+  }
+
+  // explicit cartons + fraction + fraction (ex: ×6+2/3+1/2)
+  m = raw.match(/^×(\d+)\+(\d+)\/(\d+)\+(\d+)\/(\d+)$/);
+  if (m) {
+    const whole = Number(m[1]);
+    const n1 = Number(m[2]);
+    const d1 = Number(m[3]);
+    const n2 = Number(m[4]);
+    const d2 = Number(m[5]);
+    if (!d1 || !d2) throw new Error("箱数/包 分数格式错误: " + raw);
+    return {
+      boxesValue: whole + (n1 / d1) + (n2 / d2),
+      missingPacks: 0,
+      kind: "fractional"
+    };
+  }
+
+  // packs only with 包 suffix (ex: +3包, 10包, -2包)
+  // if 每箱件数 exists, treat as 1 carton + packs; otherwise 0 carton + packs
+  m = raw.match(/^([+-]?)(\d+)包$/);
+  if (m) {
+    const sign = m[1] === "-" ? -1 : 1;
+    const packs = Number(m[2]) * sign;
+    return {
+      boxesValue: hasPpc ? 1 : 0,
+      missingPacks: packs,
+      kind: "packs_delta"
+    };
+  }
+
+  // explicit cartons + packs with 包 suffix (ex: ×2+8包, ×2-5包)
+  m = raw.match(/^×(\d+)([+-])(\d+)包$/);
+  if (m) {
+    return {
+      boxesValue: Number(m[1]),
+      missingPacks: m[2] === "+" ? Number(m[3]) : -Number(m[3]),
+      kind: "packs_delta"
     };
   }
 
@@ -1469,6 +1551,37 @@ function ArrivagesDomain_parseTailInput_(input) {
   };
 }
 
+function ArrivagesDomain_parsePpcInput_(input) {
+  const raw = String(input || "").trim();
+  if (!raw) return { primary: 0, values: [], raw: "", display: "" };
+
+  const normalized = raw
+    .replace(/[（）]/g, "")
+    .replace(/\s+/g, "")
+    .replace(/件/gi, "p");
+
+  const parts = normalized.split("+").map(s => String(s || "").trim()).filter(Boolean);
+  if (!parts.length) return { primary: 0, values: [], raw: "", display: "" };
+
+  const values = [];
+  for (const part of parts) {
+    const m = part.match(/^(\d+)(?:[pP])?$/);
+    if (!m) throw new Error("每箱件数格式不支持: " + raw);
+    const n = Number(m[1]);
+    if (!Number.isFinite(n)) throw new Error("每箱件数格式不支持: " + raw);
+    values.push(n);
+  }
+
+  if (!values.length) return { primary: 0, values: [], raw: "", display: "" };
+
+  return {
+    primary: values[0] || 0,
+    values: values,
+    raw: raw,
+    display: values.join("+")
+  };
+}
+
 function ArrivagesDomain_mergeTailRawIntoNoteSystem_(noteSystem, tailRaw) {
   const note = String(noteSystem || "").trim();
   const raw = String(tailRaw || "").trim();
@@ -1496,6 +1609,35 @@ function ArrivagesDomain_extractTailRawFromNoteSystem_(noteSystem) {
     .trim();
 
   return { cleanNoteSystem, tailRaw };
+}
+
+function ArrivagesDomain_mergePpcRawIntoNoteSystem_(noteSystem, ppcRaw) {
+  const note = String(noteSystem || "").trim();
+  const raw = String(ppcRaw || "").trim();
+  if (!raw) return note;
+
+  const cleaned = note
+    .replace(/\s*\|\s*PPC_RAW:[^|]*/gi, "")
+    .replace(/^\s*PPC_RAW:[^|]*\s*\|?\s*/i, "")
+    .trim();
+
+  return cleaned ? (cleaned + " | PPC_RAW:" + raw) : ("PPC_RAW:" + raw);
+}
+
+function ArrivagesDomain_extractPpcRawFromNoteSystem_(noteSystem) {
+  const s = String(noteSystem || "").trim();
+  if (!s) return { cleanNoteSystem: "", ppcRaw: "" };
+
+  const m = s.match(/(?:^|\|)\s*PPC_RAW:([^|]+)/i);
+  const ppcRaw = m ? String(m[1] || "").trim() : "";
+  const cleanNoteSystem = s
+    .replace(/\s*\|\s*PPC_RAW:[^|]*/gi, "")
+    .replace(/^\s*PPC_RAW:[^|]*\s*\|?\s*/i, "")
+    .trim()
+    .replace(/^\|\s*|\s*\|$/g, "")
+    .trim();
+
+  return { cleanNoteSystem, ppcRaw };
 }
 
 function ArrivagesDomain_mergeBoxPackRawIntoNoteSystem_(noteSystem, boxPackRaw) {
@@ -1632,6 +1774,7 @@ function ArrivagesDomain_buildUiModelFromDbRows_(rows) {
         cartonsSum: 0,
         boxPackRawLatest: { at: new Date(0), v: "" },
         tailRawLatest: { at: new Date(0), v: "" },
+        ppcRawLatest: { at: new Date(0), v: "" },
         tailLatest: { at: new Date(0), v: "" },
         ppcLatest:  { at: new Date(0), v: "" },
         noteULatest:{ at: new Date(0), v: "" },
@@ -1646,7 +1789,8 @@ function ArrivagesDomain_buildUiModelFromDbRows_(rows) {
     const cartons = Math.max(0, toNumberSafe(r[6]));
     const noteRaw = String(r[8] || "").trim();
     const tailInfo = ArrivagesDomain_extractTailRawFromNoteSystem_(noteRaw);
-    const noteInfo = ArrivagesDomain_extractBoxPackRawFromNoteSystem_(tailInfo.cleanNoteSystem);
+    const ppcInfo = ArrivagesDomain_extractPpcRawFromNoteSystem_(tailInfo.cleanNoteSystem);
+    const noteInfo = ArrivagesDomain_extractBoxPackRawFromNoteSystem_(ppcInfo.cleanNoteSystem);
     const noteS   = noteInfo.cleanNoteSystem;
     const noteU   = String(r[9] || "").trim();
 
@@ -1659,6 +1803,7 @@ function ArrivagesDomain_buildUiModelFromDbRows_(rows) {
     // Tail latest (toutes lignes)
     if (surplus > 0 && at > o.tailLatest.at) o.tailLatest = { at, v: surplus };
     if (tailInfo.tailRaw && at > o.tailRawLatest.at) o.tailRawLatest = { at, v: tailInfo.tailRaw };
+    if (ppcInfo.ppcRaw && at > o.ppcRawLatest.at) o.ppcRawLatest = { at, v: ppcInfo.ppcRaw };
     if (noteInfo.boxPackRaw && at > o.boxPackRawLatest.at) o.boxPackRawLatest = { at, v: noteInfo.boxPackRaw };
 
     // Note user latest
@@ -1678,7 +1823,7 @@ function ArrivagesDomain_buildUiModelFromDbRows_(rows) {
     if (!o) continue;
 
     const tail = o.tailRawLatest.v || o.tailLatest.v || "";
-    const ppc  = o.ppcLatest.v || "";
+    const ppc  = o.ppcRawLatest.v || o.ppcLatest.v || "";
     const cartons = o.boxPackRawLatest.v || (o.cartonsSum > 0 ? o.cartonsSum : 1);
 
     let noteSystem = "";

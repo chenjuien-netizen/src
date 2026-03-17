@@ -197,6 +197,7 @@ if (isEdit) {
     const tailDisplay = String(tailParsed.display || "").trim();
     const ppcParsed = ArrivagesDomain_parsePpcInput_(r[2]);
     const ppc = Number(ppcParsed.primary || 0);
+    const ppcDisplay = String(ppcParsed.display || (ppc ? String(ppc) : "")).trim();
     const boxPackParsed = ArrivagesDomain_parseBoxesAndPacks_(r[3], ppc);
     const cartons = Number(boxPackParsed.boxesValue || 0);
     const missingPacks = Number(boxPackParsed.missingPacks || 0);
@@ -243,6 +244,7 @@ const mixUsed = (isMixStart && tail > 0);
   tail: tail || 0,
   tailDisplay: tailDisplay,
   ppc: ppc || 0,
+  ppcDisplay: ppcDisplay,
   cartons: cartons || 0,
   missingPacks: missingPacks || 0,
   boxPackRaw: String(r[3] ?? "").trim(),
@@ -428,6 +430,7 @@ function ArrivagesStock_applyFromArrivagePayload_(shStock, shTpl, payload) {
     if (!baseRef) continue;
 
     const newPpc = ArrivagesStock_toNumber_(item.ppc);
+    const newPpcDisplay = String(item.ppcDisplay || (newPpc ? String(Math.trunc(newPpc)) : "")).trim();
     const newTail = ArrivagesStock_toNumber_(item.tail);
     const newTailDisplay = String(item.tailDisplay || "").trim();
     const newBoxes = ArrivagesStock_toNumber_(item.cartons);
@@ -439,12 +442,14 @@ function ArrivagesStock_applyFromArrivagePayload_(shStock, shTpl, payload) {
     const historyEntry = ArrivagesStock_buildIncomingHistoryEntry_(
       new Date(),
       newPpc,
+      newPpcDisplay,
       newBoxParts.whole,
       newBoxParts.sign,
       newBoxParts.fraction,
       newMissingPacks,
       newTail,
-      newTailDisplay
+      newTailDisplay,
+      item.boxPackRaw
     );
 
     // Decide target
@@ -505,6 +510,7 @@ function ArrivagesStock_applyFromArrivagePayload_(shStock, shTpl, payload) {
           noteUser: safeStr(item.noteUser),
           noteSystem: safeStr(item.noteSystem),
           newPpc: newPpc,
+          newPpcDisplay: newPpcDisplay,
           newTail: newTail,
           newTailDisplay: newTailDisplay,
           newBoxes: newBoxes,
@@ -531,6 +537,7 @@ function ArrivagesStock_applyFromArrivagePayload_(shStock, shTpl, payload) {
         noteUser: safeStr(item.noteUser),
         noteSystem: safeStr(item.noteSystem),
         newPpc: newPpc,
+        newPpcDisplay: newPpcDisplay,
         newTail: newTail,
         newTailDisplay: newTailDisplay,
         newBoxes: newBoxes,
@@ -618,7 +625,7 @@ ArrivagesStock_applyTemplateFormulasByHeaderNoteKey_(
 
     // Replace/Insert/Suffix all behave same for new line: set values fresh
     if (colTailCur) pushWrite(row, colTailCur, d.newTailDisplay || "");
-    if (colPpc2) pushWrite(row, colPpc2, d.newPpc || 0);
+    if (colPpc2) pushWrite(row, colPpc2, d.newPpcDisplay || (d.newPpc || 0));
     if (colBoxesCur) pushWrite(row, colBoxesCur, d.newWholeBoxes || 0);
     if (colSignCur) pushWrite(row, colSignCur, d.newBoxSign || "");
     if (colFracCur) pushWrite(row, colFracCur, d.newBoxFraction || "");
@@ -682,7 +689,7 @@ ArrivagesStock_applyTemplateFormulasByHeaderNoteKey_(
     } else {
       // REPLACE (or any non-safe update on existing line): replace full set
       if (colTailCur) pushWrite(row, colTailCur, up.newTailDisplay || "");
-      if (colPpc2) pushWrite(row, colPpc2, up.newPpc || 0);
+      if (colPpc2) pushWrite(row, colPpc2, up.newPpcDisplay || (up.newPpc || 0));
       if (colBoxesCur) pushWrite(row, colBoxesCur, up.newWholeBoxes || 0);
       if (colSignCur) pushWrite(row, colSignCur, up.newBoxSign || "");
       if (colFracCur) pushWrite(row, colFracCur, up.newBoxFraction || "");
@@ -738,6 +745,7 @@ ArrivagesStock_applyTemplateFormulasByHeaderNoteKey_(
       const s = String(v === null || typeof v === "undefined" ? "" : v).trim();
       if (!s) return "";
       if (/^\d+\/\d+$/.test(s)) return s;
+      if (/^\d+\/\d+(?:\+\d+\/\d+)+$/.test(s)) return s;
       if (/^\d+(\.\d+)?$/.test(s)) return ArrivagesStock_fractionToText_(Number(s));
       return "";
     };
@@ -919,6 +927,11 @@ function ArrivagesStock_boxPartsFromRaw_(rawInput, kind, boxesValue) {
   const compact = raw.replace(/\s+/g, " ").trim();
   const noSpace = compact.replace(/\s+/g, "");
   const safeKind = String(kind || "plain").trim().toLowerCase();
+  const asFractionText = (num, den) => {
+    if (!den) return "";
+    const reduced = ArrivagesStock_reduceFraction_(Number(num), Number(den));
+    return reduced.num + "/" + reduced.den;
+  };
 
   if (safeKind === "plain") {
     return {
@@ -940,55 +953,90 @@ function ArrivagesStock_boxPartsFromRaw_(rawInput, kind, boxesValue) {
 
   let m = compact.match(/^(\d+)\s+(\d+)\/(\d+)$/);
   if (m) {
-    const num = Number(m[2]);
-    const den = Number(m[3]);
     return {
       whole: Number(m[1]),
       sign: "+",
-      fraction: den ? (num / den) : "",
+      fraction: asFractionText(m[2], m[3]),
+      extraNote2: ""
+    };
+  }
+
+  m = noSpace.match(/^×(\d+)$/);
+  if (m) {
+    return {
+      whole: Number(m[1]),
+      sign: "",
+      fraction: "",
+      extraNote2: ""
+    };
+  }
+
+  m = noSpace.match(/^×(\d+)箱$/);
+  if (m) {
+    return {
+      whole: Number(m[1]),
+      sign: "",
+      fraction: "",
+      extraNote2: ""
+    };
+  }
+
+  m = noSpace.match(/^×(\d+)\+(\d+)\/(\d+)$/);
+  if (m) {
+    return {
+      whole: Number(m[1]),
+      sign: "+",
+      fraction: asFractionText(m[2], m[3]),
+      extraNote2: ""
+    };
+  }
+
+  m = noSpace.match(/^×(\d+)\+(\d+)\/(\d+)\+(\d+)\/(\d+)$/);
+  if (m) {
+    return {
+      whole: Number(m[1]),
+      sign: "+",
+      fraction: asFractionText(m[2], m[3]) + "+" + asFractionText(m[4], m[5]),
       extraNote2: ""
     };
   }
 
   m = noSpace.match(/^(\d+)\+(\d+)\/(\d+)$/);
   if (m) {
-    const num = Number(m[2]);
-    const den = Number(m[3]);
     return {
       whole: Number(m[1]),
       sign: "+",
-      fraction: den ? (num / den) : "",
+      fraction: asFractionText(m[2], m[3]),
+      extraNote2: ""
+    };
+  }
+
+  m = noSpace.match(/^\+(\d+)\/(\d+)(?:[+-]\d+包)?$/);
+  if (m) {
+    return {
+      whole: 1,
+      sign: "+",
+      fraction: asFractionText(m[1], m[2]),
       extraNote2: ""
     };
   }
 
   m = noSpace.match(/^(\d+)\/(\d+)\+(\d+)\/(\d+)$/);
   if (m) {
-    const n1 = Number(m[1]);
-    const d1 = Number(m[2]);
-    const n2 = Number(m[3]);
-    const d2 = Number(m[4]);
-    const num = (n1 * d2) + (n2 * d1);
-    const den = d1 * d2;
-    const reduced = ArrivagesStock_reduceFraction_(num, den);
-    const whole = Math.trunc(reduced.num / reduced.den);
-    const rem = reduced.num % reduced.den;
     return {
-      whole: whole,
-      sign: rem > 0 ? "+" : "",
-      fraction: (rem > 0 && reduced.den) ? (rem / reduced.den) : "",
-      extraNote2: raw
+      whole: 1,
+      sign: "+",
+      fraction: asFractionText(m[1], m[2]) + "+" + asFractionText(m[3], m[4]),
+      extraNote2: ""
     };
   }
 
   m = noSpace.match(/^(\d+)\/(\d+)$/);
   if (m) {
-    const num = Number(m[1]);
-    const den = Number(m[2]);
     return {
       whole: 1,
       sign: "×",
-      fraction: den ? (num / den) : "",
+      fraction: asFractionText(m[1], m[2]),
       extraNote2: ""
     };
   }
@@ -1002,6 +1050,9 @@ function ArrivagesStock_boxPartsFromRaw_(rawInput, kind, boxesValue) {
 }
 
 function ArrivagesStock_fractionToText_(v) {
+  const raw = String(v || "").trim();
+  if (raw && /^\d+\/\d+(?:\+\d+\/\d+)*$/.test(raw)) return raw;
+
   const n = Number(v);
   if (!Number.isFinite(n) || n <= 0) return "";
 
@@ -1024,21 +1075,32 @@ function ArrivagesStock_fractionToText_(v) {
   return reduced.num + "/" + reduced.den;
 }
 
-function ArrivagesStock_buildIncomingHistoryEntry_(dt, ppc, whole, sign, fraction, missingPacks, tail, tailDisplay) {
+function ArrivagesStock_buildIncomingHistoryEntry_(dt, ppc, ppcDisplay, whole, sign, fraction, missingPacks, tail, tailDisplay, boxPackRaw) {
   const tz = Session.getScriptTimeZone() || "Europe/Paris";
   const stamp = Utilities.formatDate(dt instanceof Date ? dt : new Date(), tz, "yyyy-MM-dd HH:mm");
 
-  const ppcTxt = Number(ppc) > 0 ? String(Math.trunc(Number(ppc))) + "p" : "";
+  const ppcDisplayTxt = String(ppcDisplay || "").trim();
+  const ppcTxt = ppcDisplayTxt
+    ? ppcDisplayTxt
+        .split("+")
+        .map(part => String(part || "").trim())
+        .filter(Boolean)
+        .map(part => part + "p")
+        .join("+")
+    : (Number(ppc) > 0 ? String(Math.trunc(Number(ppc))) + "p" : "");
   const wholeN = Math.max(0, Math.trunc(Number(whole) || 0));
   const signTxt = String(sign || "").trim();
   const fracTxt = ArrivagesStock_fractionToText_(fraction);
   const missN = Number(missingPacks) || 0;
   const tailN = Number(tail) || 0;
   const tailDisplayTxt = String(tailDisplay || "").trim();
+  const boxPackRawTxt = String(boxPackRaw || "").trim();
 
   let core = "";
   if (ppcTxt) {
-    if (signTxt === "×") {
+    if (boxPackRawTxt) {
+      core = ppcTxt + boxPackRawTxt;
+    } else if (signTxt === "×") {
       core = ppcTxt + "×" + (wholeN <= 1 ? "" : String(wholeN) + "×") + fracTxt;
     } else if (signTxt === "+") {
       core = ppcTxt + (wholeN <= 1 ? "" : "×" + String(wholeN)) + "+" + fracTxt;
@@ -1046,7 +1108,7 @@ function ArrivagesStock_buildIncomingHistoryEntry_(dt, ppc, whole, sign, fractio
       core = ppcTxt + (wholeN > 1 ? "×" + String(wholeN) : "");
     }
 
-    if (missN !== 0) core += (missN > 0 ? "+" : "") + String(missN) + "包";
+    if (missN !== 0 && !boxPackRawTxt) core += (missN > 0 ? "+" : "") + String(missN) + "包";
   }
 
   if (tailN > 0) {

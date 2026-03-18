@@ -252,6 +252,7 @@ const mixUsed = (isMixStart && tail > 0);
 
   if (!dbRows.length) throw new Error("Aucune ligne à enregistrer (A4:F305 vide).");
 
+  ArrivagesService_confirmDuplicateRefs_(payload);
   ArrivagesStock_runPreflightConfirmations_(stock, payload);
 
   const writeAll = () => {
@@ -276,6 +277,23 @@ const mixUsed = (isMixStart && tail > 0);
 
   if (typeof withUiGuard_ === "function") withUiGuard_(writeAll);
   else writeAll();
+}
+
+function ArrivagesService_confirmDuplicateRefs_(payload) {
+  const duplicates = ArrivagesDomain_collectDuplicateRefsInGrid_(payload);
+  if (!duplicates.length) return;
+
+  const ui = SpreadsheetApp.getUi();
+  const lines = duplicates.map(d => d.ref + " (" + d.count + "x)");
+  const confirm = ui.alert(
+    "Références dupliquées",
+    "Certaines références apparaissent plusieurs fois dans cet arrivage :\n\n" +
+    lines.join("\n") +
+    "\n\nContinuer quand même ?",
+    ui.ButtonSet.YES_NO
+  );
+
+  if (confirm !== ui.Button.YES) throw new Error("Enregistrement annulé par l'utilisateur");
 }
 
 function ArrivagesService_deleteCurrent_() {
@@ -1503,7 +1521,7 @@ function ArrivagesRepo_existsArrivageId_(dbSheet, id) {
  ***********************/
 
 function ArrivagesDomain_parseBoxesAndPacks_(input, ppcInput) {
-  let raw = String(input || "").trim().replace(/^'+\s*/, "");
+  let raw = ArrivagesDomain_normalizeBoxPackInput_(input);
 
   // rule: empty 箱数/包 means:
   // - 1 carton if 每箱件数 exists
@@ -1728,8 +1746,18 @@ function ArrivagesDomain_parseBoxesAndPacks_(input, ppcInput) {
   throw new Error("箱数/包 格式不支持: " + raw);
 }
 
+function ArrivagesDomain_normalizeBoxPackInput_(input) {
+  let raw = String(input || "").trim();
+  if (!raw) return "";
+
+  raw = raw.replace(/'/g, "").replace(/\s+/g, " ").trim();
+  raw = raw.replace(/^[xX]\s*(?=\d)/, "×");
+  raw = raw.replace(/\b([xX])\s*(?=\d)/g, "×");
+  return raw;
+}
+
 function ArrivagesDomain_parseTailInput_(input) {
-  const raw = String(input || "").trim();
+  const raw = String(input || "").trim().replace(/'/g, "");
   if (!raw) return { total: 0, display: "", raw: "" };
 
   // special case: keep forms like `2/3 278p` as display `2/3 278`
@@ -1757,7 +1785,7 @@ function ArrivagesDomain_parseTailInput_(input) {
 }
 
 function ArrivagesDomain_parsePpcInput_(input) {
-  const raw = String(input || "").trim();
+  const raw = String(input || "").trim().replace(/'/g, "");
   if (!raw) return { primary: 0, values: [], raw: "", display: "" };
 
   const normalized = raw
@@ -1785,6 +1813,20 @@ function ArrivagesDomain_parsePpcInput_(input) {
     raw: raw,
     display: values.join("+")
   };
+}
+
+function ArrivagesDomain_collectDuplicateRefsInGrid_(payload) {
+  const counts = {};
+  for (const item of (payload || [])) {
+    const ref = String(item && item.ref || "").trim().toUpperCase();
+    if (!ref) continue;
+    counts[ref] = (counts[ref] || 0) + 1;
+  }
+
+  return Object.keys(counts)
+    .filter(ref => counts[ref] > 1)
+    .sort()
+    .map(ref => ({ ref: ref, count: counts[ref] }));
 }
 
 function ArrivagesDomain_mergeTailRawIntoNoteSystem_(noteSystem, tailRaw) {

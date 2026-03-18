@@ -150,6 +150,7 @@ const isNew = (!id || id === LABEL_ADD);
 // ✅ Edit seulement si l'ID est réellement présent en DB
 const existsInDb = (!isNew) && ArrivagesRepo_existsArrivageId_(db, id);
 const isEdit = existsInDb;
+let oldRefsToReset = [];
 
 if (isNew) {
   id = ArrivagesService_newArrivageId_();
@@ -167,14 +168,7 @@ if (isEdit) {
 
   if (confirm !== uiPrompt.Button.YES) return;
 
-  // 1️⃣ récupérer les refs existantes
-  const oldRefs = ArrivagesRepo_getRefsByArrivageId_(db, id);
-
-  // 2️⃣ supprimer les lignes DB
-  ArrivagesRepo_deleteByArrivageId_(db, id);
-
-  // 3️⃣ reset stock pour ces refs
-  ArrivagesStock_resetRefsAndDeleteSuffix_(stock, oldRefs);
+  oldRefsToReset = ArrivagesRepo_getRefsByArrivageId_(db, id);
 }
 
   // CreatedAt logic
@@ -258,7 +252,14 @@ const mixUsed = (isMixStart && tail > 0);
 
   if (!dbRows.length) throw new Error("Aucune ligne à enregistrer (A4:F305 vide).");
 
+  ArrivagesStock_runPreflightConfirmations_(stock, payload);
+
   const writeAll = () => {
+    if (isEdit) {
+      ArrivagesRepo_deleteByArrivageId_(db, id);
+      ArrivagesStock_resetRefsAndDeleteSuffix_(stock, oldRefsToReset);
+    }
+
     // 1) DB append
     ArrivagesRepo_appendDbRows_(db, dbRows);
 
@@ -835,6 +836,137 @@ ArrivagesStock_applyTemplateFormulasByHeaderNoteKey_(
       shStock.getRange(2, 1, last - 1, 45).sort({ column: colSortKey, ascending: true });
     }
   }
+}
+
+function ArrivagesStock_buildExistingRefMap_(shStock) {
+  const lastRow = shStock.getLastRow();
+  const lastCol = shStock.getLastColumn();
+  if (lastRow < 2 || lastCol < 1) return {};
+
+  const headers = shStock.getRange(1, 1, 1, lastCol).getValues()[0];
+  const stockMap = (typeof headerMap_ === "function") ? headerMap_(headers) : ArrivagesStock_headerMapLocal_(headers);
+  const data = shStock.getRange(2, 1, lastRow - 1, lastCol).getDisplayValues();
+  const out = {};
+
+  for (let i = 0; i < data.length; i++) {
+    const row = data[i];
+    const state = ArrivagesStock_getComparableStateForRef_(row, stockMap, i + 2);
+    if (state.ref) out[state.ref] = { row: i + 2, state: state };
+  }
+  return out;
+}
+
+function ArrivagesStock_getComparableStateForRef_(rowValues, stockMap, row) {
+  const col = (header) => stockMap[String(header || "").toLowerCase()] || 0;
+  const get = (header) => {
+    const idx = col(header);
+    return idx ? rowValues[idx - 1] : "";
+  };
+
+  return {
+    row: row || 0,
+    ref: ArrivagesStock_normalizeComparableField_(get("货号"), "ref"),
+    tailDisplay: ArrivagesStock_normalizeComparableField_(get("当前尾箱件数"), "text"),
+    ppcDisplay: ArrivagesStock_normalizeComparableField_(get("每箱件数2"), "text"),
+    wholeBoxes: ArrivagesStock_normalizeComparableField_(get("当前箱数"), "num"),
+    sign: ArrivagesStock_normalizeComparableField_(get("当前signe"), "text"),
+    fraction: ArrivagesStock_normalizeComparableField_(get("当前箱数分数"), "text"),
+    missingPacks: ArrivagesStock_normalizeComparableField_(get("当前缺包"), "num"),
+    entrepot: ArrivagesStock_normalizeComparableField_(get("仓库"), "wh")
+  };
+}
+
+function ArrivagesStock_getComparableStateForPayloadItem_(item) {
+  const boxParts = ArrivagesStock_boxPartsFromRaw_(item.boxPackRaw, item.boxPackKind, item.cartons);
+  return {
+    row: 0,
+    ref: ArrivagesStock_normalizeComparableField_(item.ref, "ref"),
+    tailDisplay: ArrivagesStock_normalizeComparableField_(item.tailDisplay || item.tail, "text"),
+    ppcDisplay: ArrivagesStock_normalizeComparableField_(item.ppcDisplay || item.ppc, "text"),
+    wholeBoxes: ArrivagesStock_normalizeComparableField_(boxParts.whole, "num"),
+    sign: ArrivagesStock_normalizeComparableField_(boxParts.sign, "text"),
+    fraction: ArrivagesStock_normalizeComparableField_(boxParts.fraction, "text"),
+    missingPacks: ArrivagesStock_normalizeComparableField_(item.missingPacks, "num"),
+    entrepot: ArrivagesStock_normalizeComparableField_(item.entrepot, "wh")
+  };
+}
+
+function ArrivagesStock_isComparableStateCompatible_(existingState, newState) {
+  if (!existingState || !newState) return false;
+  if (existingState.ref !== newState.ref) return false;
+
+  const sameWh = !existingState.entrepot || existingState.entrepot === newState.entrepot;
+  if (!sameWh) return false;
+
+  return existingState.tailDisplay === newState.tailDisplay &&
+    existingState.ppcDisplay === newState.ppcDisplay &&
+    existingState.wholeBoxes === newState.wholeBoxes &&
+    existingState.sign === newState.sign &&
+    existingState.fraction === newState.fraction &&
+    existingState.missingPacks === newState.missingPacks;
+}
+
+function ArrivagesStock_runPreflightConfirmations_(shStock, payload) {
+  if (!payload || !payload.length) return;
+
+  const ui = SpreadsheetApp.getUi();
+  const existingMap = ArrivagesStock_buildExistingRefMap_(shStock);
+
+  for (const item of payload) {
+    const ref = String(item && item.ref || "").trim().toUpperCase();
+    if (!ref) continue;
+
+    const existing = existingMap[ref] ? existingMap[ref].state : null;
+    const nextState = ArrivagesStock_getComparableStateForPayloadItem_(item);
+
+    if (!existing) {
+      const confirmCreate = ui.alert(
+        "Nouvelle référence",
+        "La référence " + ref + " n'existe pas dans STOCK.\n\nCréer une nouvelle ligne ?",
+        ui.ButtonSet.YES_NO
+      );
+      if (confirmCreate !== ui.Button.YES) throw new Error("Enregistrement annulé par l'utilisateur");
+      continue;
+    }
+
+    if (ArrivagesStock_isComparableStateCompatible_(existing, nextState)) continue;
+
+    const confirmUpdate = ui.alert(
+      "Référence existante différente",
+      "La référence " + ref + " existe déjà dans STOCK, mais ses caractéristiques diffèrent.\n\n" +
+      "Ancien : " + ArrivagesStock_formatComparableState_(existing) + "\n" +
+      "Nouveau : " + ArrivagesStock_formatComparableState_(nextState) + "\n\n" +
+      "Continuer ?",
+      ui.ButtonSet.YES_NO
+    );
+    if (confirmUpdate !== ui.Button.YES) throw new Error("Enregistrement annulé par l'utilisateur");
+  }
+}
+
+function ArrivagesStock_normalizeComparableField_(value, kind) {
+  const s = String(value === null || typeof value === "undefined" ? "" : value).trim();
+  if (kind === "ref") return s.toUpperCase();
+  if (kind === "wh") return s ? s.toUpperCase() : "";
+  if (kind === "num") {
+    if (!s) return "0";
+    if (/^-?\d+(?:[.,]0+)?$/.test(s)) return String(Math.trunc(Number(s.replace(",", "."))));
+    return s;
+  }
+  if (!s) return "";
+  if (/^-?\d+(?:[.,]0+)?$/.test(s)) return String(Math.trunc(Number(s.replace(",", "."))));
+  return s;
+}
+
+function ArrivagesStock_formatComparableState_(state) {
+  return [
+    "tail=" + String(state && state.tailDisplay ? state.tailDisplay : ""),
+    "ppc=" + String(state && state.ppcDisplay ? state.ppcDisplay : ""),
+    "box=" + String(state && state.wholeBoxes ? state.wholeBoxes : "0"),
+    "sign=" + String(state && state.sign ? state.sign : ""),
+    "frac=" + String(state && state.fraction ? state.fraction : ""),
+    "miss=" + String(state && state.missingPacks ? state.missingPacks : "0"),
+    "wh=" + String(state && state.entrepot ? state.entrepot : "")
+  ].join(" | ");
 }
 
 // ---- Local fallbacks (if Microstore helpers not loaded)
@@ -1599,6 +1731,17 @@ function ArrivagesDomain_parseBoxesAndPacks_(input, ppcInput) {
 function ArrivagesDomain_parseTailInput_(input) {
   const raw = String(input || "").trim();
   if (!raw) return { total: 0, display: "", raw: "" };
+
+  // special case: keep forms like `2/3 278p` as display `2/3 278`
+  // and use the last quantity as the numeric tail total
+  let m = raw.match(/^\s*(\d+\/\d+)\s+\(?\s*(\d+)\s*[pP件]?\s*\)?\s*$/);
+  if (m) {
+    return {
+      total: Number(m[2]) || 0,
+      display: String(m[1]) + " " + String(m[2]),
+      raw: raw
+    };
+  }
 
   const matches = raw.match(/\d+/g);
   if (!matches || !matches.length) throw new Error("尾箱格式不支持: " + raw);

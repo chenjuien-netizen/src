@@ -924,6 +924,19 @@ function ArrivagesStock_isComparableStateCompatible_(existingState, newState) {
     existingState.missingPacks === newState.missingPacks;
 }
 
+function ArrivagesStock_isComparableStateEmpty_(state) {
+  if (!state) return true;
+
+  const tailEmpty = !state.tailDisplay || state.tailDisplay === "0";
+  const ppcEmpty = !state.ppcDisplay || state.ppcDisplay === "0";
+  const wholeEmpty = !state.wholeBoxes || state.wholeBoxes === "0";
+  const signEmpty = !state.sign;
+  const fractionEmpty = !state.fraction;
+  const missEmpty = !state.missingPacks || state.missingPacks === "0";
+
+  return tailEmpty && ppcEmpty && wholeEmpty && signEmpty && fractionEmpty && missEmpty;
+}
+
 function ArrivagesStock_runPreflightConfirmations_(shStock, payload) {
   if (!payload || !payload.length) return;
 
@@ -946,6 +959,8 @@ function ArrivagesStock_runPreflightConfirmations_(shStock, payload) {
       if (confirmCreate !== ui.Button.YES) throw new Error("Enregistrement annulé par l'utilisateur");
       continue;
     }
+
+    if (ArrivagesStock_isComparableStateEmpty_(existing)) continue;
 
     if (ArrivagesStock_isComparableStateCompatible_(existing, nextState)) continue;
 

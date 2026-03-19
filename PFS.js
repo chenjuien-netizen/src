@@ -570,6 +570,10 @@ function exportStockToPFS() {
   let cCategorie = col("catégorie");
   let cRef = col("réf. produit");
   let cNomFr = col("nom du produit* (fr)");
+  let cNomEn = col("nom du produit (en)");
+  let cNomEs = col("nom du produit (es)");
+  let cNomDe = col("nom du produit (de)");
+  let cNomIt = col("nom du produit (it)");
   let cTypeVente = col("type vente");
   let cSaison = col("saison");
   let cTailles = col("tailles");
@@ -578,6 +582,11 @@ function exportStockToPFS() {
   let cPoids = col("poids_kg");
   let cCompo = col("composition matière");
   let cPays = col("pays de fabrication");
+  let cDescFr = col("description (fr)");
+  let cDescEn = col("description (en)");
+  let cDescEs = col("description (es)");
+  let cDescDe = col("description (de)");
+  let cDescIt = col("description (it)");
 
   // Fallback to fixed PFS template positions (A..AA) if headers are missing/empty
   if (!cMarque) cMarque = 1;      // A
@@ -605,7 +614,8 @@ function exportStockToPFS() {
 
   for (const it of selected) {
     const cat = it.cat || ""; // PFS normalized category
-    const nomFr = String(it.catRaw || "").trim() || cat || it.ref; // use STOCK category for FR name
+    const editorial = buildPfsEditorialContent_(it.catRaw, it.compo, it.paysFab);
+    const nomFr = editorial.nomFr || String(it.catRaw || "").trim() || cat || it.ref;
     const globalTailles = it.taillesInfo || parsePfsTaillesStructure_(it.tailles);
     const compo = normalizeCompositionPFS_(it.compo) || "90% Viscose - 10% Polyester";
 
@@ -636,6 +646,16 @@ function exportStockToPFS() {
       if (cCategorie) line[cCategorie - 1] = cat;
       if (cRef) line[cRef - 1] = it.ref;
       if (cNomFr) line[cNomFr - 1] = nomFr;
+      if (cNomEn) line[cNomEn - 1] = editorial.nomEn;
+      if (cNomEs) line[cNomEs - 1] = editorial.nomEs;
+      if (cNomDe) line[cNomDe - 1] = editorial.nomDe;
+      if (cNomIt) line[cNomIt - 1] = editorial.nomIt;
+
+      if (cDescFr) line[cDescFr - 1] = editorial.descFr;
+      if (cDescEn) line[cDescEn - 1] = editorial.descEn;
+      if (cDescEs) line[cDescEs - 1] = editorial.descEs;
+      if (cDescDe) line[cDescDe - 1] = editorial.descDe;
+      if (cDescIt) line[cDescIt - 1] = editorial.descIt;
 
       if (cTypeVente) line[cTypeVente - 1] = idx === 0 ? "Pack" : "Sub-Pack";
       if (cSaison) line[cSaison - 1] = "Printemps/Été 2026";
@@ -1677,6 +1697,257 @@ function normalizeMaterialName_(matRaw) {
   return low.charAt(0).toUpperCase() + low.slice(1);
 }
 
+
+/****************************************************
+ * Build multilingual editorial product names/descriptions for PFS export.
+ ****************************************************/
+function buildPfsEditorialContent_(catRaw, compositionRaw, paysRaw) {
+  const key = normalizePfsEditorialCategoryKey_(catRaw);
+  const mat = extractPfsPrimaryMaterial_(compositionRaw);
+  const pays = normalizePfsCountryNameSet_(paysRaw);
+
+  const templates = {
+    "ROBES LONGUES": {
+      nomFr: "Robe longue",
+      nomEn: "Long dress",
+      nomEs: "Vestido largo",
+      nomDe: "Langes Kleid",
+      nomIt: "Abito lungo",
+      withMat: {
+        fr: "Robe longue élégante en {mat}, idéale pour le printemps/été. Confectionnée en {countryFr}, parfaite pour toutes les occasions.",
+        en: "Elegant long {matEn} dress, perfect for spring/summer. Made in {countryEn}, ideal for any occasion.",
+        es: "Vestido largo elegante de {matEs}, ideal para primavera/verano. Fabricado en {countryEs}, perfecto para cualquier ocasión.",
+        de: "Elegantes langes {matDe}kleid, ideal für Frühling/Sommer. Hergestellt in {countryDe}, perfekt für jeden Anlass.",
+        it: "Abito lungo elegante in {matIt}, ideale per la primavera/estate. Realizzato in {countryIt}, perfetto per ogni occasione."
+      },
+      noMat: {
+        fr: "Robe longue élégante, idéale pour le printemps/été. Confectionnée en {countryFr}, parfaite pour toutes les occasions.",
+        en: "Elegant long dress, perfect for spring/summer. Made in {countryEn}, ideal for any occasion.",
+        es: "Vestido largo elegante, ideal para primavera/verano. Fabricado en {countryEs}, perfecto para cualquier ocasión.",
+        de: "Elegantes langes Kleid, ideal für Frühling/Sommer. Hergestellt in {countryDe}, perfekt für jeden Anlass.",
+        it: "Abito lungo elegante, ideale per la primavera/estate. Realizzato in {countryIt}, perfetto per ogni occasione."
+      }
+    },
+    "ROBES COURTES": {
+      nomFr: "Robe courte",
+      nomEn: "Short dress",
+      nomEs: "Vestido corto",
+      nomDe: "Kurzes Kleid",
+      nomIt: "Abito corto",
+      withMat: {
+        fr: "Robe courte en {mat}, idéale pour le printemps/été. Confectionnée en {countryFr}, parfaite pour les jours ensoleillés.",
+        en: "Short {matEn} dress, perfect for spring/summer. Made in {countryEn}, ideal for sunny days.",
+        es: "Vestido corto de {matEs}, ideal para primavera/verano. Fabricado en {countryEs}, perfecto para días soleados.",
+        de: "Kurzes {matDe}kleid, ideal für Frühling/Sommer. Hergestellt in {countryDe}, perfekt für sonnige Tage.",
+        it: "Abito corto in {matIt}, ideale per la primavera/estate. Realizzato in {countryIt}, perfetto per le giornate di sole."
+      },
+      noMat: {
+        fr: "Robe courte idéale pour le printemps/été. Confectionnée en {countryFr}, parfaite pour les jours ensoleillés.",
+        en: "Short dress, perfect for spring/summer. Made in {countryEn}, ideal for sunny days.",
+        es: "Vestido corto, ideal para primavera/verano. Fabricado en {countryEs}, perfecto para días soleados.",
+        de: "Kurzes Kleid, ideal für Frühling/Sommer. Hergestellt in {countryDe}, perfekt für sonnige Tage.",
+        it: "Abito corto, ideale per la primavera/estate. Realizzato in {countryIt}, perfetto per le giornate di sole."
+      }
+    },
+    "ENSEMBLES": {
+      nomFr: "Ensemble",
+      nomEn: "Outfit",
+      nomEs: "Conjunto",
+      nomDe: "Outfit",
+      nomIt: "Completo",
+      withMat: {
+        fr: "Ensemble fluide et élégant en {mat}, idéal pour le printemps/été. Confectionné en {countryFr}, parfait pour la saison.",
+        en: "Flowy and elegant {matEn} outfit, perfect for spring/summer. Made in {countryEn}, ideal for the season.",
+        es: "Conjunto fluido y elegante de {matEs}, ideal para primavera/verano. Fabricado en {countryEs}, perfecto para la temporada.",
+        de: "Fließendes und elegantes {matDe}-Outfit, ideal für Frühling/Sommer. Hergestellt in {countryDe}, perfekt für die Saison.",
+        it: "Completo fluido ed elegante in {matIt}, ideale per la primavera/estate. Realizzato in {countryIt}, perfetto per la stagione."
+      },
+      noMat: {
+        fr: "Ensemble fluide et élégant, idéal pour le printemps/été. Confectionné en {countryFr}, parfait pour la saison.",
+        en: "Flowy and elegant outfit, perfect for spring/summer. Made in {countryEn}, ideal for the season.",
+        es: "Conjunto fluido y elegante, ideal para primavera/verano. Fabricado en {countryEs}, perfecto para la temporada.",
+        de: "Fließendes und elegantes Outfit, ideal für Frühling/Sommer. Hergestellt in {countryDe}, perfekt für die Saison.",
+        it: "Completo fluido ed elegante, ideale per la primavera/estate. Realizzato in {countryIt}, perfetto per la stagione."
+      }
+    },
+    "PANTALONS": {
+      nomFr: "Pantalon",
+      nomEn: "Trousers",
+      nomEs: "Pantalón",
+      nomDe: "Hose",
+      nomIt: "Pantaloni",
+      withMat: {
+        fr: "Pantalon léger en {mat}, idéal pour le printemps/été. Confectionné en {countryFr}, parfait pour la saison chaude.",
+        en: "Lightweight {matEn} trousers, perfect for spring/summer. Made in {countryEn}, ideal for the warm season.",
+        es: "Pantalón ligero de {matEs}, ideal para primavera/verano. Fabricado en {countryEs}, perfecto para la temporada cálida.",
+        de: "Leichte {matDe}hose, ideal für Frühling/Sommer. Hergestellt in {countryDe}, perfekt für die warme Jahreszeit.",
+        it: "Pantaloni leggeri in {matIt}, ideali per la primavera/estate. Realizzati in {countryIt}, perfetti per la stagione calda."
+      },
+      noMat: {
+        fr: "Pantalon léger, idéal pour le printemps/été. Confectionné en {countryFr}, parfait pour la saison chaude.",
+        en: "Lightweight trousers, perfect for spring/summer. Made in {countryEn}, ideal for the warm season.",
+        es: "Pantalón ligero, ideal para primavera/verano. Fabricado en {countryEs}, perfecto para la temporada cálida.",
+        de: "Leichte Hose, ideal für Frühling/Sommer. Hergestellt in {countryDe}, perfekt für die warme Jahreszeit.",
+        it: "Pantaloni leggeri, ideali per la primavera/estate. Realizzati in {countryIt}, perfetti per la stagione calda."
+      }
+    }
+  };
+
+  const tpl = templates[key] || {
+    nomFr: singularizePfsEditorialFallback_(catRaw) || "Produit",
+    nomEn: "Product",
+    nomEs: "Producto",
+    nomDe: "Produkt",
+    nomIt: "Prodotto",
+    withMat: {
+      fr: "{nameFr} en {mat}, idéale pour le printemps/été. Confectionnée en {countryFr}.",
+      en: "{nameEn} in {matEn}, perfect for spring/summer. Made in {countryEn}.",
+      es: "{nameEs} de {matEs}, ideal para primavera/verano. Fabricado en {countryEs}.",
+      de: "{nameDe} aus {matDe}, ideal für Frühling/Sommer. Hergestellt in {countryDe}.",
+      it: "{nameIt} in {matIt}, ideale per la primavera/estate. Realizzato in {countryIt}."
+    },
+    noMat: {
+      fr: "{nameFr} idéale pour le printemps/été. Confectionnée en {countryFr}.",
+      en: "{nameEn}, perfect for spring/summer. Made in {countryEn}.",
+      es: "{nameEs}, ideal para primavera/verano. Fabricado en {countryEs}.",
+      de: "{nameDe}, ideal für Frühling/Sommer. Hergestellt in {countryDe}.",
+      it: "{nameIt}, ideale per la primavera/estate. Realizzato in {countryIt}."
+    }
+  };
+
+  const useMat = !!mat.fr;
+  const descTpl = useMat ? tpl.withMat : tpl.noMat;
+
+  const vars = {
+    nameFr: tpl.nomFr,
+    nameEn: tpl.nomEn,
+    nameEs: tpl.nomEs,
+    nameDe: tpl.nomDe,
+    nameIt: tpl.nomIt,
+    mat: mat.fr,
+    matEn: mat.en,
+    matEs: mat.es,
+    matDe: mat.de,
+    matIt: mat.it,
+    countryFr: pays.fr,
+    countryEn: pays.en,
+    countryEs: pays.es,
+    countryDe: pays.de,
+    countryIt: pays.it
+  };
+
+  return {
+    nomFr: tpl.nomFr,
+    nomEn: tpl.nomEn,
+    nomEs: tpl.nomEs,
+    nomDe: tpl.nomDe,
+    nomIt: tpl.nomIt,
+    descFr: pfsApplyTemplateVars_(descTpl.fr, vars),
+    descEn: pfsApplyTemplateVars_(descTpl.en, vars),
+    descEs: pfsApplyTemplateVars_(descTpl.es, vars),
+    descDe: pfsApplyTemplateVars_(descTpl.de, vars),
+    descIt: pfsApplyTemplateVars_(descTpl.it, vars)
+  };
+}
+
+function normalizePfsEditorialCategoryKey_(catRaw) {
+  const s = String(catRaw || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, " ");
+
+  if (!s) return "";
+  if (s === "ROBES LONGUES") return "ROBES LONGUES";
+  if (s === "ROBES COURTES") return "ROBES COURTES";
+  if (s === "ENSEMBLES") return "ENSEMBLES";
+  if (s === "PANTALONS") return "PANTALONS";
+  return s;
+}
+
+function singularizePfsEditorialFallback_(catRaw) {
+  const s = String(catRaw || "").trim();
+  if (!s) return "";
+  const up = s.toUpperCase();
+
+  if (up === "ROBES LONGUES") return "Robe longue";
+  if (up === "ROBES COURTES") return "Robe courte";
+  if (up === "ENSEMBLES") return "Ensemble";
+  if (up === "PANTALONS") return "Pantalon";
+
+  const low = s.toLowerCase();
+  return low.charAt(0).toUpperCase() + low.slice(1);
+}
+
+function extractPfsPrimaryMaterial_(compositionRaw) {
+  const normalized = normalizeCompositionPFS_(compositionRaw);
+  if (!normalized) {
+    return { fr: "", en: "", es: "", de: "", it: "" };
+  }
+
+  const m = String(normalized).match(/^\s*\d+\%\s+([^-]+)/);
+  let matFr = m ? String(m[1] || "").trim() : "";
+
+  if (!matFr) {
+    const m2 = String(normalized).match(/^([A-Za-zÀ-ÿÉéÈèÊêËëÎîÏïÔôÖöÛûÜüÙùÇç'-]+)/);
+    matFr = m2 ? String(m2[1] || "").trim() : "";
+  }
+
+  const up = matFr.toUpperCase();
+  const MAP = {
+    "VISCOSE": { fr: "viscose", en: "viscose", es: "viscosa", de: "Viskose", it: "viscosa" },
+    "POLYESTER": { fr: "polyester", en: "polyester", es: "poliéster", de: "Polyester", it: "poliestere" },
+    "COTON": { fr: "coton", en: "cotton", es: "algodón", de: "Baumwolle", it: "cotone" },
+    "LIN": { fr: "lin", en: "linen", es: "lino", de: "Leinen", it: "lino" },
+    "LAINE": { fr: "laine", en: "wool", es: "lana", de: "Wolle", it: "lana" },
+    "POLYAMIDE": { fr: "polyamide", en: "polyamide", es: "poliamida", de: "Polyamid", it: "poliammide" },
+    "NYLON": { fr: "nylon", en: "nylon", es: "nailon", de: "Nylon", it: "nylon" },
+    "RAYON": { fr: "rayonne", en: "rayon", es: "rayón", de: "Rayon", it: "rayon" }
+  };
+
+  return MAP[up] || { fr: matFr.toLowerCase(), en: matFr.toLowerCase(), es: matFr.toLowerCase(), de: matFr, it: matFr.toLowerCase() };
+}
+
+function normalizePfsCountryNameSet_(paysRaw) {
+  const s = String(paysRaw || "").trim();
+  const up = s.toUpperCase();
+
+  if (!s) {
+    return {
+      fr: "Chine",
+      en: "China",
+      es: "China",
+      de: "China",
+      it: "Cina"
+    };
+  }
+
+  if (up === "CHINE" || up === "CHINA") {
+    return {
+      fr: "Chine",
+      en: "China",
+      es: "China",
+      de: "China",
+      it: "Cina"
+    };
+  }
+
+  return {
+    fr: s,
+    en: s,
+    es: s,
+    de: s,
+    it: s
+  };
+}
+
+function pfsApplyTemplateVars_(template, vars) {
+  let out = String(template || "");
+  Object.keys(vars || {}).forEach(function(key) {
+    const value = vars[key] == null ? "" : String(vars[key]);
+    out = out.replace(new RegExp("\\{" + key + "\\}", "g"), value);
+  });
+  return out.replace(/\s{2,}/g, " ").trim();
+}
 
 /****************************************************
  * Parse STOCK Couleurs into a strict shared structure.

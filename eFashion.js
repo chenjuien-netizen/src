@@ -1411,7 +1411,10 @@ function parseContenuColisSegmentEFashion_(segment) {
   // "S/M" -> keep S/M
   // "XL/XXL" -> keep XL/XXL
 
-  const withQty = s.match(/^(\d+)\s*[xX×*]?\s*(.+)$/);
+  const withQty = s.match(/^(\d+)\s*[×*]\s*(.+)$/)
+    || s.match(/^(\d+)\s*[xX]\s+(.+)$/)
+    || s.match(/^(\d+)[xX](.+)$/)
+    || s.match(/^(\d+)\s+(.+)$/);
   if (withQty) {
     const size = normalizeEFashionSizeTokenEFashion_(withQty[2]);
     if (!size) return null;

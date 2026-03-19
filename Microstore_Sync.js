@@ -603,13 +603,16 @@ function msApplyTemplateFormulas_(shTpl, shStock, tplHeaderMap, stockHeaderMap, 
 }
 
 function msRebuildLockedFilter_A_to_AU_(sh) {
-  var lastRow = sh.getLastRow();
-  if (lastRow < 1) lastRow = 1;
+  if (typeof rebuildSheetFilterToLastColumn_ === "function") {
+    rebuildSheetFilterToLastColumn_(sh);
+    return;
+  }
 
+  var lastRow = Math.max(1, sh.getLastRow());
+  var lastCol = Math.max(1, sh.getLastColumn());
   var existing = sh.getFilter();
   if (existing) existing.remove();
-
-  sh.getRange(1, 1, lastRow, 46).createFilter();
+  sh.getRange(1, 1, lastRow, lastCol).createFilter();
 }
 
 function msApplyTemplateColumnByHeaderNoteKey_(shTpl, shStock, key, addCount, startRow) {

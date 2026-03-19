@@ -79,3 +79,22 @@ function normalizeUpper_(s) {
   var t = (s === null || typeof s === "undefined") ? "" : String(s);
   return t.trim().toUpperCase();
 }
+
+function findColumnByHeaderNoteKey_(sheet, key) {
+  var lastCol = sheet.getLastColumn();
+  if (lastCol < 1) return 0;
+
+  var notes = sheet.getRange(1, 1, 1, lastCol).getNotes()[0];
+  for (var i = 0; i < notes.length; i++) {
+    if (notes[i] && String(notes[i]).indexOf(key) !== -1) return i + 1;
+  }
+  return 0;
+}
+
+function rebuildSheetFilterToLastColumn_(sheet) {
+  var lastRow = Math.max(1, sheet.getLastRow());
+  var lastCol = Math.max(1, sheet.getLastColumn());
+  var existing = sheet.getFilter();
+  if (existing) existing.remove();
+  sheet.getRange(1, 1, lastRow, lastCol).createFilter();
+}

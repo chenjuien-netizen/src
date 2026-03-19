@@ -95,7 +95,10 @@ function exportStockToMsExport() {
     var cAnnee = stockMap["année"] - 1;
     var cSaison = stockMap["saison"] - 1;
     var cStock = stockMap["stock"] - 1;
-    var cTotalPqs = 46 - 1; // AT = KEY:TOTAL_PQS
+    var totalPqsCol = (typeof findColumnByHeaderNoteKey_ === "function")
+      ? findColumnByHeaderNoteKey_(shStock, "KEY:TOTAL_PQS")
+      : 0;
+    var cTotalPqs = totalPqsCol ? (totalPqsCol - 1) : cStock;
     var cColisage = stockMap["colisage"] - 1;
     var cCouleur = stockMap["couleur"] - 1;
     var cPrix = stockMap["prix"] - 1;

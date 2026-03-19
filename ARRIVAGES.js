@@ -353,7 +353,7 @@ function ArrivagesService_newArrivageId_() {
  * - Insert if missing (+ template formulas)
  * - Safe-add / Replace / Suffix (货号*, 货号**...)
  * - Update dropdowns ONLY for refs touched (no disabling elsewhere)
- * - Rebuild filter A:AS + sort by SortKey
+ * - Rebuild filter on the full used width + sort by SortKey
  */
 function ArrivagesStock_applyFromArrivagePayload_(shStock, shTpl, payload) {
   if (!payload || !payload.length) return;
@@ -843,15 +843,15 @@ ArrivagesStock_applyTemplateFormulasByHeaderNoteKey_(
     }
   }
 
-  // 5) Filter A:AS + sort by SortKey
+  // 5) Rebuild filter on the full used width + sort by SortKey
   if (typeof rebuildLockedFilter_A_to_AS_ === "function") rebuildLockedFilter_A_to_AS_(shStock);
   else ArrivagesStock_rebuildFilterAtoASLocal_(shStock);
 
   if (colSortKey) {
     const last = shStock.getLastRow();
     if (last >= 2) {
-      // sort only within A:AS (45 cols)
-      shStock.getRange(2, 1, last - 1, 45).sort({ column: colSortKey, ascending: true });
+      const lastCol = Math.max(1, shStock.getLastColumn());
+      shStock.getRange(2, 1, last - 1, lastCol).sort({ column: colSortKey, ascending: true });
     }
   }
 }
@@ -1034,10 +1034,16 @@ function ArrivagesStock_applyTemplateFormulasLocal_(shTpl, shStock, tplHeaderMap
 }
 
 function ArrivagesStock_rebuildFilterAtoASLocal_(sh) {
+  if (typeof rebuildSheetFilterToLastColumn_ === "function") {
+    rebuildSheetFilterToLastColumn_(sh);
+    return;
+  }
+
   const lastRow = Math.max(1, sh.getLastRow());
+  const lastCol = Math.max(1, sh.getLastColumn());
   const existing = sh.getFilter();
   if (existing) existing.remove();
-  sh.getRange(1, 1, lastRow, 45).createFilter(); // A..AS
+  sh.getRange(1, 1, lastRow, lastCol).createFilter();
 }
 
 function ArrivagesStock_toInt_(v) {
@@ -1422,7 +1428,7 @@ function ArrivagesStock_resetRefsAndDeleteSuffix_(shStock, refs) {
   rowsToDelete.sort((a,b)=>b-a);
   for (const r of rowsToDelete) shStock.deleteRow(r);
 
-  // rebuild filter A:AS + sort if you want
+  // rebuild filter on the full used width + sort if you want
   try {
     if (typeof rebuildLockedFilter_A_to_AS_ === "function") rebuildLockedFilter_A_to_AS_(shStock);
     else ArrivagesStock_rebuildFilterAtoASLocal_(shStock);
@@ -1432,7 +1438,10 @@ function ArrivagesStock_resetRefsAndDeleteSuffix_(shStock, refs) {
   const colSortKey = map["sortkey"];
   if (colSortKey) {
     const lr = shStock.getLastRow();
-    if (lr >= 2) shStock.getRange(2, 1, lr - 1, 45).sort({ column: colSortKey, ascending: true });
+    if (lr >= 2) {
+      const lastCol = Math.max(1, shStock.getLastColumn());
+      shStock.getRange(2, 1, lr - 1, lastCol).sort({ column: colSortKey, ascending: true });
+    }
   }
 }
 

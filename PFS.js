@@ -767,7 +767,10 @@ function parseContenuColisSegmentPFS_(segment) {
   // "S/M" -> keep size token and default qty 6 for current PFS v1
   // "XL/XXL" -> keep size token and default qty 6
 
-  const withQty = s.match(/^(\d+)\s*[xX×*]?\s*(.+)$/);
+  const withQty = s.match(/^(\d+)\s*[×*]\s*(.+)$/)
+    || s.match(/^(\d+)\s*[xX]\s+(.+)$/)
+    || s.match(/^(\d+)[xX](.+)$/)
+    || s.match(/^(\d+)\s+(.+)$/);
   if (withQty) {
     const qty = Number(withQty[1]);
     const size = normalizePfsSizeToken_(withQty[2]);
@@ -1682,7 +1685,8 @@ function normalizeMaterialName_(matRaw) {
  * - detailed: "1-2 ORANGE 2-1 BLEU"
  ****************************************************/
 function parsePfsColorPackFromStock_(raw, sizes, expectedTotal) {
-  return parseStockColorPackStrict_(raw, {
+  const preNormalized = pfsPreNormalizeCouleursRaw_(raw);
+  return parseStockColorPackStrict_(preNormalized, {
     normalizeColor: normalizePfsColorName_,
     invalidColorReason: "Couleur non reconnue dans le catalogue PFS",
     sizes: sizes,
@@ -1801,13 +1805,63 @@ function detectStockColorQtyMode_(qtyToken) {
   return "";
 }
 
+/********************************************************************
+ * Helpers for pre-normalizing STOCK Couleurs and expanding compact color names
+ ********************************************************************/
+function pfsPreNormalizeCouleursRaw_(raw) {
+  const s0 = String(raw || "").toUpperCase().trim();
+  if (!s0) return "";
+
+  return s0
+    .replace(/[\r\n;,]+/g, " ")
+    .replace(/(\d(?:-\d+)+)(?=[A-ZÀ-Ÿ])/g, "$1 ")
+    .replace(/(\d)(?=[A-ZÀ-Ÿ])/g, "$1 ")
+    .replace(/(?<=[A-ZÀ-Ÿ])(?=\d)/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function pfsExpandCompactColorNameForCatalog_(raw) {
+  const s = String(raw || "").toUpperCase().trim();
+  if (!s) return "";
+
+  const MAP = {
+    "BLEUCLAIR": "BLEU CLAIR",
+    "BLEUFONCE": "BLEU FONCE",
+    "BLEUPETROLE": "BLEU PETROLE",
+    "BLEUCANARD": "BLEU CANARD",
+    "BLEUMARINE": "MARINE",
+    "VERTCLAIR": "VERT CLAIR",
+    "VERTFONCE": "VERT FONCE",
+    "VERTDEAU": "VERT D EAU",
+    "VERTBOUTEILLE": "VERT BOUTEILLE",
+    "VERTSAPIN": "VERT SAPIN",
+    "VERTCANARD": "VERT CANARD",
+    "ROUGECLAIR": "ROUGE CLAIR",
+    "ROUGEFONCE": "ROUGE FONCE",
+    "JAUNECLAIR": "JAUNE CLAIR",
+    "JAUNEFONCE": "JAUNE FONCE",
+    "GRISCLAIR": "GRIS CLAIR",
+    "GRISFONCE": "GRIS FONCE",
+    "MARRONCLAIR": "MARRON CLAIR",
+    "MARRONFONCE": "MARRON FONCE",
+    "NOIRIRISE": "NOIR IRISE",
+    "VIEUXROSE": "VIEUX ROSE",
+    "ROSEFLUO": "ROSE FLUO",
+    "ORANGEFLUO": "ORANGE FLUO",
+    "JAUNEFLUO": "JAUNE FLUO"
+  };
+
+  return MAP[s] || s;
+}
+
 /****************************************************
  * Map STOCK color names to the fixed PFS color catalog.
  ****************************************************/
 function normalizePfsColorName_(raw) {
   const s = String(raw || "").trim();
   if (!s) return "";
-  const up = s.toUpperCase();
+  const up = pfsExpandCompactColorNameForCatalog_(s.toUpperCase());
 
   const MAP = {
     "ECRU": "Écru",

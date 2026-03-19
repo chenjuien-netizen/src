@@ -268,7 +268,7 @@ function msRunSyncCore_() {
       "Promo",
       "Prix@",
       "Promo@",
-      "进货",
+      "Pays d'origine",
       "剩下 / RESTE",
       "SortKey"
     ];
@@ -454,6 +454,7 @@ function msRunSyncCore_() {
       msApplyTemplateFormulas_(shTpl, shStock, tplHeaderMap, stockHeaderMap, formulaCols, addCount, addedStartRow);
       msApplyTemplateColumnByHeaderNoteKey_(shTpl, shStock, "KEY:TOTAL_BOX", addCount, addedStartRow);
       msApplyTemplateColumnByHeaderNoteKey_(shTpl, shStock, "KEY:TOTAL_PCS", addCount, addedStartRow);
+      msApplyTemplateColumnByHeaderNoteKey_(shTpl, shStock, "KEY:TOTAL_PQS", addCount, addedStartRow);
     }
 
     ss.toast("Rebuild filtre (A→AU)…", "Microstore", 5);

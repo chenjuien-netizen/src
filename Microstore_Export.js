@@ -163,7 +163,7 @@ function exportStockToMsExport() {
 
       var line = new Array(expLastCol).fill("");
       line[expMap["référence"] - 1] = it.ref;
-      line[expMap["nom"] - 1] = it.nom ? String(it.nom).trim() : it.ref;
+      line[expMap["nom"] - 1] = it.nom ? String(it.nom).trim() : "";
       line[expMap["catégorie"] - 1] = it.cat;
       line[expMap["contenu colis"] - 1] = it.contenuColis;
       line[expMap["composition matérielle"] - 1] = it.comp;
@@ -182,8 +182,9 @@ function exportStockToMsExport() {
       line[expMap["prix"] - 1] = it.prix;
       line[expMap["pays d'origine"] - 1] = it.paysOrigine;
       line[expMap["remise (%)"] - 1] = it.remise;
+      var prixParPaquetTexte = msBuildPrixParPaquetLine_(it.prix, it.colisage, it.remise);
       var couleursTexte = msBuildCouleursRemark_(it.couleursRaw);
-      line[expMap["remarque"] - 1] = msBuildCleanRemarque_(it.remarque, contenu, couleursTexte);
+      line[expMap["remarque"] - 1] = msBuildCleanRemarque_(it.remarque, prixParPaquetTexte, contenu, couleursTexte);
 
       out.push(line);
     }
@@ -230,16 +231,27 @@ function msBuildContenuColis_(totalPieces, packs, pcsPerPack) {
   return "Colis: " + t + " pièces avec " + p + " paquets de " + u + " pièces";
 }
 
-function msBuildCleanRemarque_(existingRemark, contenu, couleursTexte) {
-  var lines = String(existingRemark || "").split(/\r?\n/);
+function msBuildCleanRemarque_(existingRemark, prixParPaquetTexte, contenu, couleursTexte) {
+  var cleanedRemark = String(existingRemark || "")
+    .replace(/\s*\[MS_DOUBLON:\d+\]\s*/gi, " ")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+
+  var lines = cleanedRemark.split(/\r?\n/);
   var otherLines = [];
   var seenOther = {};
+  var prixLine = "";
   var colisLine = "";
   var couleursLine = "";
 
   for (var i = 0; i < lines.length; i++) {
     var line = String(lines[i] || "").trim();
     if (!line) continue;
+
+    if (/^Prix par paquet\s*:/i.test(line)) {
+      if (!prixLine) prixLine = line;
+      continue;
+    }
 
     if (/^Colis\s*:/i.test(line)) {
       if (!colisLine) colisLine = line;
@@ -256,10 +268,12 @@ function msBuildCleanRemarque_(existingRemark, contenu, couleursTexte) {
     otherLines.push(line);
   }
 
+  if (String(prixParPaquetTexte || "").trim()) prixLine = String(prixParPaquetTexte).trim();
   if (String(contenu || "").trim()) colisLine = String(contenu).trim();
   if (String(couleursTexte || "").trim()) couleursLine = String(couleursTexte).trim();
 
   var finalLines = otherLines.slice();
+  if (prixLine) finalLines.push(prixLine);
   if (colisLine) finalLines.push(colisLine);
   if (couleursLine) finalLines.push(couleursLine);
 
@@ -271,28 +285,131 @@ function msString_(v) {
   return String(v).trim();
 }
 
-function msBuildCouleursRemark_(raw) {
-  var s = String(raw || "").trim();
+function msBuildPrixParPaquetLine_(prix, colisage, remisePct) {
+  var p = msToNumberSafe_(prix);
+  var c = msToNumberSafe_(colisage);
+  if (p === null || c === null || c <= 0) return "";
+
+  var total = p * c;
+  if (!isFinite(total)) return "";
+
+  var remise = msToNumberSafe_(remisePct);
+  if (remise === null || !isFinite(remise) || remise <= 0) {
+    return "Prix par paquet: " + msFormatFrenchNumber_(total);
+  }
+
+  var discounted = total * (1 - (remise / 100));
+  if (!isFinite(discounted)) {
+    return "Prix par paquet: " + msFormatFrenchNumber_(total);
+  }
+
+  return "Prix par paquet: " + msFormatFrenchNumber_(total) + " -> " + msFormatFrenchNumber_(discounted);
+}
+
+function msToNumberSafe_(v) {
+  if (v === null || typeof v === "undefined") return null;
+  var s = String(v).trim();
+  if (!s) return null;
+
+  s = s.replace(/\s+/g, "").replace(",", ".");
+  var n = Number(s);
+  return isNaN(n) ? null : n;
+}
+
+function msFormatFrenchNumber_(n) {
+  if (!isFinite(n)) return "";
+  var rounded = Math.round(n * 100) / 100;
+  return rounded.toFixed(2).replace(".", ",");
+}
+
+function msPreNormalizeCouleursRaw_(raw) {
+  var s = String(raw || "").toUpperCase().trim();
   if (!s) return "";
 
-  var re = /(\d+)\s+([A-Za-zÀ-ÿ]+)/g;
+  s = s
+    .replace(/[\r\n;,]+/g, " ")
+    .replace(/(\d(?:-\d+)+)(?=[A-ZÀ-Ÿ])/g, "$1 ")
+    .replace(/(\d)(?=[A-ZÀ-Ÿ])/g, "$1 ")
+    .replace(/(?<=[A-ZÀ-Ÿ])(?=\d)/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  return s;
+}
+
+function msNormalizeColorLabel_(raw) {
+  var s = String(raw || "").toUpperCase().replace(/[^A-ZÀ-Ÿ]/g, "").trim();
+  if (!s) return "";
+
+  var specialMap = {
+    "BLEUCLAIR": "Bleu clair",
+    "BLEUFONCE": "Bleu foncé",
+    "VERTCLAIR": "Vert clair",
+    "VERTFONCE": "Vert foncé",
+    "ROSECLAIR": "Rose clair",
+    "ROSEFONCE": "Rose foncé",
+    "GRISCLAIR": "Gris clair",
+    "GRISFONCE": "Gris foncé",
+    "JAUNECLAIR": "Jaune clair",
+    "JAUNEFONCE": "Jaune foncé",
+    "BLEUMARINE": "Bleu marine",
+    "NOIRBLANC": "Noir/Blanc",
+    "BLANCNOIR": "Blanc/Noir"
+  };
+  if (specialMap[s]) return specialMap[s];
+
+  var low = s.toLowerCase();
+  return low.charAt(0).toUpperCase() + low.slice(1);
+}
+
+function msQtyTokenToCount_(token) {
+  var s = String(token || "").trim();
+  if (!s) return 0;
+  if (/^\d+$/.test(s)) return Number(s);
+  if (/^\d+(?:-\d+)+$/.test(s)) {
+    var parts = s.split("-");
+    var total = 0;
+    for (var i = 0; i < parts.length; i++) total += Number(parts[i] || 0);
+    return total;
+  }
+  return 0;
+}
+
+function msBuildCouleursRemark_(raw) {
+  var s = msPreNormalizeCouleursRaw_(raw);
+  if (!s) return "";
+
+  var tokens = s.split(/\s+/);
   var parts = [];
-  var m;
-  while ((m = re.exec(s)) !== null) {
-    var qty = m[1];
-    var color = msTitleCaseColor_(m[2]);
-    parts.push(qty + " " + color);
+  var totals = {};
+  var order = [];
+
+  for (var i = 0; i < tokens.length - 1; i++) {
+    var qtyToken = tokens[i];
+    var colorToken = tokens[i + 1];
+
+    if (!/^\d+(?:-\d+)*$/.test(qtyToken)) continue;
+    if (/^\d+(?:-\d+)*$/.test(colorToken)) continue;
+
+    var qty = msQtyTokenToCount_(qtyToken);
+    var color = msNormalizeColorLabel_(colorToken);
+    if (!qty || !color) continue;
+
+    if (!totals.hasOwnProperty(color)) {
+      totals[color] = 0;
+      order.push(color);
+    }
+    totals[color] += qty;
+    i++;
+  }
+
+  for (var j = 0; j < order.length; j++) {
+    var label = order[j];
+    parts.push(totals[label] + " " + label);
   }
 
   if (!parts.length) return "";
   return "Couleurs: " + parts.join(", ");
-}
-
-function msTitleCaseColor_(raw) {
-  var s = String(raw || "").trim();
-  if (!s) return "";
-  var low = s.toLowerCase();
-  return low.charAt(0).toUpperCase() + low.slice(1);
 }
 
 /**

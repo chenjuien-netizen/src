@@ -2288,7 +2288,16 @@ function parseSupplierToUiRows_(supGrid) {
   const warnings = [];
 
   const isBlank_ = (v) => String(v ?? "").trim() === "";
-  const normRef_ = (v) => cleanRef_(String(v ?? "")).toUpperCase();
+  const normRef_ = (v) => {
+    const cleaned = cleanRef_(String(v ?? "")).toUpperCase();
+    return cleaned.replace(/#+$/g, "");
+  };
+  const supplierHeaderRef_ = (v) => {
+    const raw = String(v ?? "").trim();
+    if (!raw) return "";
+    const firstLine = raw.split(/\r?\n/)[0].trim();
+    return normRef_(firstLine);
+  };
   const asPosInt_ = (v) => {
     const n = toIntSafe_(v);
     return n > 0 ? n : 0;
@@ -2318,7 +2327,7 @@ function parseSupplierToUiRows_(supGrid) {
   for (let i = 0; i < (supGrid || []).length; i++) {
     const r = supGrid[i] || ["", "", "", ""];
 
-    const rawRef = String(r[0] ?? "").trim();
+    const rawRef = supplierHeaderRef_(r[0]);
     const hasRef = rawRef !== "";
 
     const rowHasSomething = !isBlank_(r[0]) || !isBlank_(r[1]) || !isBlank_(r[2]) || !isBlank_(r[3]);
@@ -2327,7 +2336,7 @@ function parseSupplierToUiRows_(supGrid) {
       continue;
     }
 
-    const ref = hasRef ? normRef_(rawRef) : lastRef;
+    const ref = hasRef ? rawRef : lastRef;
     if (!ref) continue;
     if (hasRef) lastRef = ref;
 

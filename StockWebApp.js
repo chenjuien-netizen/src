@@ -38,11 +38,13 @@ function StockWebApp_getList_() {
 
   if (!items.length) {
     Logger.log(
-      "StockWebApp_getList_ | no items returned | sheet=%s | headers=%s | columns=%s | missingOptional=%s | rowsRead=%s | sampleReferenceValues=%s",
+      "StockWebApp_getList_ | no items returned | sheet=%s | headers=%s | columns=%s | missingOptional=%s | missingRaw=%s | stockStateSource=%s | rowsRead=%s | sampleReferenceValues=%s",
       sh.getName(),
       JSON.stringify(headers),
       JSON.stringify(StockWebApp_logColumns_(headers, cols)),
       JSON.stringify(StockWebApp_missingOptionalColumns_(cols)),
+      JSON.stringify(StockWebApp_missingRawColumns_(cols)),
+      "n/a",
       rowCount,
       JSON.stringify(values.slice(0, 10).map(function(row) {
         return row[cols.reference - 1];
@@ -51,11 +53,12 @@ function StockWebApp_getList_() {
   }
 
   Logger.log(
-    "StockWebApp_getList_ | sheet=%s | headers=%s | columns=%s | missingOptional=%s | rowsRead=%s | itemsReturned=%s",
+    "StockWebApp_getList_ | sheet=%s | headers=%s | columns=%s | missingOptional=%s | missingRaw=%s | rowsRead=%s | itemsReturned=%s",
     sh.getName(),
     JSON.stringify(headers),
     JSON.stringify(StockWebApp_logColumns_(headers, cols)),
     JSON.stringify(StockWebApp_missingOptionalColumns_(cols)),
+    JSON.stringify(StockWebApp_missingRawColumns_(cols)),
     rowCount,
     items.length
   );
@@ -91,7 +94,12 @@ function StockWebApp_resolveColumns_(headers) {
     reference: findCol(["货号", "Reference", "Référence", "ref"]),
     stockDisplay: findCol(["剩下 / RESTE", "剩下", "RESTE"]),
     arrivageRef: findCol(["到货单", "arrivage", "arrivage id"]),
-    warehouse: findCol(["仓库", "entrepot", "entrepôt"])
+    warehouse: findCol(["仓库", "entrepot", "entrepôt"]),
+    tailRaw: findCol(["尾箱"]),
+    unitsPerBoxRaw: findCol(["件/箱", "每箱件数2"]),
+    boxesRaw: findCol(["箱数"]),
+    fractionRaw: findCol(["当前箱数分数"]),
+    stockRaw: findCol(["stock"])
   };
 
   if (!cols.reference) {
@@ -110,7 +118,8 @@ function StockWebApp_buildItem_(row, cols, rowIndex) {
     reference: reference,
     stockDisplay: StockWebApp_optionalText_(row, cols.stockDisplay),
     arrivageRef: StockWebApp_optionalText_(row, cols.arrivageRef),
-    warehouse: StockWebApp_optionalText_(row, cols.warehouse)
+    warehouse: StockWebApp_optionalText_(row, cols.warehouse),
+    stockState: StockWebApp_computeStockState_(row, cols).state
   };
 }
 
@@ -131,7 +140,12 @@ function StockWebApp_logColumns_(headers, cols) {
     reference: cols.reference ? (headers[cols.reference - 1] || "") : "",
     stockDisplay: cols.stockDisplay ? (headers[cols.stockDisplay - 1] || "") : "",
     arrivageRef: cols.arrivageRef ? (headers[cols.arrivageRef - 1] || "") : "",
-    warehouse: cols.warehouse ? (headers[cols.warehouse - 1] || "") : ""
+    warehouse: cols.warehouse ? (headers[cols.warehouse - 1] || "") : "",
+    tailRaw: cols.tailRaw ? (headers[cols.tailRaw - 1] || "") : "",
+    unitsPerBoxRaw: cols.unitsPerBoxRaw ? (headers[cols.unitsPerBoxRaw - 1] || "") : "",
+    boxesRaw: cols.boxesRaw ? (headers[cols.boxesRaw - 1] || "") : "",
+    fractionRaw: cols.fractionRaw ? (headers[cols.fractionRaw - 1] || "") : "",
+    stockRaw: cols.stockRaw ? (headers[cols.stockRaw - 1] || "") : ""
   };
 }
 
@@ -141,6 +155,99 @@ function StockWebApp_missingOptionalColumns_(cols) {
   if (!cols.arrivageRef) missing.push("到货单");
   if (!cols.warehouse) missing.push("仓库");
   return missing;
+}
+
+function StockWebApp_missingRawColumns_(cols) {
+  const missing = [];
+  if (!cols.tailRaw) missing.push("尾箱");
+  if (!cols.unitsPerBoxRaw) missing.push("件/箱|每箱件数2");
+  if (!cols.boxesRaw) missing.push("箱数");
+  if (!cols.fractionRaw) missing.push("当前箱数分数");
+  if (!cols.stockRaw) missing.push("stock");
+  return missing;
+}
+
+function StockWebApp_computeStockState_(row, cols) {
+  const tail = StockWebApp_parsePositiveNumber_(row, cols.tailRaw);
+  const unitsPerBox = StockWebApp_parsePositiveNumber_(row, cols.unitsPerBoxRaw);
+  const boxes = StockWebApp_parsePositiveNumber_(row, cols.boxesRaw);
+  const fractionPositive = StockWebApp_isPositiveFractionLike_(row, cols.fractionRaw);
+
+  if (tail > 0) return { state: "positive", source: "raw-columns" };
+  if (unitsPerBox > 0 && boxes > 0) return { state: "positive", source: "raw-columns" };
+  if (unitsPerBox > 0 && fractionPositive) return { state: "positive", source: "raw-columns" };
+
+  if (cols.tailRaw || cols.unitsPerBoxRaw || cols.boxesRaw || cols.fractionRaw) {
+    const stockNumeric = StockWebApp_parseFiniteNumber_(row, cols.stockRaw);
+    if (stockNumeric !== null) {
+      return { state: stockNumeric > 0 ? "positive" : "zero", source: "stock" };
+    }
+
+    const displayNumber = StockWebApp_extractFirstNumber_(StockWebApp_optionalText_(row, cols.stockDisplay));
+    if (displayNumber !== null) {
+      return { state: displayNumber > 0 ? "positive" : "zero", source: "rest-display" };
+    }
+
+    return { state: "zero", source: "default-zero" };
+  }
+
+  const stockNumeric = StockWebApp_parseFiniteNumber_(row, cols.stockRaw);
+  if (stockNumeric !== null) {
+    return { state: stockNumeric > 0 ? "positive" : "zero", source: "stock" };
+  }
+
+  const displayNumber = StockWebApp_extractFirstNumber_(StockWebApp_optionalText_(row, cols.stockDisplay));
+  if (displayNumber !== null) {
+    return { state: displayNumber > 0 ? "positive" : "zero", source: "rest-display" };
+  }
+
+  return { state: "zero", source: "default-zero" };
+}
+
+function StockWebApp_parseFiniteNumber_(row, col) {
+  if (!col) return null;
+  const raw = row[col - 1];
+  if (raw === null || typeof raw === "undefined" || String(raw).trim() === "") return null;
+  const normalized = String(raw).trim().replace(",", ".");
+  if (!/^[-+]?\d+(?:\.\d+)?$/.test(normalized)) return null;
+  const numberValue = Number(normalized);
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+function StockWebApp_parsePositiveNumber_(row, col) {
+  const numberValue = StockWebApp_parseFiniteNumber_(row, col);
+  return numberValue !== null && numberValue > 0 ? numberValue : 0;
+}
+
+function StockWebApp_isPositiveFractionLike_(row, col) {
+  const numberValue = StockWebApp_parseFiniteNumber_(row, col);
+  if (numberValue !== null) return numberValue > 0;
+  if (!col) return false;
+
+  const raw = row[col - 1];
+  const normalized = String(raw === null || typeof raw === "undefined" ? "" : raw)
+    .trim()
+    .replace(/\s*\/\s*/g, "/");
+  if (!normalized) return false;
+
+  const match = normalized.match(/^(\d+)\/(\d+)$/);
+  if (!match) return false;
+
+  const numerator = Number(match[1]);
+  const denominator = Number(match[2]);
+  return Number.isFinite(numerator) &&
+    Number.isFinite(denominator) &&
+    numerator > 0 &&
+    denominator > 0;
+}
+
+function StockWebApp_extractFirstNumber_(value) {
+  const text = String(value || "").trim().replace(",", ".");
+  if (!text) return null;
+  const match = text.match(/[-+]?\d+(?:\.\d+)?/);
+  if (!match) return null;
+  const numberValue = Number(match[0]);
+  return Number.isFinite(numberValue) ? numberValue : null;
 }
 
 function StockWebApp_normalizeHeaderCandidate_(value) {

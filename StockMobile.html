@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SZFashion Stock</title>
+    <style>
+      :root {
+        --bg: #f4efe6;
+        --surface: rgba(255, 252, 247, 0.96);
+        --surface-strong: #ffffff;
+        --ink: #1f1a17;
+        --muted: #726456;
+        --line: rgba(61, 44, 27, 0.12);
+        --accent: #b9582e;
+        --accent-soft: rgba(185, 88, 46, 0.12);
+        --shadow: 0 18px 45px rgba(74, 47, 26, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Avenir Next", "Segoe UI", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top left, rgba(229, 195, 162, 0.45), transparent 35%),
+          linear-gradient(180deg, #fbf8f2 0%, #efe6da 100%);
+      }
+
+      .app {
+        width: 100%;
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 18px 14px 28px;
+      }
+
+      .hero {
+        padding: 18px;
+        border: 1px solid rgba(255, 255, 255, 0.45);
+        border-radius: 24px;
+        background: linear-gradient(145deg, rgba(255, 249, 241, 0.96), rgba(255, 255, 255, 0.7));
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(10px);
+      }
+
+      .eyebrow {
+        margin: 0 0 8px;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 26px;
+        line-height: 1.08;
+        letter-spacing: -0.03em;
+      }
+
+      .subtitle {
+        margin: 8px 0 0;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.45;
+      }
+
+      .controls {
+        display: grid;
+        gap: 10px;
+        margin-top: 16px;
+      }
+
+      .field {
+        display: grid;
+        gap: 6px;
+      }
+
+      .field label {
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .input,
+      .select {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--surface-strong);
+        color: var(--ink);
+        padding: 14px 16px;
+        font-size: 16px;
+        outline: none;
+        appearance: none;
+      }
+
+      .input:focus,
+      .select:focus {
+        border-color: rgba(185, 88, 46, 0.5);
+        box-shadow: 0 0 0 4px rgba(185, 88, 46, 0.12);
+      }
+
+      .status {
+        margin-top: 16px;
+        min-height: 24px;
+        font-size: 14px;
+        color: var(--muted);
+      }
+
+      .status.error {
+        color: #a32727;
+      }
+
+      .list {
+        display: grid;
+        gap: 12px;
+        margin-top: 14px;
+      }
+
+      .card {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        padding: 16px;
+        background: var(--surface);
+        box-shadow: 0 10px 30px rgba(74, 47, 26, 0.08);
+        text-align: left;
+        color: inherit;
+        cursor: pointer;
+        transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+      }
+
+      .card:active {
+        transform: scale(0.99);
+      }
+
+      .card.selected {
+        border-color: rgba(185, 88, 46, 0.7);
+        background: linear-gradient(180deg, rgba(255, 247, 240, 0.98), rgba(255, 252, 247, 0.98));
+        box-shadow: 0 14px 34px rgba(185, 88, 46, 0.16);
+      }
+
+      .row-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .ref {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 700;
+        line-height: 1.2;
+        letter-spacing: -0.02em;
+        word-break: break-word;
+      }
+
+      .pill {
+        flex-shrink: 0;
+        padding: 7px 10px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+      }
+
+      .meta {
+        display: grid;
+        gap: 10px;
+        margin-top: 14px;
+      }
+
+      .meta-row {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .meta-label {
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .meta-value {
+        text-align: right;
+        font-size: 15px;
+        line-height: 1.35;
+        word-break: break-word;
+      }
+
+      .empty {
+        padding: 18px;
+        border: 1px dashed rgba(61, 44, 27, 0.18);
+        border-radius: 20px;
+        background: rgba(255, 252, 247, 0.72);
+        color: var(--muted);
+        text-align: center;
+      }
+
+      .loading {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .loading::before {
+        content: "";
+        width: 12px;
+        height: 12px;
+        border-radius: 999px;
+        border: 2px solid rgba(185, 88, 46, 0.2);
+        border-top-color: var(--accent);
+        animation: spin 0.9s linear infinite;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      @media (min-width: 640px) {
+        .controls {
+          grid-template-columns: 1.4fr 0.9fr;
+          align-items: end;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <section class="hero">
+        <p class="eyebrow">Stock mobile</p>
+        <h1>Références par entrepôt</h1>
+        <p class="subtitle">Lecture seule. Le stock affiché reprend directement la valeur de la colonne `剩下 / RESTE`.</p>
+
+        <div class="controls">
+          <div class="field">
+            <label for="searchInput">Recherche</label>
+            <input id="searchInput" class="input" type="search" placeholder="Référence ou entrepôt">
+          </div>
+
+          <div class="field">
+            <label for="sortSelect">Tri</label>
+            <select id="sortSelect" class="select">
+              <option value="reference">Référence A-Z</option>
+              <option value="warehouse">Entrepôt A-Z</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="status" class="status"></div>
+      </section>
+
+      <section id="list" class="list" aria-live="polite"></section>
+    </main>
+
+    <script>
+      const state = {
+        items: [],
+        filteredItems: [],
+        search: "",
+        sort: "reference",
+        selectedItemId: ""
+      };
+
+      const els = {
+        list: document.getElementById("list"),
+        status: document.getElementById("status"),
+        searchInput: document.getElementById("searchInput"),
+        sortSelect: document.getElementById("sortSelect")
+      };
+
+      function init() {
+        bindEvents();
+        setLoading();
+        google.script.run
+          .withSuccessHandler(onLoadSuccess)
+          .withFailureHandler(onLoadFailure)
+          .StockWebApp_getList_();
+      }
+
+      function bindEvents() {
+        els.searchInput.addEventListener("input", function(event) {
+          state.search = String(event.target.value || "");
+          recompute();
+        });
+
+        els.sortSelect.addEventListener("change", function(event) {
+          state.sort = String(event.target.value || "reference");
+          recompute();
+        });
+      }
+
+      function setLoading() {
+        els.status.className = "status";
+        els.status.innerHTML = '<span class="loading">Chargement du stock...</span>';
+        els.list.innerHTML = "";
+      }
+
+      function onLoadSuccess(payload) {
+        state.items = Array.isArray(payload && payload.items) ? payload.items : [];
+        recompute();
+      }
+
+      function onLoadFailure(error) {
+        const message = error && error.message ? error.message : String(error || "Erreur inconnue");
+        els.status.className = "status error";
+        els.status.textContent = message;
+        els.list.innerHTML = "";
+      }
+
+      function recompute() {
+        const term = normalizeText(state.search);
+        const items = state.items.filter(function(item) {
+          if (!term) return true;
+          return normalizeText(item.reference).indexOf(term) !== -1 ||
+            normalizeText(item.warehouse).indexOf(term) !== -1;
+        });
+
+        items.sort(compareItems);
+        state.filteredItems = items;
+
+        if (state.selectedItemId && !items.some(function(item) { return item.id === state.selectedItemId; })) {
+          state.selectedItemId = "";
+        }
+
+        renderStatus();
+        renderList();
+      }
+
+      function compareItems(a, b) {
+        if (state.sort === "warehouse") {
+          const warehouseCompare = compareText(a.warehouse, b.warehouse);
+          if (warehouseCompare !== 0) return warehouseCompare;
+          return compareText(a.reference, b.reference);
+        }
+
+        const referenceCompare = compareText(a.reference, b.reference);
+        if (referenceCompare !== 0) return referenceCompare;
+        return compareText(a.warehouse, b.warehouse);
+      }
+
+      function compareText(a, b) {
+        return normalizeText(a).localeCompare(normalizeText(b), undefined, {
+          sensitivity: "base",
+          numeric: true
+        });
+      }
+
+      function normalizeText(value) {
+        return String(value || "")
+          .trim()
+          .toLocaleLowerCase();
+      }
+
+      function renderStatus() {
+        els.status.className = "status";
+
+        if (!state.items.length) {
+          els.status.textContent = "Aucune ligne exploitable dans STOCK.";
+          return;
+        }
+
+        const count = state.filteredItems.length;
+        const suffix = count > 1 ? "s" : "";
+        els.status.textContent = count + " ligne" + suffix + " affichee" + suffix + ".";
+      }
+
+      function renderList() {
+        if (!state.filteredItems.length) {
+          els.list.innerHTML = '<div class="empty">Aucun resultat pour ce filtre.</div>';
+          return;
+        }
+
+        els.list.innerHTML = state.filteredItems.map(function(item) {
+          const selectedClass = item.id === state.selectedItemId ? " selected" : "";
+          return '' +
+            '<button type="button" class="card' + selectedClass + '" data-item-id="' + escapeHtml(item.id) + '">' +
+              '<div class="row-top">' +
+                '<p class="ref">' + escapeHtml(item.reference || "-") + '</p>' +
+                '<span class="pill">RESTE</span>' +
+              '</div>' +
+              '<div class="meta">' +
+                '<div class="meta-row">' +
+                  '<span class="meta-label">Entrepot</span>' +
+                  '<span class="meta-value">' + escapeHtml(item.warehouse || "-") + '</span>' +
+                '</div>' +
+                '<div class="meta-row">' +
+                  '<span class="meta-label">Stock</span>' +
+                  '<span class="meta-value">' + escapeHtml(item.stockDisplay || "-") + '</span>' +
+                '</div>' +
+              '</div>' +
+            '</button>';
+        }).join("");
+
+        Array.prototype.forEach.call(els.list.querySelectorAll(".card"), function(button) {
+          button.addEventListener("click", function() {
+            const id = button.getAttribute("data-item-id") || "";
+            state.selectedItemId = state.selectedItemId === id ? "" : id;
+            renderList();
+          });
+        });
+      }
+
+      function escapeHtml(value) {
+        return String(value || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/\"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      init();
+    </script>
+  </body>
+</html>

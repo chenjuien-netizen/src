@@ -275,6 +275,7 @@
       const state = {
         items: [],
         filteredItems: [],
+        meta: null,
         search: "",
         sort: "reference",
         selectedItemId: ""
@@ -289,6 +290,10 @@
 
       function init() {
         bindEvents();
+        els.searchInput.value = "";
+        els.sortSelect.value = "reference";
+        state.search = "";
+        state.sort = "reference";
         setLoading();
         google.script.run
           .withSuccessHandler(onLoadSuccess)
@@ -316,6 +321,11 @@
 
       function onLoadSuccess(payload) {
         state.items = Array.isArray(payload && payload.items) ? payload.items : [];
+        state.meta = payload && payload.meta ? payload.meta : null;
+        state.search = "";
+        state.selectedItemId = "";
+        els.searchInput.value = "";
+        els.sortSelect.value = state.sort;
         recompute();
       }
 
@@ -379,12 +389,23 @@
         }
 
         const count = state.filteredItems.length;
+        const hasActiveFilter = !!normalizeText(state.search);
+        if (!count && hasActiveFilter) {
+          els.status.textContent = "Aucun resultat pour ce filtre.";
+          return;
+        }
+
         const suffix = count > 1 ? "s" : "";
         els.status.textContent = count + " ligne" + suffix + " affichee" + suffix + ".";
       }
 
       function renderList() {
         if (!state.filteredItems.length) {
+          if (!state.items.length) {
+            els.list.innerHTML = '<div class="empty">Aucune ligne exploitable dans STOCK.</div>';
+            return;
+          }
+
           els.list.innerHTML = '<div class="empty">Aucun resultat pour ce filtre.</div>';
           return;
         }

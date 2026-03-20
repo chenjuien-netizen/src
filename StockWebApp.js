@@ -29,7 +29,31 @@ function StockWebApp_getList_() {
     if (item) items.push(item);
   }
 
-  return { items: items };
+  Logger.log(
+    "StockWebApp_getList_ | sheet=%s | columns=%s | rowsRead=%s | itemsReturned=%s",
+    sh.getName(),
+    JSON.stringify({
+      reference: headers[cols.reference - 1] || "",
+      warehouse: headers[cols.warehouse - 1] || "",
+      stockDisplay: headers[cols.stockDisplay - 1] || ""
+    }),
+    rowCount,
+    items.length
+  );
+
+  return {
+    items: items,
+    meta: {
+      sheetName: sh.getName(),
+      rowsRead: rowCount,
+      itemsReturned: items.length,
+      columns: {
+        reference: headers[cols.reference - 1] || "",
+        warehouse: headers[cols.warehouse - 1] || "",
+        stockDisplay: headers[cols.stockDisplay - 1] || ""
+      }
+    }
+  };
 }
 
 function StockWebApp_resolveColumns_(headers) {

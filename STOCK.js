@@ -12,19 +12,19 @@ function StockMoves_validateAll_() {
 
   const colSel = StockMoves_col_(map, "选择");
   const colRef = StockMoves_col_(map, "货号");
-  const colIn = StockMoves_col_(map, "进货");
-  const colOut = StockMoves_col_(map, "出-Sortie/箱");
+  const colIn = StockMoves_col_(map, "修改日期");
+  const colOut = StockMoves_col_(map, "开箱/包");
 
-  const colTail = StockMoves_col_(map, "当前尾箱件数");
+  const colTail = StockMoves_col_(map, "尾箱");
   const colPpc = StockMoves_col_(map, "每箱件数2");
-  const colBoxes = StockMoves_col_(map, "当前箱数");
+  const colBoxes = StockMoves_col_(map, "箱数");
   const colSign = StockMoves_col_(map, "当前signe");
   const colFrac = StockMoves_col_(map, "当前箱数分数");
   const colMissing = StockMoves_col_(map, "当前缺包");
   const colOpenRest = StockMoves_col_(map, "Carton ouvert (reste)");
 
   if (!colSel || !colRef || !colIn || !colOut || !colTail || !colPpc || !colBoxes || !colSign || !colFrac || !colMissing) {
-    throw new Error("Colonnes requises manquantes dans STOCK (选择, 货号, 进货, 出-Sortie/箱, 当前尾箱件数, 每箱件数2, 当前箱数, 当前signe, 当前箱数分数, 当前缺包).");
+    throw new Error("Colonnes requises manquantes dans STOCK (选择, 货号, 修改日期, 开箱/包, 尾箱, 每箱件数2, 箱数, 当前signe, 当前箱数分数, 当前缺包).");
   }
 
   const data = sh.getRange(2, 1, lastRow - 1, lastCol).getValues();
@@ -72,9 +72,9 @@ function StockMoves_validateAll_() {
     const latestHistoryStateText = StockMoves_extractLatestStateFromHistory_(oldHistory);
     const manualChanged = StockMoves_hasManualStateChange_(currentStateText, latestHistoryStateText);
 
-    // Do not block stock exits just because the current row shape differs from 进货.
+    // Do not block stock exits just because the current row shape differs from 修改日期.
     // Without a real snapshot, that comparison creates false conflicts on untouched lines.
-    // If 出-Sortie/箱 is filled, we let the exit flow continue and use the current row state as source.
+    // If 开箱/包 is filled, we let the exit flow continue and use the current row state as source.
 
     if (!outRaw) {
       if (manualChanged) {
@@ -166,11 +166,11 @@ function StockMoves_resetPendingRows_() {
   const map = (typeof headerMap_ === "function") ? headerMap_(headers) : StockMoves_headerMapLocal_(headers);
 
   const colSel = StockMoves_col_(map, "选择");
-  const colIn = StockMoves_col_(map, "进货");
-  const colOut = StockMoves_col_(map, "出-Sortie/箱");
-  const colTail = StockMoves_col_(map, "当前尾箱件数");
+  const colIn = StockMoves_col_(map, "修改日期");
+  const colOut = StockMoves_col_(map, "开箱/包");
+  const colTail = StockMoves_col_(map, "尾箱");
   const colPpc = StockMoves_col_(map, "每箱件数2");
-  const colBoxes = StockMoves_col_(map, "当前箱数");
+  const colBoxes = StockMoves_col_(map, "箱数");
   const colSign = StockMoves_col_(map, "当前signe");
   const colFrac = StockMoves_col_(map, "当前箱数分数");
   const colMissing = StockMoves_col_(map, "当前缺包");
@@ -289,7 +289,7 @@ function StockMoves_onEditWarehouse_(e) {
     const map = (typeof headerMap_ === "function") ? headerMap_(headers) : StockMoves_headerMapLocal_(headers);
 
     const colWh = StockMoves_col_(map, "仓库");
-    const colLog = StockMoves_col_(map, "出库记录");
+    const colLog = StockMoves_col_(map, "清库记录");
     if (!colWh || !colLog) return;
 
     if (range.getColumn() !== colWh) return;
@@ -324,8 +324,8 @@ function StockMoves_onEdit_(e) {
   const map = (typeof headerMap_ === "function") ? headerMap_(headers) : StockMoves_headerMapLocal_(headers);
 
   const colSel = StockMoves_col_(map, "选择");
-  const colIn = StockMoves_col_(map, "进货");
-  const colOut = StockMoves_col_(map, "出-Sortie/箱");
+  const colIn = StockMoves_col_(map, "修改日期");
+  const colOut = StockMoves_col_(map, "开箱/包");
   const colFrac = StockMoves_col_(map, "当前箱数分数");
   if (!colSel || !colIn || !colOut || !colFrac) return;
 
@@ -529,7 +529,7 @@ function StockMoves_applyOutCommandToState_(stateInput, parsed, row, ref, packsP
   if (parsed.type === "TAIL") {
     const qtyTail = StockMoves_toInt_(parsed.qty);
     if (qtyTail <= 0) throw new Error(`尾箱数量 invalide ligne ${row} (${ref}).`);
-    if (qtyTail > next.tail) throw new Error(`尾箱不足 ligne ${row} (${ref}) : demandé ${qtyTail}p > 当前尾箱件数 ${next.tail}p`);
+    if (qtyTail > next.tail) throw new Error(`尾箱不足 ligne ${row} (${ref}) : demandé ${qtyTail}p > 尾箱 ${next.tail}p`);
     next.tail = next.tail - qtyTail;
     return StockMoves_normalizeState_(next);
   }
@@ -915,16 +915,29 @@ function StockMoves_headerMapLocal_(headersRow) {
   for (let c = 0; c < headersRow.length; c++) {
     const h = headersRow[c];
     if (h === null || typeof h === "undefined") continue;
-    const key = String(h).trim();
-    if (!key) continue;
-    map[key.toLowerCase()] = c + 1;
+    const rawKey = String(h).trim();
+    if (!rawKey) continue;
+    const basicKey = (typeof normalizeBasicSheetHeaderKey_ === "function")
+      ? normalizeBasicSheetHeaderKey_(rawKey)
+      : rawKey.toLowerCase();
+    const key = (typeof normalizeSheetHeaderKey_ === "function")
+      ? normalizeSheetHeaderKey_(rawKey)
+      : basicKey;
+    map[basicKey] = c + 1;
+    map[key] = c + 1;
   }
   return map;
 }
 
 function StockMoves_col_(map, header) {
-  const k = String(header || "").toLowerCase();
-  return map[k] || map[header] || 0;
+  const rawHeader = String(header || "");
+  const basicKey = (typeof normalizeBasicSheetHeaderKey_ === "function")
+    ? normalizeBasicSheetHeaderKey_(rawHeader)
+    : rawHeader.toLowerCase();
+  const key = (typeof normalizeSheetHeaderKey_ === "function")
+    ? normalizeSheetHeaderKey_(rawHeader)
+    : basicKey;
+  return map[key] || map[basicKey] || map[header] || 0;
 }
 
 function StockMoves_isTruthy_(v) {
@@ -936,9 +949,9 @@ function StockMoves_isTruthy_(v) {
 
 function StockMoves_manualStateColumns_(map) {
   return [
-    StockMoves_col_(map, "当前尾箱件数"),
+    StockMoves_col_(map, "尾箱"),
     StockMoves_col_(map, "每箱件数2"),
-    StockMoves_col_(map, "当前箱数"),
+    StockMoves_col_(map, "箱数"),
     StockMoves_col_(map, "当前signe"),
     StockMoves_col_(map, "当前箱数分数"),
     StockMoves_col_(map, "当前缺包")
@@ -946,9 +959,9 @@ function StockMoves_manualStateColumns_(map) {
 }
 
 function StockMoves_stateFromRowValues_(rowValues, map) {
-  const colTail = StockMoves_col_(map, "当前尾箱件数");
+  const colTail = StockMoves_col_(map, "尾箱");
   const colPpc = StockMoves_col_(map, "每箱件数2");
-  const colBoxes = StockMoves_col_(map, "当前箱数");
+  const colBoxes = StockMoves_col_(map, "箱数");
   const colSign = StockMoves_col_(map, "当前signe");
   const colFrac = StockMoves_col_(map, "当前箱数分数");
   const colMissing = StockMoves_col_(map, "当前缺包");
@@ -1080,7 +1093,7 @@ function StockMoves_canonicalizeOutValue_(rawInput) {
 }
 
 function StockMoves_setOutDropdown_(sh, map, row) {
-  const colOut = StockMoves_col_(map, "出-Sortie/箱");
+  const colOut = StockMoves_col_(map, "开箱/包");
   const colWh = StockMoves_col_(map, "仓库");
   if (!colOut) return;
 

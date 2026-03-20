@@ -33,7 +33,7 @@ function onOpen() {
     .addToUi();
 
   ui.createMenu("STOCK")
-    .addItem("Valider mouvements (出-Sortie/箱)", "StockMoves_validateAll_")
+    .addItem("Valider mouvements (开箱/包)", "StockMoves_validateAll_")
     .addItem("Annuler modifs non validées", "stockResetPending_")
     .addToUi();
 }

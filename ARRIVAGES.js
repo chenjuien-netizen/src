@@ -207,7 +207,7 @@ if (isEdit) {
       id,          // ArrivageID
       entrepot,    // Entrepot
       ref,         // 货号
-      tail || 0,   // 尾箱件数
+      tail || 0,   // 尾箱
       ppc || 0,    // 每箱件数
       cartons || 0,// 标准箱数
       createdAt,   // CreatedAt
@@ -373,8 +373,8 @@ function ArrivagesStock_applyFromArrivagePayload_(shStock, shTpl, payload) {
   const colRef = stockMap["货号".toLowerCase()];
   if (!colRef) throw new Error("STOCK: colonne '货号' introuvable.");
 
-  const colTailCur = stockMap["当前尾箱件数".toLowerCase()];
-  const colBoxesCur = stockMap["当前箱数".toLowerCase()];
+  const colTailCur = stockMap["尾箱".toLowerCase()];
+  const colBoxesCur = stockMap["箱数".toLowerCase()];
   const colSignCur = stockMap["当前signe".toLowerCase()];
   const colFracCur = stockMap["当前箱数分数".toLowerCase()];
   const colMissingCur = stockMap["当前缺包".toLowerCase()];
@@ -388,9 +388,9 @@ function ArrivagesStock_applyFromArrivagePayload_(shStock, shTpl, payload) {
   const colNote2 = stockMap["备注2".toLowerCase()];
   const colArrId = stockMap["到货单".toLowerCase()];
   const colWh = stockMap["仓库".toLowerCase()];
-  const colIn = stockMap["进货".toLowerCase()];
+  const colIn = stockMap["修改日期".toLowerCase()];
 
-  const colOut = stockMap["出-sortie/箱".toLowerCase()];
+  const colOut = stockMap["开箱/包".toLowerCase()];
   const colOpenRest = stockMap["carton ouvert (reste)".toLowerCase()];
 
   // Build ref->rowIndex map (existing)
@@ -742,7 +742,7 @@ function ArrivagesStock_applyFromArrivagePayload_(shStock, shTpl, payload) {
     for (const r of uniqTouched) shStock.getRange(r, colWh).setDataValidation(ruleWh);
   }
 
-  // 出-Sortie/箱 dropdown (activate only for touched)
+  // 开箱/包 dropdown (activate only for touched)
   if (colOut) {
     const toFracText = (v) => {
       const s = String(v === null || typeof v === "undefined" ? "" : v).trim();
@@ -859,9 +859,9 @@ function ArrivagesStock_getComparableStateForRef_(rowValues, stockMap, row) {
   return {
     row: row || 0,
     ref: ArrivagesStock_normalizeComparableField_(get("货号"), "ref"),
-    tailDisplay: ArrivagesStock_normalizeComparableField_(get("当前尾箱件数"), "text"),
+    tailDisplay: ArrivagesStock_normalizeComparableField_(get("尾箱"), "text"),
     ppcDisplay: ArrivagesStock_normalizeComparableField_(get("每箱件数2"), "text"),
-    wholeBoxes: ArrivagesStock_normalizeComparableField_(get("当前箱数"), "num"),
+    wholeBoxes: ArrivagesStock_normalizeComparableField_(get("箱数"), "num"),
     sign: ArrivagesStock_normalizeComparableField_(get("当前signe"), "text"),
     fraction: ArrivagesStock_normalizeComparableField_(get("当前箱数分数"), "text"),
     missingPacks: ArrivagesStock_normalizeComparableField_(get("当前缺包"), "num"),
@@ -984,9 +984,16 @@ function ArrivagesStock_headerMapLocal_(headersRow) {
   for (let c = 0; c < headersRow.length; c++) {
     const h = headersRow[c];
     if (h === null || typeof h === "undefined") continue;
-    const key = String(h).trim();
-    if (!key) continue;
-    map[key.toLowerCase()] = c + 1;
+    const rawKey = String(h).trim();
+    if (!rawKey) continue;
+    const basicKey = (typeof normalizeBasicSheetHeaderKey_ === "function")
+      ? normalizeBasicSheetHeaderKey_(rawKey)
+      : rawKey.toLowerCase();
+    const key = (typeof normalizeSheetHeaderKey_ === "function")
+      ? normalizeSheetHeaderKey_(rawKey)
+      : basicKey;
+    map[basicKey] = c + 1;
+    map[key] = c + 1;
   }
   return map;
 }
@@ -1298,9 +1305,9 @@ function ArrivagesStock_resetRefsAndDeleteSuffix_(shStock, refs) {
   const map = (typeof headerMap_ === "function") ? headerMap_(headers) : ArrivagesStock_headerMapLocal_(headers);
 
   const colRef      = map["货号"];
-  const colTailCur  = map["当前尾箱件数"];
+  const colTailCur  = map["尾箱"];
   const colPpc2     = map["每箱件数2"];
-  const colBoxesCur = map["当前箱数"];
+  const colBoxesCur = map["箱数"];
   const colSignCur  = map["当前signe"];
   const colFracCur  = map["当前箱数分数"];
   const colMissingCur = map["当前缺包"];
@@ -1377,7 +1384,7 @@ function ArrivagesStock_resetRefsAndDeleteSuffix_(shStock, refs) {
     pushReset(row, colArrId, "");
     pushReset(row, colWh, "");
     pushReset(row, colOut, "");
-    // Keep 进货 history untouched.
+    // Keep 修改日期 history untouched.
   }
 
   // apply resets (simple & safe)
@@ -1920,7 +1927,7 @@ function ArrivagesDomain_parseQuickInput_(input) {
     cartons = parsePToken(tokens[2]);
   } else {
     const t = parsePToken(tokens[1]);
-    if (!Number.isFinite(t) || t <= 0) throw new Error("尾箱件数格式错误：例如 56p");
+    if (!Number.isFinite(t) || t <= 0) throw new Error("尾箱格式错误：例如 56p");
     tail = Math.trunc(t);
 
     ppc = parsePToken(tokens[2]);

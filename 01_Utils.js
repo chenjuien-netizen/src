@@ -43,7 +43,7 @@ function parseMixPartnerFromNoteSystem_(noteS) {
   return (typeof cleanRef_ === "function" ? cleanRef_(raw) : String(raw || "")).toUpperCase();
 }
 
-function normalizeSheetHeaderKey_(header) {
+function normalizeBasicSheetHeaderKey_(header) {
   if (header === null || typeof header === "undefined") return "";
   return String(header)
     .trim()
@@ -52,14 +52,29 @@ function normalizeSheetHeaderKey_(header) {
     .toLowerCase();
 }
 
+var SHEET_HEADER_ALIASES_ = {};
+SHEET_HEADER_ALIASES_[normalizeBasicSheetHeaderKey_("进货")] = normalizeBasicSheetHeaderKey_("修改日期");
+SHEET_HEADER_ALIASES_[normalizeBasicSheetHeaderKey_("当前尾箱件数")] = normalizeBasicSheetHeaderKey_("尾箱");
+SHEET_HEADER_ALIASES_[normalizeBasicSheetHeaderKey_("箱件")] = normalizeBasicSheetHeaderKey_("件/箱");
+SHEET_HEADER_ALIASES_[normalizeBasicSheetHeaderKey_("当前箱数")] = normalizeBasicSheetHeaderKey_("箱数");
+SHEET_HEADER_ALIASES_[normalizeBasicSheetHeaderKey_("出-Sortie/箱")] = normalizeBasicSheetHeaderKey_("开箱/包");
+SHEET_HEADER_ALIASES_[normalizeBasicSheetHeaderKey_("出库记录")] = normalizeBasicSheetHeaderKey_("清库记录");
+
+function normalizeSheetHeaderKey_(header) {
+  var basicKey = normalizeBasicSheetHeaderKey_(header);
+  return SHEET_HEADER_ALIASES_[basicKey] || basicKey;
+}
+
 function headerMap_(headersRow) {
   var map = {};
   for (var c = 0; c < headersRow.length; c++) {
     var h = headersRow[c];
     if (h === null || typeof h === "undefined") continue;
+    var rawKey = normalizeBasicSheetHeaderKey_(h);
     var key = normalizeSheetHeaderKey_(h);
-    if (!key) continue;
-    map[key] = c + 1; // 1-based
+    if (!rawKey && !key) continue;
+    if (rawKey) map[rawKey] = c + 1; // compat alias
+    if (key) map[key] = c + 1; // canonical
   }
   return map;
 }

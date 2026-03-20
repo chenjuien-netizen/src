@@ -19,44 +19,40 @@ function StockWebApp_getList_() {
   }
 
   const headers = sh.getRange(1, 1, 1, lastCol).getDisplayValues()[0];
-  const cols = StockWebApp_resolveColumns_(headers);
+  const referenceCol = StockWebApp_resolveReferenceColumn_(headers);
   const rowCount = Math.max(0, lastRow - 1);
-  const values = rowCount ? sh.getRange(2, 1, rowCount, lastCol).getDisplayValues() : [];
+  const values = rowCount ? sh.getRange(2, referenceCol, rowCount, 1).getDisplayValues().flat() : [];
   const items = [];
 
   for (let i = 0; i < values.length; i++) {
-    const item = StockWebApp_buildItem_(values[i], cols, i + 2);
+    const item = StockWebApp_buildReferenceItem_(values[i], i + 2);
     if (item) items.push(item);
   }
 
+  if (!items.length) {
+    Logger.log(
+      "StockWebApp_getList_ | no items returned | sheet=%s | headers=%s | referenceColumn=%s | rowsRead=%s | sampleValues=%s",
+      sh.getName(),
+      JSON.stringify(headers),
+      headers[referenceCol - 1] || "",
+      rowCount,
+      JSON.stringify(values.slice(0, 10))
+    );
+  }
+
   Logger.log(
-    "StockWebApp_getList_ | sheet=%s | columns=%s | rowsRead=%s | itemsReturned=%s",
+    "StockWebApp_getList_ | sheet=%s | headers=%s | referenceColumn=%s | rowsRead=%s | itemsReturned=%s",
     sh.getName(),
-    JSON.stringify({
-      reference: headers[cols.reference - 1] || "",
-      warehouse: headers[cols.warehouse - 1] || "",
-      stockDisplay: headers[cols.stockDisplay - 1] || ""
-    }),
+    JSON.stringify(headers),
+    headers[referenceCol - 1] || "",
     rowCount,
     items.length
   );
 
-  return {
-    items: items,
-    meta: {
-      sheetName: sh.getName(),
-      rowsRead: rowCount,
-      itemsReturned: items.length,
-      columns: {
-        reference: headers[cols.reference - 1] || "",
-        warehouse: headers[cols.warehouse - 1] || "",
-        stockDisplay: headers[cols.stockDisplay - 1] || ""
-      }
-    }
-  };
+  return { items: items };
 }
 
-function StockWebApp_resolveColumns_(headers) {
+function StockWebApp_resolveReferenceColumn_(headers) {
   const normalizedHeaders = Array.isArray(headers) ? headers : [];
   const exactMap = (typeof headerMap_ === "function") ? headerMap_(normalizedHeaders) : {};
   const lowerHeaders = normalizedHeaders.map(function(header) {
@@ -80,36 +76,21 @@ function StockWebApp_resolveColumns_(headers) {
     return 0;
   };
 
-  const cols = {
-    reference: findCol(["货号", "ref", "réf", "référence", "reference"]),
-    warehouse: findCol(["仓库", "entrepot", "entrepôt", "warehouse"]),
-    stockDisplay: findCol(["剩下 / RESTE", "reste", "剩下", "restant", "stock restant"])
-  };
-
-  const missing = [];
-  if (!cols.reference) missing.push("reference (`货号`)");
-  if (!cols.warehouse) missing.push("warehouse (`仓库`)");
-  if (!cols.stockDisplay) missing.push("stockDisplay (`剩下 / RESTE`)");
-
-  if (missing.length) {
-    throw new Error("Colonnes introuvables dans STOCK: " + missing.join(", "));
+  const referenceCol = findCol(["货号", "Reference", "Référence", "ref"]);
+  if (!referenceCol) {
+    throw new Error("Colonne reference introuvable dans STOCK. Attendu: `货号`, `Reference`, `Référence` ou `ref`.");
   }
 
-  return cols;
+  return referenceCol;
 }
 
-function StockWebApp_buildItem_(row, cols, rowIndex) {
-  const reference = StockWebApp_normalizeReference_(row[cols.reference - 1]);
+function StockWebApp_buildReferenceItem_(value, rowIndex) {
+  const reference = StockWebApp_normalizeReference_(value);
   if (!reference) return null;
 
-  const warehouse = StockWebApp_toDisplayText_(row[cols.warehouse - 1]);
-  const stockDisplay = StockWebApp_toDisplayText_(row[cols.stockDisplay - 1]);
-
   return {
-    id: [reference, warehouse || "NO_WAREHOUSE", String(rowIndex || 0)].join("__"),
-    reference: reference,
-    warehouse: warehouse,
-    stockDisplay: stockDisplay
+    id: "row_" + String(rowIndex || 0),
+    reference: reference
   };
 }
 
@@ -118,10 +99,6 @@ function StockWebApp_normalizeReference_(value) {
     return cleanRef_(value).toUpperCase();
   }
   return String(value || "").trim().toUpperCase();
-}
-
-function StockWebApp_toDisplayText_(value) {
-  return String(value === null || typeof value === "undefined" ? "" : value).trim();
 }
 
 function StockWebApp_normalizeHeaderCandidate_(value) {

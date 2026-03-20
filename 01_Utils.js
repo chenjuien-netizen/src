@@ -98,3 +98,222 @@ function rebuildSheetFilterToLastColumn_(sheet) {
   if (existing) existing.remove();
   sheet.getRange(1, 1, lastRow, lastCol).createFilter();
 }
+
+var STOCK_TEMPLATE_PROPAGATION_HEADERS = [
+  "Poids (en gramme)",
+  "Pays d'origine",
+  "SortKey",
+  "Colisage",
+  "Couleur",
+  "Couleurs",
+  "Promo",
+  "Prix@",
+  "Promo@",
+  "剩下 / RESTE",
+  "包/箱",
+  "Carton ouvert (reste)"
+];
+
+var STOCK_TEMPLATE_PROPAGATION_NOTE_KEYS = [
+  "KEY:TOTAL_BOX",
+  "KEY:TOTAL_PQS",
+  "KEY:TOTAL_PCS"
+];
+
+function applyTemplateCellToRange_(shTpl, shStock, tplCol, stockCol, addCount, startRow) {
+  if (!tplCol || !stockCol || !addCount || !startRow) return;
+
+  var tplCell = shTpl.getRange(2, tplCol);
+  var formula = tplCell.getFormulaR1C1();
+
+  if (formula) {
+    var formulas = [];
+    for (var i = 0; i < addCount; i++) formulas.push([formula]);
+    shStock.getRange(startRow, stockCol, addCount, 1).setFormulasR1C1(formulas);
+    return;
+  }
+
+  var value = tplCell.getValue();
+  var values = [];
+  for (var j = 0; j < addCount; j++) values.push([value]);
+  shStock.getRange(startRow, stockCol, addCount, 1).setValues(values);
+}
+
+function applyStockTemplatePropagation_(shTpl, shStock, addCount, startRow, headers, noteKeys) {
+  if (!addCount || addCount <= 0) return;
+  if (!startRow || startRow <= 0) throw new Error("applyStockTemplatePropagation_: startRow invalide");
+
+  var tplHeaders = shTpl.getRange(1, 1, 1, Math.max(1, shTpl.getLastColumn())).getValues()[0];
+  var stockHeaders = shStock.getRange(1, 1, 1, Math.max(1, shStock.getLastColumn())).getValues()[0];
+  var tplHeaderMap = headerMap_(tplHeaders);
+  var stockHeaderMap = headerMap_(stockHeaders);
+  var effectiveHeaders = Array.isArray(headers) && headers.length ? headers : STOCK_TEMPLATE_PROPAGATION_HEADERS;
+  var effectiveNoteKeys = Array.isArray(noteKeys) && noteKeys.length ? noteKeys : STOCK_TEMPLATE_PROPAGATION_NOTE_KEYS;
+
+  for (var i = 0; i < effectiveHeaders.length; i++) {
+    var header = String(effectiveHeaders[i] || "");
+    var key = normalizeSheetHeaderKey_(header);
+    var tplCol = tplHeaderMap[key];
+    var stockCol = stockHeaderMap[key];
+    if (!tplCol || !stockCol) continue;
+    applyTemplateCellToRange_(shTpl, shStock, tplCol, stockCol, addCount, startRow);
+  }
+
+  for (var j = 0; j < effectiveNoteKeys.length; j++) {
+    var noteKey = String(effectiveNoteKeys[j] || "");
+    if (!noteKey) continue;
+    var tplNoteCol = findColumnByHeaderNoteKey_(shTpl, noteKey);
+    var stockNoteCol = findColumnByHeaderNoteKey_(shStock, noteKey);
+    if (!tplNoteCol || !stockNoteCol) continue;
+    applyTemplateCellToRange_(shTpl, shStock, tplNoteCol, stockNoteCol, addCount, startRow);
+  }
+}
+
+function rebuildAndSortStockSheet_(sheet) {
+  rebuildSheetFilterToLastColumn_(sheet);
+
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return;
+
+  var lastCol = Math.max(1, sheet.getLastColumn());
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  var map = headerMap_(headers);
+  var sortCol = map["sortkey"];
+  if (!sortCol) return;
+
+  sheet.getRange(2, 1, lastRow - 1, lastCol).sort({ column: sortCol, ascending: true });
+}
+
+function normalizeColorCatalogKey_(value) {
+  var s = (value === null || typeof value === "undefined") ? "" : String(value);
+  return s
+    .trim()
+    .replace(/[’`´']/g, "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9]+/g, "")
+    .toUpperCase();
+}
+
+var STOCK_COLOR_CANONICAL_LIST = [
+  "Écru",
+  "Ivoire",
+  "Vanille",
+  "Nude",
+  "Crême",
+  "Beige",
+  "Blanc",
+  "Transparent",
+  "Bleu Ciel",
+  "Bleu Clair",
+  "Bleu",
+  "Cyan",
+  "Turquoise",
+  "Bleu Roi",
+  "Jeans",
+  "Denim",
+  "Bleu Canard",
+  "Bleu Pétrole",
+  "Bleu Foncé",
+  "Bleu Irisé",
+  "Marine",
+  "Ciel nocturne",
+  "Gris Clair",
+  "Gris Perle",
+  "Argent",
+  "Gris",
+  "Gris Souris",
+  "Acier",
+  "Gris Foncé",
+  "Carbone",
+  "Gris Ardoise",
+  "Anthracite",
+  "Jaune Clair",
+  "Jaune Citron",
+  "Jaune",
+  "Jaune Foncé",
+  "Jaune Soleil",
+  "Jaune Fluo",
+  "Or",
+  "Moutarde",
+  "Doré",
+  "Ocre",
+  "Caramel",
+  "Bronze",
+  "Camel",
+  "Champagne",
+  "Taupe",
+  "Cognac",
+  "Brun",
+  "Terracotta",
+  "Brun foncé",
+  "Marron Clair",
+  "Chocolat",
+  "Marron Foncé",
+  "Multicolore",
+  "Bicolore",
+  "Noir Irisé",
+  "Noir",
+  "Saumon",
+  "Corail",
+  "Abricot",
+  "Orange Fluo",
+  "Orange",
+  "Rouge Orangé",
+  "Cuivre",
+  "Brique",
+  "Rouille",
+  "Blush",
+  "Rose",
+  "Rose Fluo",
+  "Fuchsia",
+  "Magenta",
+  "Framboise",
+  "Vieux Rose",
+  "Rouge Clair",
+  "Rouge",
+  "Carmin",
+  "Rouge Foncé",
+  "Bordeaux",
+  "Vert Clair",
+  "Vert d'Eau",
+  "Céladon",
+  "Vert Fluo",
+  "Vert Pomme",
+  "Vert",
+  "Vert Foncé",
+  "Vert Bouteille",
+  "Vert Sapin",
+  "Vert Canard",
+  "Olive",
+  "Kaki",
+  "Lilas",
+  "Lavande",
+  "Mauve",
+  "Violet",
+  "Indigo",
+  "Prune"
+];
+
+function buildCanonicalColorMap_() {
+  var map = {};
+  for (var i = 0; i < STOCK_COLOR_CANONICAL_LIST.length; i++) {
+    var canonical = STOCK_COLOR_CANONICAL_LIST[i];
+    map[normalizeColorCatalogKey_(canonical)] = canonical;
+  }
+
+  map["CREME"] = "Crême";
+  map["CRÈME"] = "Crême";
+  map["CRÊME"] = "Crême";
+  map["VERTDEAU"] = "Vert d'Eau";
+
+  return map;
+}
+
+var STOCK_COLOR_CANONICAL_MAP = buildCanonicalColorMap_();
+
+function normalizeStockCatalogColorName_(raw) {
+  var key = normalizeColorCatalogKey_(raw);
+  if (!key) return "";
+  return STOCK_COLOR_CANONICAL_MAP[key] || "";
+}

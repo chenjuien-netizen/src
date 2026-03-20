@@ -629,7 +629,7 @@ function exportStockToPFS() {
     const entries = Array.isArray(it.colorPack && it.colorPack.entries) ? it.colorPack.entries : [];
     for (let idx = 0; idx < entries.length; idx++) {
       const entry = entries[idx];
-      const taillesColor = it.colorPack && it.colorPack.mode === "detailed"
+      const taillesColor = Array.isArray(entry && entry.split) && entry.split.length
         ? buildPfsDetailedColorTailles_(entry.split, globalTailles.sizes)
         : buildPfsColorTailles_(entry.qty, globalTailles.sizes);
       if (!taillesColor.ok) {
@@ -1984,18 +1984,30 @@ function parseStockColorPackStrict_(raw, options) {
   }
 
   const tokens = s.split(/\s+/).filter(Boolean);
-  if (tokens.length % 2 !== 0) {
+  if (!tokens.length) {
     return { ok: false, reason: "Couleurs mal formées (paires quantité/couleur attendues): " + s };
   }
 
-  let mode = "";
   let total = 0;
   const sumsByPosition = new Array(sizes.length).fill(0);
   const entries = [];
+  let sawSimple = false;
+  let sawDetailed = false;
 
-  for (let i = 0; i < tokens.length; i += 2) {
+  for (let i = 0; i < tokens.length;) {
     const qtyToken = String(tokens[i] || "").trim();
-    const colorRaw = String(tokens[i + 1] || "").trim();
+    if (!qtyToken) {
+      return { ok: false, reason: "Quantité couleur invalide: '" + qtyToken + "' dans '" + s + "'" };
+    }
+
+    i += 1;
+    const colorTokens = [];
+    while (i < tokens.length && !detectStockColorQtyMode_(tokens[i])) {
+      colorTokens.push(tokens[i]);
+      i += 1;
+    }
+
+    const colorRaw = colorTokens.join(" ").trim();
     const color = normalizeColor(colorRaw);
 
     if (!color || /^\d/.test(colorRaw)) {
@@ -2006,30 +2018,18 @@ function parseStockColorPackStrict_(raw, options) {
     if (!tokenMode) {
       return { ok: false, reason: "Quantité couleur invalide: '" + qtyToken + "' dans '" + s + "'" };
     }
-    if (!mode) mode = tokenMode;
-    if (mode !== tokenMode) {
-      return { ok: false, reason: "Couleurs mixtes non supportées (simple et détaillé mélangés): " + s };
-    }
-
-    if (mode === "simple") {
+    if (tokenMode === "simple") {
       const qty = Number(qtyToken);
       if (!Number.isFinite(qty) || qty <= 0 || !Number.isInteger(qty)) {
         return { ok: false, reason: "Quantité couleur invalide: '" + qtyToken + "' dans '" + s + "'" };
       }
-      if (qty % sizes.length !== 0) {
-        return { ok: false, reason: "Quantité couleur " + qty + " non divisible par " + sizes.length + " taille(s)" };
-      }
-
-      const qtyPerSize = qty / sizes.length;
-      for (let p = 0; p < sizes.length; p++) {
-        sumsByPosition[p] += qtyPerSize;
-      }
-
-      entries.push({ color: color, qty: qty, split: null });
+      sawSimple = true;
+      entries.push({ color: color, qty: qty, split: null, tokenMode: "simple" });
       total += qty;
       continue;
     }
 
+    sawDetailed = true;
     const split = qtyToken.split("-").map(function (part) { return Number(part); });
     if (split.length !== sizes.length) {
       return { ok: false, reason: "Détail couleur incompatible avec le nombre de tailles pour '" + colorRaw + "'" };
@@ -2045,7 +2045,7 @@ function parseStockColorPackStrict_(raw, options) {
       qtyDetailed += partQty;
     }
 
-    entries.push({ color: color, qty: qtyDetailed, split: split });
+    entries.push({ color: color, qty: qtyDetailed, split: split, tokenMode: "detailed" });
     total += qtyDetailed;
   }
 
@@ -2054,6 +2054,27 @@ function parseStockColorPackStrict_(raw, options) {
   }
   if (total !== expectedTotal) {
     return { ok: false, reason: "Somme des couleurs = " + total + " au lieu de " + expectedTotal };
+  }
+
+  const remainingByPosition = sizes.map(function(size, idx) {
+    return Number(size && size.qty) - sumsByPosition[idx];
+  });
+
+  for (let e = 0; e < entries.length; e++) {
+    const entry = entries[e];
+    if (!entry || entry.tokenMode !== "simple") continue;
+
+    const allocation = allocateSimpleColorAcrossSizes_(entry.qty, sizes, remainingByPosition, sawDetailed);
+    if (!allocation.ok) {
+      return { ok: false, reason: allocation.reason };
+    }
+
+    for (let p = 0; p < allocation.split.length; p++) {
+      sumsByPosition[p] += allocation.split[p];
+      remainingByPosition[p] -= allocation.split[p];
+    }
+
+    if (allocation.usedSplit) entry.split = allocation.split;
   }
 
   for (let p = 0; p < sizes.length; p++) {
@@ -2066,6 +2087,7 @@ function parseStockColorPackStrict_(raw, options) {
     }
   }
 
+  const mode = sawDetailed ? (sawSimple ? "mixed" : "detailed") : "simple";
   return { ok: true, mode: mode, total: total, sizeCount: sizes.length, entries: entries };
 }
 
@@ -2074,6 +2096,56 @@ function detectStockColorQtyMode_(qtyToken) {
   if (/^\d+$/.test(s)) return "simple";
   if (/^\d+(?:-\d+)+$/.test(s)) return "detailed";
   return "";
+}
+
+function allocateSimpleColorAcrossSizes_(qty, sizes, remainingByPosition, preferSplit) {
+  const totalQty = Number(qty);
+  const sizeCount = Array.isArray(sizes) ? sizes.length : 0;
+  if (!Number.isFinite(totalQty) || totalQty <= 0 || !Number.isInteger(totalQty) || !sizeCount) {
+    return { ok: false, reason: "Quantité couleur ou tailles globales invalides" };
+  }
+
+  if (sizeCount === 1) {
+    if (remainingByPosition[0] < totalQty) {
+      return { ok: false, reason: "Quantité couleur " + totalQty + " incompatible avec la taille " + sizes[0].size };
+    }
+    return { ok: true, split: [totalQty], usedSplit: !!preferSplit };
+  }
+
+  if (totalQty % sizeCount === 0) {
+    const qtyPerSize = totalQty / sizeCount;
+    const evenSplit = new Array(sizeCount).fill(qtyPerSize);
+    const fitsEvenly = evenSplit.every(function(part, idx) {
+      return part <= remainingByPosition[idx];
+    });
+    if (fitsEvenly) {
+      return { ok: true, split: evenSplit, usedSplit: !!preferSplit };
+    }
+  }
+
+  const split = new Array(sizeCount).fill(0);
+  for (let unit = 0; unit < totalQty; unit++) {
+    let bestIdx = -1;
+    let bestRemaining = -1;
+    for (let idx = 0; idx < remainingByPosition.length; idx++) {
+      const remaining = Number(remainingByPosition[idx]) || 0;
+      if (remaining <= 0) continue;
+      if (remaining > bestRemaining) {
+        bestRemaining = remaining;
+        bestIdx = idx;
+      }
+    }
+    if (bestIdx < 0) {
+      return { ok: false, reason: "Quantité couleur " + totalQty + " incompatible avec la structure tailles" };
+    }
+    split[bestIdx] += 1;
+    remainingByPosition[bestIdx] -= 1;
+  }
+
+  for (let idx = 0; idx < split.length; idx++) {
+    remainingByPosition[idx] += split[idx];
+  }
+  return { ok: true, split: split, usedSplit: true };
 }
 
 /********************************************************************
@@ -2093,171 +2165,17 @@ function pfsPreNormalizeCouleursRaw_(raw) {
 }
 
 function pfsExpandCompactColorNameForCatalog_(raw) {
-  const s = String(raw || "").toUpperCase().trim();
-  if (!s) return "";
-
-  const MAP = {
-    "BLEUCLAIR": "BLEU CLAIR",
-    "BLEUFONCE": "BLEU FONCE",
-    "BLEUPETROLE": "BLEU PETROLE",
-    "BLEUCANARD": "BLEU CANARD",
-    "BLEUMARINE": "MARINE",
-    "VERTCLAIR": "VERT CLAIR",
-    "VERTFONCE": "VERT FONCE",
-    "VERTDEAU": "VERT D EAU",
-    "VERTBOUTEILLE": "VERT BOUTEILLE",
-    "VERTSAPIN": "VERT SAPIN",
-    "VERTCANARD": "VERT CANARD",
-    "ROUGECLAIR": "ROUGE CLAIR",
-    "ROUGEFONCE": "ROUGE FONCE",
-    "JAUNECLAIR": "JAUNE CLAIR",
-    "JAUNEFONCE": "JAUNE FONCE",
-    "GRISCLAIR": "GRIS CLAIR",
-    "GRISFONCE": "GRIS FONCE",
-    "MARRONCLAIR": "MARRON CLAIR",
-    "MARRONFONCE": "MARRON FONCE",
-    "NOIRIRISE": "NOIR IRISE",
-    "VIEUXROSE": "VIEUX ROSE",
-    "ROSEFLUO": "ROSE FLUO",
-    "ORANGEFLUO": "ORANGE FLUO",
-    "JAUNEFLUO": "JAUNE FLUO"
-  };
-
-  return MAP[s] || s;
+  return String(raw || "").trim();
 }
 
 /****************************************************
  * Map STOCK color names to the fixed PFS color catalog.
  ****************************************************/
 function normalizePfsColorName_(raw) {
-  const s = String(raw || "").trim();
-  if (!s) return "";
-  const up = pfsExpandCompactColorNameForCatalog_(s.toUpperCase());
-
-  const MAP = {
-    "ECRU": "Écru",
-    "ÉCRU": "Écru",
-    "IVOIRE": "Ivoire",
-    "NUDE": "Nude",
-    "CREME": "Beige",
-    "CRÈME": "Beige",
-    "VANILLE": "Beige",
-    "BEIGE": "Beige",
-    "BLANC": "Blanc",
-    "TRANSPARENT": "Blanc",
-    "BLEU CIEL": "Bleu",
-    "BLEU CLAIR": "Bleu",
-    "BLEU": "Bleu",
-    "CYAN": "Cyan",
-    "TURQUOISE": "Turquoise",
-    "BLEU ROI": "Bleu",
-    "JEANS": "Bleu",
-    "DENIM": "Bleu",
-    "BLEU CANARD": "Bleu",
-    "BLEU PETROLE": "Bleu",
-    "BLEU PÉTROLE": "Bleu",
-    "BLEU FONCE": "Marine",
-    "BLEU FONCÉ": "Marine",
-    "BLEU IRISE": "Bleu",
-    "BLEU IRISÉ": "Bleu",
-    "MARINE": "Marine",
-    "CIEL NOCTURNE": "Marine",
-    "GRIS CLAIR": "Gris",
-    "GRIS PERLE": "Gris",
-    "ARGENT": "Argent",
-    "GRIS": "Gris",
-    "GRIS SOURIS": "Gris",
-    "ACIER": "Gris",
-    "GRIS FONCE": "Gris",
-    "GRIS FONCÉ": "Gris",
-    "CARBONE": "Gris",
-    "GRIS ARDOISE": "Gris",
-    "ANTHRACITE": "Gris",
-    "JAUNE CLAIR": "Jaune",
-    "JAUNE CITRON": "Jaune",
-    "JAUNE": "Jaune",
-    "JAUNE FONCE": "Jaune",
-    "JAUNE FONCÉ": "Jaune",
-    "JAUNE SOLEIL": "Jaune",
-    "JAUNE FLUO": "Jaune",
-    "OR": "Doré",
-    "DORÉ": "Doré",
-    "MOUTARDE": "Moutarde",
-    "CAMEL": "Camel",
-    "CHAMPAGNE": "Champagne",
-    "TAUPE": "Taupe",
-    "BRUN": "Brun",
-    "COGNAC": "Brun",
-    "CARAMEL": "Brun",
-    "BRONZE": "Brun",
-    "TERRACOTTA": "Brun",
-    "MARRON": "Brun",
-    "MARRON CLAIR": "Brun",
-    "MARRON FONCE": "Brun",
-    "MARRON FONCÉ": "Brun",
-    "CHOCOLAT": "Brun",
-    "BRUN FONCE": "Brun",
-    "BRUN FONCÉ": "Brun",
-    "NOIR IRISE": "Noir",
-    "NOIR IRISÉ": "Noir",
-    "NOIR": "Noir",
-    "ROSE": "Rose",
-    "FUCHSIA": "Fuchsia",
-    "ROSE FLUO": "Rose",
-    "BLUSH": "Rose",
-    "VIEUX ROSE": "Rose",
-    "MAGENTA": "Fuchsia",
-    "FRAMBOISE": "Fuchsia",
-    "ROUGE CLAIR": "Rouge",
-    "ROUGE": "Rouge",
-    "CORAIL": "Corail",
-    "SAUMON": "Corail",
-    "ABRICOT": "Corail",
-    "ORANGE FLUO": "Orange",
-    "ORANGE": "Orange",
-    "ROUGE ORANGÉ": "Orange",
-    "CUIVRE": "Orange",
-    "BRIQUE": "Rouge",
-    "ROUILLE": "Rouge",
-    "CARMIN": "Rouge",
-    "ROUGE FONCE": "Rouge",
-    "ROUGE FONCÉ": "Rouge",
-    "BORDEAUX": "Bordeaux",
-    "VERT CLAIR": "Vert",
-    "VERT D'EAU": "Vert",
-    "VERT D EAU": "Vert",
-    "CÉLADON": "Vert",
-    "CELADON": "Vert",
-    "VERT FLUO": "Vert",
-    "VERT POMME": "Vert",
-    "VERT": "Vert",
-    "VERT FONCE": "Vert",
-    "VERT FONCÉ": "Vert",
-    "VERT BOUTEILLE": "Vert",
-    "VERT SAPIN": "Vert",
-    "VERT CANARD": "Vert",
-    "OLIVE": "Olive",
-    "KAKI": "Kaki",
-    "LILAS": "Lilas",
-    "LAVANDE": "Lavande",
-    "MAUVE": "Mauve",
-    "VIOLET": "Violet",
-    "INDIGO": "Indigo",
-    "PRUNE": "Prune"
-  };
-
-  if (MAP[up]) return MAP[up];
-
-  // fallback exact-title if already a PFS catalog color
-  for (var i = 0; i < PFS_COLOR_CATALOG.length; i++) {
-    if (PFS_COLOR_CATALOG[i].toUpperCase() === up) return PFS_COLOR_CATALOG[i];
-  }
-  return "";
+  return normalizeStockCatalogColorName_(pfsExpandCompactColorNameForCatalog_(raw));
 }
 
-var PFS_COLOR_CATALOG = [
-  "Écru","Ivoire","Nude","Beige","Blanc","Bleu","Cyan","Turquoise","Marine","Gris","Argent","Jaune","Moutarde","Doré","Camel","Champagne","Taupe","Brun","Noir","Corail","Orange","Rose","Fuchsia","Rouge","Bordeaux","Vert","Olive","Kaki","Lilas","Lavande","Mauve","Violet","Indigo","Prune"
-];
+var PFS_COLOR_CATALOG = Array.isArray(STOCK_COLOR_CANONICAL_LIST) ? STOCK_COLOR_CANONICAL_LIST.slice() : [];
 
 /****************************************************
  * Parse a normalized tailles string like "6*S/M,6*L/XL"

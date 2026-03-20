@@ -1336,7 +1336,7 @@ function formatEFashionMixedColorsFromStock_(colorPack) {
     const entry = colorPack.entries[i];
     if (!entry || !entry.color) return "";
 
-    if (colorPack.mode === "detailed") {
+    if (Array.isArray(entry.split) && entry.split.length) {
       if (!Array.isArray(entry.split) || !entry.split.length) return "";
       parts.push(entry.color + "*" + entry.split.join("-"));
       continue;
@@ -1351,54 +1351,7 @@ function formatEFashionMixedColorsFromStock_(colorPack) {
 }
 
 function normalizeEFashionColorName_(raw) {
-  const s = String(raw || "").trim();
-  if (!s) return "";
-  const up = efExpandCompactColorName_(s.toUpperCase());
-  const MAP = {
-    "ROUGE": "Rouge",
-    "VERT": "Vert",
-    "MARRON": "Marron",
-    "BLEU": "Bleu",
-    "TAUPE": "Taupe",
-    "NOIR": "Noir",
-    "KAKI": "Kaki",
-    "BLANC": "Blanc",
-    "BEIGE": "Beige",
-    "JAUNE": "Jaune",
-    "GRIS": "Gris",
-    "VIOLET": "Violet",
-    "ROSE": "Rose",
-    "ORANGE": "Orange",
-    "MARINE": "Marine",
-    "BLEU CLAIR": "Bleu clair",
-    "BLEU FONCE": "Bleu foncé",
-    "BLEU PETROLE": "Bleu pétrole",
-    "BLEU CANARD": "Bleu canard",
-    "VERT CLAIR": "Vert clair",
-    "VERT FONCE": "Vert foncé",
-    "VERT D EAU": "Vert d'eau",
-    "VERT BOUTEILLE": "Vert bouteille",
-    "VERT SAPIN": "Vert sapin",
-    "VERT CANARD": "Vert canard",
-    "ROUGE CLAIR": "Rouge clair",
-    "ROUGE FONCE": "Rouge foncé",
-    "JAUNE CLAIR": "Jaune clair",
-    "JAUNE FONCE": "Jaune foncé",
-    "GRIS CLAIR": "Gris clair",
-    "GRIS FONCE": "Gris foncé",
-    "MARRON CLAIR": "Marron clair",
-    "MARRON FONCE": "Marron foncé",
-    "NOIR IRISE": "Noir irisé",
-    "VIEUX ROSE": "Vieux rose",
-    "ROSE FLUO": "Rose fluo",
-    "ORANGE FLUO": "Orange fluo",
-    "JAUNE FLUO": "Jaune fluo"
-  };
-  if (MAP[up]) return MAP[up];
-  if (typeof normalizePfsColorName_ === "function") {
-    return normalizePfsColorName_(s);
-  }
-  return "";
+  return normalizeStockCatalogColorName_(efExpandCompactColorName_(raw));
 }
 
 function parseContenuColisSegmentEFashion_(segment) {
@@ -1507,37 +1460,7 @@ function efPreNormalizeCouleursRaw_(raw) {
 }
 
 function efExpandCompactColorName_(raw) {
-  const s = String(raw || "").toUpperCase().trim();
-  if (!s) return "";
-
-  const MAP = {
-    "BLEUCLAIR": "BLEU CLAIR",
-    "BLEUFONCE": "BLEU FONCE",
-    "BLEUPETROLE": "BLEU PETROLE",
-    "BLEUCANARD": "BLEU CANARD",
-    "BLEUMARINE": "MARINE",
-    "VERTCLAIR": "VERT CLAIR",
-    "VERTFONCE": "VERT FONCE",
-    "VERTDEAU": "VERT D EAU",
-    "VERTBOUTEILLE": "VERT BOUTEILLE",
-    "VERTSAPIN": "VERT SAPIN",
-    "VERTCANARD": "VERT CANARD",
-    "ROUGECLAIR": "ROUGE CLAIR",
-    "ROUGEFONCE": "ROUGE FONCE",
-    "JAUNECLAIR": "JAUNE CLAIR",
-    "JAUNEFONCE": "JAUNE FONCE",
-    "GRISCLAIR": "GRIS CLAIR",
-    "GRISFONCE": "GRIS FONCE",
-    "MARRONCLAIR": "MARRON CLAIR",
-    "MARRONFONCE": "MARRON FONCE",
-    "NOIRIRISE": "NOIR IRISE",
-    "VIEUXROSE": "VIEUX ROSE",
-    "ROSEFLUO": "ROSE FLUO",
-    "ORANGEFLUO": "ORANGE FLUO",
-    "JAUNEFLUO": "JAUNE FLUO"
-  };
-
-  return MAP[s] || s;
+  return String(raw || "").trim();
 }
 
 function validateEFashionColorPack_(raw, expectedTotal, sizes) {

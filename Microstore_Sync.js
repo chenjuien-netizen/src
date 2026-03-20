@@ -260,23 +260,12 @@ function msRunSyncCore_() {
     ];
     ensureHeadersExist_(stockHeaderMap, stockNeed, "STOCK (ligne 1)");
 
-    var formulaCols = [
-      "Colisage",
-      "包/箱",
-      "Stock",
-      "Poids (en gramme)",
-      "Promo",
-      "Prix@",
-      "Promo@",
-      "Pays d'origine",
-      "剩下 / RESTE",
-      "SortKey"
-    ];
-    ensureHeadersExist_(stockHeaderMap, formulaCols, "STOCK (ligne 1) - colonnes formules");
+    var formulaCols = STOCK_TEMPLATE_PROPAGATION_HEADERS.slice();
+    ensureHeadersExist_(stockHeaderMap, formulaCols, "STOCK (ligne 1) - colonnes template");
 
     var tplHeaders = shTpl.getRange(1, 1, 1, shTpl.getLastColumn()).getValues()[0];
     var tplHeaderMap = headerMap_(tplHeaders);
-    ensureHeadersExist_(tplHeaderMap, formulaCols, "TEMPLATE_STOCK (ligne 1) - colonnes formules");
+    ensureHeadersExist_(tplHeaderMap, formulaCols, "TEMPLATE_STOCK (ligne 1) - colonnes template");
 
     var nExisting = Math.max(0, stockLastRow - 1);
     var colRef = stockHeaderMap["货号"];
@@ -451,14 +440,11 @@ function msRunSyncCore_() {
 
     if (addCount > 0) {
       ss.toast("Prolongation formules (TEMPLATE_STOCK)…", "Microstore", 8);
-      msApplyTemplateFormulas_(shTpl, shStock, tplHeaderMap, stockHeaderMap, formulaCols, addCount, addedStartRow);
-      msApplyTemplateColumnByHeaderNoteKey_(shTpl, shStock, "KEY:TOTAL_BOX", addCount, addedStartRow);
-      msApplyTemplateColumnByHeaderNoteKey_(shTpl, shStock, "KEY:TOTAL_PCS", addCount, addedStartRow);
-      msApplyTemplateColumnByHeaderNoteKey_(shTpl, shStock, "KEY:TOTAL_PQS", addCount, addedStartRow);
+      applyStockTemplatePropagation_(shTpl, shStock, addCount, addedStartRow, formulaCols, STOCK_TEMPLATE_PROPAGATION_NOTE_KEYS);
     }
 
-    ss.toast("Rebuild filtre (A→AU)…", "Microstore", 5);
-    msRebuildLockedFilter_A_to_AU_(shStock);
+    ss.toast("Rebuild filtre + tri STOCK…", "Microstore", 5);
+    rebuildAndSortStockSheet_(shStock);
 
     ss.toast("Sync OK (MS_IMPORT → STOCK).", "Microstore", 8);
   } catch (err) {
@@ -587,19 +573,7 @@ function msApplyTemplateFormulas_(shTpl, shStock, tplHeaderMap, stockHeaderMap, 
     var stockCol = stockHeaderMap[h.toLowerCase()];
     if (!tplCol || !stockCol) continue;
 
-    var tplCell = shTpl.getRange(2, tplCol);
-    var f = tplCell.getFormulaR1C1();
-
-    if (f) {
-      var formulas = [];
-      for (var r = 0; r < addCount; r++) formulas.push([f]);
-      shStock.getRange(startRow, stockCol, addCount, 1).setFormulasR1C1(formulas);
-    } else {
-      var v = tplCell.getValue();
-      var values = [];
-      for (var rr = 0; rr < addCount; rr++) values.push([v]);
-      shStock.getRange(startRow, stockCol, addCount, 1).setValues(values);
-    }
+    applyTemplateCellToRange_(shTpl, shStock, tplCol, stockCol, addCount, startRow);
   }
 }
 
@@ -642,17 +616,5 @@ function msApplyTemplateColumnByHeaderNoteKey_(shTpl, shStock, key, addCount, st
 
   if (stockCol <= 0 || tplCol <= 0) return;
 
-  var tplCell = shTpl.getRange(2, tplCol);
-  var f = tplCell.getFormulaR1C1();
-
-  if (f) {
-    var formulas = [];
-    for (var r = 0; r < addCount; r++) formulas.push([f]);
-    shStock.getRange(startRow, stockCol, addCount, 1).setFormulasR1C1(formulas);
-  } else {
-    var v = tplCell.getValue();
-    var values = [];
-    for (var rr = 0; rr < addCount; rr++) values.push([v]);
-    shStock.getRange(startRow, stockCol, addCount, 1).setValues(values);
-  }
+  applyTemplateCellToRange_(shTpl, shStock, tplCol, stockCol, addCount, startRow);
 }

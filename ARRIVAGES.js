@@ -578,30 +578,14 @@ function ArrivagesStock_applyFromArrivagePayload_(shStock, shTpl, payload) {
     appendStartRow = shStock.getLastRow() + 1;
     shStock.getRange(appendStartRow, 1, rowsToAppend.length, stockLastCol).setValues(rowsToAppend);
 
-    // Apply template formulas
-    const formulaCols = ["包/箱", "Colisage", "Poids (en gramme)", "Pays d'origine", "Promo", "Prix@", "Promo@", "剩下 / RESTE", "SortKey"];
-
-// Keep only headers present in both TEMPLATE and STOCK
-const safeFormulaCols = formulaCols.filter(h => {
-  const k = String(h).toLowerCase();
-  return !!tplMap[k] && !!stockMap[k];
-});
-
-if (safeFormulaCols.length) {
-  if (typeof applyTemplateFormulas_ === "function") {
-    applyTemplateFormulas_(shTpl, shStock, tplMap, stockMap, safeFormulaCols, rowsToAppend.length, appendStartRow);
-  } else {
-    ArrivagesStock_applyTemplateFormulasLocal_(shTpl, shStock, tplMap, stockMap, safeFormulaCols, rowsToAppend.length, appendStartRow);
-  }
-}
-// KEY:* columns detected from header notes keep their template formulas.
-ArrivagesStock_applyTemplateFormulasByHeaderNoteKey_(
-  shTpl,
-  shStock,
-  ["KEY:TOTAL_BOX", "KEY:TOTAL_PCS"],
-  rowsToAppend.length,
-  appendStartRow
-);
+    applyStockTemplatePropagation_(
+      shTpl,
+      shStock,
+      rowsToAppend.length,
+      appendStartRow,
+      STOCK_TEMPLATE_PROPAGATION_HEADERS,
+      STOCK_TEMPLATE_PROPAGATION_NOTE_KEYS
+    );
 
     // Fix refToRow for appended
     for (let i = 0; i < appendMeta.length; i++) {
@@ -844,16 +828,7 @@ ArrivagesStock_applyTemplateFormulasByHeaderNoteKey_(
   }
 
   // 5) Rebuild filter on the full used width + sort by SortKey
-  if (typeof rebuildLockedFilter_A_to_AS_ === "function") rebuildLockedFilter_A_to_AS_(shStock);
-  else ArrivagesStock_rebuildFilterAtoASLocal_(shStock);
-
-  if (colSortKey) {
-    const last = shStock.getLastRow();
-    if (last >= 2) {
-      const lastCol = Math.max(1, shStock.getLastColumn());
-      shStock.getRange(2, 1, last - 1, lastCol).sort({ column: colSortKey, ascending: true });
-    }
-  }
+  rebuildAndSortStockSheet_(shStock);
 }
 
 function ArrivagesStock_buildExistingRefMap_(shStock) {
@@ -1023,13 +998,7 @@ function ArrivagesStock_applyTemplateFormulasLocal_(shTpl, shStock, tplHeaderMap
     const tplCol = tplHeaderMap[String(h).toLowerCase()];
     const stockCol = stockHeaderMap[String(h).toLowerCase()];
     if (!tplCol || !stockCol) continue;
-
-    const f = shTpl.getRange(2, tplCol).getFormulaR1C1();
-    if (!f) continue;
-
-    const formulas = [];
-    for (let r = 0; r < addCount; r++) formulas.push([f]);
-    shStock.getRange(startRow, stockCol, addCount, 1).setFormulasR1C1(formulas);
+    applyTemplateCellToRange_(shTpl, shStock, tplCol, stockCol, addCount, startRow);
   }
 }
 
@@ -1313,12 +1282,7 @@ function ArrivagesStock_applyTemplateFormulasByHeaderNoteKey_(shTpl, shStock, ke
     const tplCol = ArrivagesStock_findColByHeaderNoteKey_(shTpl, key);
     const stockCol = ArrivagesStock_findColByHeaderNoteKey_(shStock, key);
     if (!tplCol || !stockCol) continue;
-
-    const f = shTpl.getRange(2, tplCol).getFormulaR1C1();
-    if (!f) continue;
-
-    const formulas = Array.from({ length: addCount }, () => [f]);
-    shStock.getRange(startRow, stockCol, addCount, 1).setFormulasR1C1(formulas);
+    applyTemplateCellToRange_(shTpl, shStock, tplCol, stockCol, addCount, startRow);
   }
 }
 
@@ -1430,19 +1394,8 @@ function ArrivagesStock_resetRefsAndDeleteSuffix_(shStock, refs) {
 
   // rebuild filter on the full used width + sort if you want
   try {
-    if (typeof rebuildLockedFilter_A_to_AS_ === "function") rebuildLockedFilter_A_to_AS_(shStock);
-    else ArrivagesStock_rebuildFilterAtoASLocal_(shStock);
+    rebuildAndSortStockSheet_(shStock);
   } catch (e) {}
-
-  // sort by SortKey if exists
-  const colSortKey = map["sortkey"];
-  if (colSortKey) {
-    const lr = shStock.getLastRow();
-    if (lr >= 2) {
-      const lastCol = Math.max(1, shStock.getLastColumn());
-      shStock.getRange(2, 1, lr - 1, lastCol).sort({ column: colSortKey, ascending: true });
-    }
-  }
 }
 
 /***********************

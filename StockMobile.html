@@ -69,6 +69,42 @@
         backdrop-filter: blur(10px);
       }
 
+      .topbar-actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        flex: 0 0 auto;
+      }
+
+      .topbar-action {
+        width: 36px;
+        height: 36px;
+        border: 0;
+        border-radius: 10px;
+        background: rgba(26, 115, 232, 0.08);
+        color: #3c4043;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+        transition: background 0.12s ease, transform 0.08s ease, color 0.12s ease;
+      }
+
+      .topbar-action:active {
+        transform: scale(0.96);
+      }
+
+      .topbar-action.is-active {
+        background: rgba(26, 115, 232, 0.16);
+        color: #1a73e8;
+      }
+
+      .topbar-action svg {
+        width: 18px;
+        height: 18px;
+      }
+
       .floating-scroll-controls {
         position: fixed;
         right: 12px;
@@ -165,6 +201,32 @@
         box-shadow: var(--shadow);
       }
 
+      .search-panel {
+        margin-top: 10px;
+        display: none;
+      }
+
+      .search-panel.is-open {
+        display: block;
+      }
+
+      .search-input {
+        width: 100%;
+        min-width: 0;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 11px 12px;
+        background: #ffffff;
+        color: var(--ink);
+        font-size: 14px;
+        outline: none;
+      }
+
+      .search-input:focus {
+        border-color: rgba(26, 115, 232, 0.45);
+        box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.1);
+      }
+
       .hero-row {
         display: flex;
         align-items: center;
@@ -238,6 +300,11 @@
 
       .item.stock-zero {
         background: #f4cccc;
+      }
+
+      .item.is-selected {
+        border-color: #1a73e8;
+        box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.18), 0 2px 8px rgba(32, 33, 36, 0.08);
       }
 
       .item-line {
@@ -381,6 +448,23 @@
           <p class="eyebrow">Stock mobile</p>
           <h1>Liste des références</h1>
         </div>
+        <div class="topbar-actions" aria-label="Actions">
+          <button id="reloadButton" class="topbar-action" type="button" aria-label="Recharger">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="currentColor" d="M17.65 6.35A7.95 7.95 0 0 0 12 4V1L7 6l5 5V7a5 5 0 1 1-4.9 6h-2.02A7 7 0 1 0 17.65 6.35z"/>
+            </svg>
+          </button>
+          <button id="searchToggleButton" class="topbar-action" type="button" aria-label="Recherche">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="currentColor" d="M15.5 14h-.79l-.28-.27a6 6 0 1 0-.71.71l.27.28v.79L20 21.5 21.5 20l-6-6zm-5.5 0A4.5 4.5 0 1 1 10 5a4.5 4.5 0 0 1 0 9z"/>
+            </svg>
+          </button>
+          <button id="selectToggleButton" class="topbar-action" type="button" aria-label="Sélection">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="currentColor" d="m9 16.17-3.88-3.88L3.71 13.7 9 19l12-12-1.41-1.41z"/>
+            </svg>
+          </button>
+        </div>
       </header>
 
       <section class="content">
@@ -390,6 +474,9 @@
             <span id="countBadge" class="badge">--</span>
           </div>
           <div id="status" class="status"></div>
+          <div id="searchPanel" class="search-panel">
+            <input id="searchInput" class="search-input" type="search" placeholder="Rechercher référence, entrepôt, arrivage, stock">
+          </div>
         </section>
 
         <section id="list" class="list" aria-live="polite"></section>
@@ -410,22 +497,44 @@
 
     <script>
       const STOCK_MOBILE_CACHE_KEY = "stockMobileCache:v1";
+      const INITIAL_RENDER_COUNT = 100;
+      const BACKGROUND_RENDER_CHUNK = 100;
       const els = {
         list: document.getElementById("list"),
         status: document.getElementById("status"),
         countBadge: document.getElementById("countBadge"),
+        reloadButton: document.getElementById("reloadButton"),
+        searchToggleButton: document.getElementById("searchToggleButton"),
+        selectToggleButton: document.getElementById("selectToggleButton"),
+        searchPanel: document.getElementById("searchPanel"),
+        searchInput: document.getElementById("searchInput"),
         floatingScrollControls: document.getElementById("floatingScrollControls"),
         scrollTopButton: document.getElementById("scrollTopButton"),
         scrollBottomButton: document.getElementById("scrollBottomButton")
       };
       let currentPayload = null;
+      let currentFilteredItems = [];
       let currentStatusText = "";
       let currentStatusKind = "normal";
+      let currentStatusSource = "normal";
       let restoreStatusTimeout = null;
+      let isShowingCache = false;
+      let isSearchOpen = false;
+      let searchQuery = "";
+      let isSelectionMode = false;
+      let selectedIds = {};
+      let isRefreshing = false;
+      let renderedCount = 0;
+      let renderToken = 0;
+      let pendingRenderItems = [];
+      let pendingRenderHandle = null;
+      let renderMetrics = null;
 
       function init() {
+        bindTopbarActions_();
         const cachedEntry = loadCache_();
         if (cachedEntry && cachedEntry.payload) {
+          isShowingCache = true;
           renderPayload_(cachedEntry.payload, { source: "cache" });
           fetchFreshData_({ hadCache: true });
           return;
@@ -437,12 +546,17 @@
 
       function setLoading() {
         currentPayload = null;
-        currentStatusText = "Chargement des références...";
-        currentStatusKind = "normal";
+        currentFilteredItems = [];
+        isShowingCache = false;
+        selectedIds = {};
         els.status.className = "status";
         els.status.innerHTML = '<span class="loading">Chargement des références...</span>';
+        currentStatusText = "Chargement des références...";
+        currentStatusKind = "normal";
+        currentStatusSource = "loading";
         els.countBadge.textContent = "...";
         els.list.innerHTML = "";
+        updateActionStates_();
       }
 
       function loadCache_() {
@@ -480,30 +594,98 @@
         }
       }
 
+      function filterItems_(items, query) {
+        const list = Array.isArray(items) ? items : [];
+        const q = normalizeSearchText_(query);
+        if (!q) return list.slice();
+
+        return list.filter(function(item) {
+          const haystack = [
+            item && item.reference,
+            item && item.warehouse,
+            item && item.arrivageRef,
+            item && item.stockDisplay
+          ].map(normalizeSearchText_).join("\n");
+          return haystack.indexOf(q) !== -1;
+        });
+      }
+
       function renderPayload_(payload, options) {
         const source = options && options.source ? options.source : "network";
         const items = Array.isArray(payload && payload.items) ? payload.items : [];
+        const metrics = options && options.metrics ? options.metrics : null;
         currentPayload = payload;
+        currentFilteredItems = filterItems_(items, searchQuery);
+        isShowingCache = source === "cache";
+        pruneSelectedIds_();
+        cancelProgressiveRender_();
+        renderMetrics = metrics;
 
         if (!items.length) {
-          setStatus_("normal", "Aucune référence exploitable dans STOCK.");
           els.countBadge.textContent = "0";
           els.list.innerHTML = '<div class="empty">Aucune référence trouvée.</div>';
+          setStatus_("normal", "Aucune référence exploitable dans STOCK.", source);
+          logRenderMetrics_(source, items.length, metrics, 0, 0);
+          updateActionStates_();
           return;
         }
 
-        const suffix = items.length > 1 ? "s" : "";
-        els.countBadge.textContent = String(items.length);
-        setStatus_(
-          "normal",
-          source === "cache"
-            ? items.length + " référence" + suffix + " (cache)"
-            : items.length + " référence" + suffix + " chargée" + suffix + "."
-        );
-        els.list.innerHTML = items.map(function(item) {
+        renderList_(currentFilteredItems, { source: source, metrics: metrics });
+        updateCountBadge_();
+        if (source === "cache") {
+          setStatus_("normal", items.length + " référence" + (items.length > 1 ? "s" : "") + " (cache)", "cache");
+        } else {
+          setStatus_("normal", items.length + " référence" + (items.length > 1 ? "s" : "") + " chargée" + (items.length > 1 ? "s" : "") + ".", "network");
+        }
+        updateActionStates_();
+      }
+
+      function renderList_(items, options) {
+        const visibleItems = Array.isArray(items) ? items : [];
+        const source = options && options.source ? options.source : "network";
+        const metrics = options && options.metrics ? options.metrics : null;
+        currentFilteredItems = visibleItems;
+        renderedCount = 0;
+        const token = ++renderToken;
+        const renderStartedAt = performance.now();
+
+        if (!visibleItems.length) {
+          els.countBadge.textContent = "0";
+          els.list.innerHTML = '<div class="empty">Aucun résultat pour cette recherche.</div>';
+          bindItemCopyHandlers();
+          logRenderMetrics_(source, visibleItems.length, metrics, 0, 0);
+          return;
+        }
+
+        const firstBatch = visibleItems.slice(0, INITIAL_RENDER_COUNT);
+        els.list.innerHTML = buildItemsMarkup_(firstBatch);
+        bindItemCopyHandlers();
+        renderedCount = firstBatch.length;
+
+        const firstRenderMs = performance.now() - renderStartedAt;
+        const remainingItems = visibleItems.slice(renderedCount);
+        pendingRenderItems = remainingItems;
+
+        if (!remainingItems.length) {
+          logRenderMetrics_(source, visibleItems.length, metrics, firstRenderMs, performance.now() - renderStartedAt);
+          return;
+        }
+
+        scheduleProgressiveRender_(token, {
+          source: source,
+          metrics: metrics,
+          totalItems: visibleItems.length,
+          firstRenderMs: firstRenderMs,
+          renderStartedAt: renderStartedAt
+        });
+      }
+
+      function buildItemsMarkup_(items) {
+        return items.map(function(item) {
           const itemClass = item.stockState === "positive" ? "item stock-positive" : "item stock-zero";
+          const selectedClass = selectedIds[item.id] ? " is-selected" : "";
           return '' +
-            '<article class="' + itemClass + '" data-reference="' + escapeHtml(item.reference || "") + '" tabindex="0" role="button" aria-label="Copier ' + escapeHtml(item.reference || "") + '">' +
+            '<article class="' + itemClass + selectedClass + '" data-item-id="' + escapeHtml(item.id || "") + '" data-reference="' + escapeHtml(item.reference || "") + '" tabindex="0" role="button" aria-label="' + escapeHtml(isSelectionMode ? "Sélectionner " : "Copier ") + escapeHtml(item.reference || "") + '">' +
               '<div class="item-line">' +
                 '<div class="item-left">' +
                   '<p class="ref">' + escapeHtml(item.reference || "-") + '</p>' +
@@ -518,18 +700,93 @@
               '</div>' +
             '</article>';
         }).join("");
+      }
 
+      function scheduleProgressiveRender_(token, context) {
+        if (pendingRenderHandle) {
+          cancelAnimationFrameIfNeeded_(pendingRenderHandle);
+          pendingRenderHandle = null;
+        }
+
+        const run = function() {
+          continueRender_(token, context);
+        };
+
+        if (typeof requestAnimationFrame === "function") {
+          pendingRenderHandle = requestAnimationFrame(run);
+          return;
+        }
+
+        pendingRenderHandle = setTimeout(run, 0);
+      }
+
+      function continueRender_(token, context) {
+        pendingRenderHandle = null;
+        if (token !== renderToken) return;
+        if (!pendingRenderItems.length) {
+          logRenderMetrics_(context.source, context.totalItems, context.metrics, context.firstRenderMs, performance.now() - context.renderStartedAt);
+          return;
+        }
+
+        const nextChunk = pendingRenderItems.splice(0, BACKGROUND_RENDER_CHUNK);
+        els.list.insertAdjacentHTML("beforeend", buildItemsMarkup_(nextChunk));
         bindItemCopyHandlers();
+        renderedCount += nextChunk.length;
+
+        if (!pendingRenderItems.length) {
+          logRenderMetrics_(context.source, context.totalItems, context.metrics, context.firstRenderMs, performance.now() - context.renderStartedAt);
+          return;
+        }
+
+        scheduleProgressiveRender_(token, context);
+      }
+
+      function cancelProgressiveRender_() {
+        renderToken += 1;
+        pendingRenderItems = [];
+        renderedCount = 0;
+        if (!pendingRenderHandle) return;
+        cancelAnimationFrameIfNeeded_(pendingRenderHandle);
+        pendingRenderHandle = null;
+      }
+
+      function cancelAnimationFrameIfNeeded_(handle) {
+        if (typeof cancelAnimationFrame === "function") {
+          cancelAnimationFrame(handle);
+          return;
+        }
+        clearTimeout(handle);
+      }
+
+      function updateCountBadge_() {
+        const totalItems = Array.isArray(currentPayload && currentPayload.items) ? currentPayload.items.length : 0;
+        const visibleCount = Array.isArray(currentFilteredItems) ? currentFilteredItems.length : 0;
+        if (searchQuery) {
+          els.countBadge.textContent = String(visibleCount) + "/" + String(totalItems);
+          return;
+        }
+        els.countBadge.textContent = String(visibleCount);
       }
 
       function fetchFreshData_(options) {
+        if (isRefreshing) return;
+        isRefreshing = true;
+        updateActionStates_();
         const hadCache = !!(options && options.hadCache);
+        const manual = !!(options && options.manual);
+        const requestStartedAt = performance.now();
+        if (manual && currentPayload) {
+          setStatus_("normal", "Mise à jour...", "refresh");
+        }
         google.script.run
           .withSuccessHandler(function(payload) {
+            isRefreshing = false;
+            const responseReceivedAt = performance.now();
             const validPayload = payload && Array.isArray(payload.items) ? payload : null;
             if (!validPayload) {
               if (hadCache && currentPayload) {
-                setStatus_("error", "Cache affiché, mise à jour impossible.");
+                  setStatus_("error", "Cache affiché, mise à jour impossible.", "cache-error");
+                updateActionStates_();
                 return;
               }
               onLoadFailure(new Error("Réponse invalide du serveur."));
@@ -538,21 +795,31 @@
 
             const samePayload = currentPayload && isPayloadEquivalent_(currentPayload, validPayload);
             saveCache_(validPayload);
+            const metrics = {
+              requestStartedAt: requestStartedAt,
+              responseReceivedAt: responseReceivedAt,
+              networkRoundTripMs: responseReceivedAt - requestStartedAt,
+              itemsReceived: validPayload.items.length
+            };
 
             if (!samePayload) {
-              renderPayload_(validPayload, { source: "network" });
+              renderPayload_(validPayload, { source: "network", metrics: metrics });
               return;
             }
 
             currentPayload = validPayload;
-            const items = validPayload.items;
-            const suffix = items.length > 1 ? "s" : "";
-            els.countBadge.textContent = String(items.length);
-            setStatus_("normal", items.length + " référence" + suffix + " chargée" + suffix + ".");
+            currentFilteredItems = filterItems_(validPayload.items, searchQuery);
+            pruneSelectedIds_();
+            updateCountBadge_();
+            setStatus_("normal", validPayload.items.length + " référence" + (validPayload.items.length > 1 ? "s" : "") + " chargée" + (validPayload.items.length > 1 ? "s" : "") + ".", "network");
+            logRenderMetrics_("network", validPayload.items.length, metrics, 0, 0, true);
+            updateActionStates_();
           })
           .withFailureHandler(function(error) {
+            isRefreshing = false;
             if (hadCache && currentPayload) {
-              setStatus_("error", "Cache affiché, mise à jour impossible.");
+              setStatus_("error", "Cache affiché, mise à jour impossible.", "cache-error");
+              updateActionStates_();
               return;
             }
             onLoadFailure(error);
@@ -563,31 +830,153 @@
       function onLoadFailure(error) {
         const message = error && error.message ? error.message : String(error || "Erreur inconnue");
         currentPayload = null;
-        setStatus_("error", message);
+        currentFilteredItems = [];
+        isShowingCache = false;
+        setStatus_("error", message, "error");
         els.countBadge.textContent = "!";
         els.list.innerHTML = "";
+        updateActionStates_();
       }
 
-      function setStatus_(kind, text) {
+      function setStatus_(kind, text, source) {
         currentStatusKind = kind || "normal";
         currentStatusText = String(text || "");
-        els.status.className = currentStatusKind === "error" ? "status error" : "status";
-        els.status.textContent = currentStatusText;
+        currentStatusSource = source || currentStatusSource || "normal";
+        updateStatusDisplay_();
+      }
+
+      function updateStatusDisplay_() {
+        let effectiveKind = currentStatusKind;
+        let effectiveText = currentStatusText;
+
+        const selectionCount = getSelectedCount_();
+        if (effectiveKind !== "error" && isSelectionMode && selectionCount > 0) {
+          effectiveKind = "normal";
+          effectiveText = selectionCount + " sélectionné" + (selectionCount > 1 ? "s" : "");
+        }
+
+        els.status.className = effectiveKind === "error" ? "status error" : "status";
+        els.status.textContent = effectiveText;
       }
 
       function bindItemCopyHandlers() {
         Array.prototype.forEach.call(els.list.querySelectorAll(".item"), function(node) {
+          if (node.getAttribute("data-bound") === "1") return;
+          node.setAttribute("data-bound", "1");
+
           node.addEventListener("click", function() {
-            copyReferenceFromNode(node);
+            handleItemActivate_(node);
           });
 
           node.addEventListener("keydown", function(event) {
             if (event.key === "Enter" || event.key === " ") {
               event.preventDefault();
-              copyReferenceFromNode(node);
+              handleItemActivate_(node);
             }
           });
         });
+      }
+
+      function handleItemActivate_(node) {
+        if (isSelectionMode) {
+          toggleSelectedItem_(String(node.getAttribute("data-item-id") || ""));
+          return;
+        }
+        copyReferenceFromNode(node);
+      }
+
+      function toggleSelectedItem_(itemId) {
+        if (!itemId) return;
+        if (selectedIds[itemId]) delete selectedIds[itemId];
+        else selectedIds[itemId] = true;
+        renderList_(currentFilteredItems);
+        updateCountBadge_();
+        updateStatusDisplay_();
+      }
+
+      function getSelectedCount_() {
+        return Object.keys(selectedIds).length;
+      }
+
+      function pruneSelectedIds_() {
+        const validIds = {};
+        const items = Array.isArray(currentPayload && currentPayload.items) ? currentPayload.items : [];
+        for (let i = 0; i < items.length; i++) {
+          const itemId = items[i] && items[i].id;
+          if (itemId && selectedIds[itemId]) validIds[itemId] = true;
+        }
+        selectedIds = validIds;
+      }
+
+      function toggleSearch_() {
+        isSearchOpen = !isSearchOpen;
+        if (!isSearchOpen) {
+          searchQuery = "";
+          if (els.searchInput) els.searchInput.value = "";
+        }
+        updateActionStates_();
+        applySearch_();
+        if (isSearchOpen && els.searchInput) {
+          try { els.searchInput.focus(); } catch (error) {}
+        }
+      }
+
+      function toggleSelectionMode_() {
+        isSelectionMode = !isSelectionMode;
+        updateActionStates_();
+        renderList_(currentFilteredItems);
+        updateCountBadge_();
+        updateStatusDisplay_();
+      }
+
+      function applySearch_() {
+        const baseItems = Array.isArray(currentPayload && currentPayload.items) ? currentPayload.items : [];
+        currentFilteredItems = filterItems_(baseItems, searchQuery);
+        renderList_(currentFilteredItems, { source: "search", metrics: null });
+        updateCountBadge_();
+        updateStatusDisplay_();
+      }
+
+      function bindTopbarActions_() {
+        if (els.reloadButton) {
+          els.reloadButton.addEventListener("click", function() {
+            fetchFreshData_({ manual: true, hadCache: !!currentPayload });
+          });
+        }
+
+        if (els.searchToggleButton) {
+          els.searchToggleButton.addEventListener("click", function() {
+            toggleSearch_();
+          });
+        }
+
+        if (els.selectToggleButton) {
+          els.selectToggleButton.addEventListener("click", function() {
+            toggleSelectionMode_();
+          });
+        }
+
+        if (els.searchInput) {
+          els.searchInput.addEventListener("input", function(event) {
+            searchQuery = String(event.target.value || "");
+            applySearch_();
+          });
+        }
+      }
+
+      function updateActionStates_() {
+        if (els.searchPanel) {
+          els.searchPanel.classList.toggle("is-open", isSearchOpen);
+        }
+        if (els.searchToggleButton) {
+          els.searchToggleButton.classList.toggle("is-active", isSearchOpen);
+        }
+        if (els.selectToggleButton) {
+          els.selectToggleButton.classList.toggle("is-active", isSelectionMode);
+        }
+        if (els.reloadButton) {
+          els.reloadButton.classList.toggle("is-active", isRefreshing);
+        }
       }
 
       function copyReferenceFromNode(node) {
@@ -596,16 +985,17 @@
 
         const previousStatus = currentStatusText;
         const previousKind = currentStatusKind;
+        const previousSource = currentStatusSource;
         Promise.resolve(copyText(reference))
           .then(function() {
-            showTemporaryStatus("Copié : " + reference, previousStatus, previousKind, false);
+            showTemporaryStatus("Copié : " + reference, previousStatus, previousKind, previousSource, false);
           })
           .catch(function() {
-            showTemporaryStatus("Copie impossible : " + reference, previousStatus, previousKind, true);
+            showTemporaryStatus("Copie impossible : " + reference, previousStatus, previousKind, previousSource, true);
           });
       }
 
-      function showTemporaryStatus(message, previousStatus, previousKind, isError) {
+      function showTemporaryStatus(message, previousStatus, previousKind, previousSource, isError) {
         if (restoreStatusTimeout) {
           clearTimeout(restoreStatusTimeout);
           restoreStatusTimeout = null;
@@ -617,8 +1007,8 @@
         restoreStatusTimeout = setTimeout(function() {
           currentStatusKind = previousKind || "normal";
           currentStatusText = previousStatus || "";
-          els.status.className = currentStatusKind === "error" ? "status error" : "status";
-          els.status.textContent = currentStatusText;
+          currentStatusSource = previousSource || "normal";
+          updateStatusDisplay_();
           restoreStatusTimeout = null;
         }, 1500);
       }
@@ -658,6 +1048,27 @@
           .replace(/>/g, "&gt;")
           .replace(/\"/g, "&quot;")
           .replace(/'/g, "&#39;");
+      }
+
+      function normalizeSearchText_(value) {
+        return String(value || "").toLowerCase().trim();
+      }
+
+      function logRenderMetrics_(source, itemCount, metrics, firstRenderMs, fullRenderMs, noRenderNeeded) {
+        const networkRoundTripMs = metrics && typeof metrics.networkRoundTripMs === "number"
+          ? metrics.networkRoundTripMs
+          : null;
+        const output = {
+          source: source,
+          items: itemCount,
+          networkRoundTripMs: networkRoundTripMs,
+          firstRenderMs: firstRenderMs,
+          fullRenderMs: fullRenderMs,
+          noRenderNeeded: !!noRenderNeeded
+        };
+        try {
+          console.log("[StockMobile perf]", output);
+        } catch (error) {}
       }
 
       let floatingControlsTimeout = null;

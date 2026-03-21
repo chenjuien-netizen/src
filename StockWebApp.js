@@ -12,6 +12,7 @@ function StockWebApp_getList() {
 }
 
 function StockWebApp_getList_() {
+  const totalStart = Date.now();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sh = ss.getSheetByName(SHEET_STOCK);
 
@@ -25,42 +26,76 @@ function StockWebApp_getList_() {
     throw new Error("La feuille STOCK ne contient aucun en-tête.");
   }
 
+  const headersStart = Date.now();
   const headers = sh.getRange(1, 1, 1, lastCol).getDisplayValues()[0];
+  const headersMs = Date.now() - headersStart;
+
+  const resolveStart = Date.now();
   const cols = StockWebApp_resolveColumns_(headers);
+  const resolveMs = Date.now() - resolveStart;
   const rowCount = Math.max(0, lastRow - 1);
-  const values = rowCount ? sh.getRange(2, 1, rowCount, lastCol).getDisplayValues() : [];
+  const usedCols = StockWebApp_collectUsedColumns_(cols);
+  const minCol = usedCols.length ? Math.min.apply(null, usedCols) : 1;
+  const maxCol = usedCols.length ? Math.max.apply(null, usedCols) : 1;
+
+  const fetchStart = Date.now();
+  const values = rowCount
+    ? sh.getRange(2, minCol, rowCount, maxCol - minCol + 1).getDisplayValues()
+    : [];
+  const fetchMs = Date.now() - fetchStart;
+
+  const buildStart = Date.now();
   const items = [];
 
   for (let i = 0; i < values.length; i++) {
-    const item = StockWebApp_buildItem_(values[i], cols, i + 2);
+    const item = StockWebApp_buildItem_(values[i], cols, i + 2, minCol);
     if (item) items.push(item);
   }
+  const buildMs = Date.now() - buildStart;
+  const totalMs = Date.now() - totalStart;
 
   if (!items.length) {
     Logger.log(
-      "StockWebApp_getList_ | no items returned | sheet=%s | headers=%s | columns=%s | missingOptional=%s | missingRaw=%s | stockStateSource=%s | rowsRead=%s | sampleReferenceValues=%s",
+      "StockWebApp_getList_ | no items returned | sheet=%s | headers=%s | columns=%s | missingOptional=%s | missingRaw=%s | rowsRead=%s | readRange=%s:%s | timingsMs=%s | sampleReferenceValues=%s",
       sh.getName(),
       JSON.stringify(headers),
       JSON.stringify(StockWebApp_logColumns_(headers, cols)),
       JSON.stringify(StockWebApp_missingOptionalColumns_(cols)),
       JSON.stringify(StockWebApp_missingRawColumns_(cols)),
-      "n/a",
       rowCount,
+      minCol,
+      maxCol,
+      JSON.stringify({
+        headers: headersMs,
+        resolve: resolveMs,
+        fetch: fetchMs,
+        build: buildMs,
+        total: totalMs
+      }),
       JSON.stringify(values.slice(0, 10).map(function(row) {
-        return row[cols.reference - 1];
+        return StockWebApp_getCellByAbsCol_(row, cols.reference, minCol);
       }))
     );
   }
 
   Logger.log(
-    "StockWebApp_getList_ | sheet=%s | headers=%s | columns=%s | missingOptional=%s | missingRaw=%s | rowsRead=%s | itemsReturned=%s",
+    "StockWebApp_getList_ | sheet=%s | headers=%s | columns=%s | missingOptional=%s | missingRaw=%s | rowsRead=%s | readRange=%s:%s | itemsReturned=%s | timingsMs=%s",
     sh.getName(),
     JSON.stringify(headers),
     JSON.stringify(StockWebApp_logColumns_(headers, cols)),
     JSON.stringify(StockWebApp_missingOptionalColumns_(cols)),
     JSON.stringify(StockWebApp_missingRawColumns_(cols)),
     rowCount,
-    items.length
+    minCol,
+    maxCol,
+    items.length,
+    JSON.stringify({
+      headers: headersMs,
+      resolve: resolveMs,
+      fetch: fetchMs,
+      build: buildMs,
+      total: totalMs
+    })
   );
 
   return { items: items };
@@ -109,17 +144,17 @@ function StockWebApp_resolveColumns_(headers) {
   return cols;
 }
 
-function StockWebApp_buildItem_(row, cols, rowIndex) {
-  const reference = StockWebApp_normalizeReference_(row[cols.reference - 1]);
+function StockWebApp_buildItem_(row, cols, rowIndex, baseCol) {
+  const reference = StockWebApp_normalizeReference_(StockWebApp_getCellByAbsCol_(row, cols.reference, baseCol));
   if (!reference) return null;
 
   return {
     id: "row_" + String(rowIndex || 0),
     reference: reference,
-    stockDisplay: StockWebApp_optionalText_(row, cols.stockDisplay),
-    arrivageRef: StockWebApp_optionalText_(row, cols.arrivageRef),
-    warehouse: StockWebApp_optionalText_(row, cols.warehouse),
-    stockState: StockWebApp_computeStockState_(row, cols).state
+    stockDisplay: StockWebApp_optionalText_(row, cols.stockDisplay, baseCol),
+    arrivageRef: StockWebApp_optionalText_(row, cols.arrivageRef, baseCol),
+    warehouse: StockWebApp_optionalText_(row, cols.warehouse, baseCol),
+    stockState: StockWebApp_computeStockState_(row, cols, baseCol).state
   };
 }
 
@@ -130,9 +165,26 @@ function StockWebApp_normalizeReference_(value) {
   return String(value || "").trim().toUpperCase();
 }
 
-function StockWebApp_optionalText_(row, col) {
+function StockWebApp_getCellByAbsCol_(row, absCol, baseCol) {
+  if (!absCol) return "";
+  const index = absCol - (baseCol || 1);
+  if (index < 0 || index >= row.length) return "";
+  const value = row[index];
+  return value === null || typeof value === "undefined" ? "" : value;
+}
+
+function StockWebApp_optionalText_(row, col, baseCol) {
   if (!col) return "";
-  return String(row[col - 1] === null || typeof row[col - 1] === "undefined" ? "" : row[col - 1]).trim();
+  return String(StockWebApp_getCellByAbsCol_(row, col, baseCol)).trim();
+}
+
+function StockWebApp_collectUsedColumns_(cols) {
+  const out = [];
+  Object.keys(cols || {}).forEach(function(key) {
+    const col = cols[key];
+    if (col && out.indexOf(col) === -1) out.push(col);
+  });
+  return out;
 }
 
 function StockWebApp_logColumns_(headers, cols) {
@@ -167,23 +219,23 @@ function StockWebApp_missingRawColumns_(cols) {
   return missing;
 }
 
-function StockWebApp_computeStockState_(row, cols) {
-  const tail = StockWebApp_parsePositiveNumber_(row, cols.tailRaw);
-  const unitsPerBox = StockWebApp_parsePositiveNumber_(row, cols.unitsPerBoxRaw);
-  const boxes = StockWebApp_parsePositiveNumber_(row, cols.boxesRaw);
-  const fractionPositive = StockWebApp_isPositiveFractionLike_(row, cols.fractionRaw);
+function StockWebApp_computeStockState_(row, cols, baseCol) {
+  const tail = StockWebApp_parsePositiveNumber_(row, cols.tailRaw, baseCol);
+  const unitsPerBox = StockWebApp_parsePositiveNumber_(row, cols.unitsPerBoxRaw, baseCol);
+  const boxes = StockWebApp_parsePositiveNumber_(row, cols.boxesRaw, baseCol);
+  const fractionPositive = StockWebApp_isPositiveFractionLike_(row, cols.fractionRaw, baseCol);
 
   if (tail > 0) return { state: "positive", source: "raw-columns" };
   if (unitsPerBox > 0 && boxes > 0) return { state: "positive", source: "raw-columns" };
   if (unitsPerBox > 0 && fractionPositive) return { state: "positive", source: "raw-columns" };
 
   if (cols.tailRaw || cols.unitsPerBoxRaw || cols.boxesRaw || cols.fractionRaw) {
-    const stockNumeric = StockWebApp_parseFiniteNumber_(row, cols.stockRaw);
+    const stockNumeric = StockWebApp_parseFiniteNumber_(row, cols.stockRaw, baseCol);
     if (stockNumeric !== null) {
       return { state: stockNumeric > 0 ? "positive" : "zero", source: "stock" };
     }
 
-    const displayNumber = StockWebApp_extractFirstNumber_(StockWebApp_optionalText_(row, cols.stockDisplay));
+    const displayNumber = StockWebApp_extractFirstNumber_(StockWebApp_optionalText_(row, cols.stockDisplay, baseCol));
     if (displayNumber !== null) {
       return { state: displayNumber > 0 ? "positive" : "zero", source: "rest-display" };
     }
@@ -191,12 +243,12 @@ function StockWebApp_computeStockState_(row, cols) {
     return { state: "zero", source: "default-zero" };
   }
 
-  const stockNumeric = StockWebApp_parseFiniteNumber_(row, cols.stockRaw);
+  const stockNumeric = StockWebApp_parseFiniteNumber_(row, cols.stockRaw, baseCol);
   if (stockNumeric !== null) {
     return { state: stockNumeric > 0 ? "positive" : "zero", source: "stock" };
   }
 
-  const displayNumber = StockWebApp_extractFirstNumber_(StockWebApp_optionalText_(row, cols.stockDisplay));
+  const displayNumber = StockWebApp_extractFirstNumber_(StockWebApp_optionalText_(row, cols.stockDisplay, baseCol));
   if (displayNumber !== null) {
     return { state: displayNumber > 0 ? "positive" : "zero", source: "rest-display" };
   }
@@ -204,9 +256,9 @@ function StockWebApp_computeStockState_(row, cols) {
   return { state: "zero", source: "default-zero" };
 }
 
-function StockWebApp_parseFiniteNumber_(row, col) {
+function StockWebApp_parseFiniteNumber_(row, col, baseCol) {
   if (!col) return null;
-  const raw = row[col - 1];
+  const raw = StockWebApp_getCellByAbsCol_(row, col, baseCol);
   if (raw === null || typeof raw === "undefined" || String(raw).trim() === "") return null;
   const normalized = String(raw).trim().replace(",", ".");
   if (!/^[-+]?\d+(?:\.\d+)?$/.test(normalized)) return null;
@@ -214,17 +266,17 @@ function StockWebApp_parseFiniteNumber_(row, col) {
   return Number.isFinite(numberValue) ? numberValue : null;
 }
 
-function StockWebApp_parsePositiveNumber_(row, col) {
-  const numberValue = StockWebApp_parseFiniteNumber_(row, col);
+function StockWebApp_parsePositiveNumber_(row, col, baseCol) {
+  const numberValue = StockWebApp_parseFiniteNumber_(row, col, baseCol);
   return numberValue !== null && numberValue > 0 ? numberValue : 0;
 }
 
-function StockWebApp_isPositiveFractionLike_(row, col) {
-  const numberValue = StockWebApp_parseFiniteNumber_(row, col);
+function StockWebApp_isPositiveFractionLike_(row, col, baseCol) {
+  const numberValue = StockWebApp_parseFiniteNumber_(row, col, baseCol);
   if (numberValue !== null) return numberValue > 0;
   if (!col) return false;
 
-  const raw = row[col - 1];
+  const raw = StockWebApp_getCellByAbsCol_(row, col, baseCol);
   const normalized = String(raw === null || typeof raw === "undefined" ? "" : raw)
     .trim()
     .replace(/\s*\/\s*/g, "/");

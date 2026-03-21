@@ -1,5 +1,29 @@
+const INITIAL_SERVER_RENDER_COUNT = 100;
+
 function doGet() {
-  return HtmlService.createHtmlOutputFromFile("StockMobile")
+  const initialResult = StockWebApp_collectPayload_(INITIAL_SERVER_RENDER_COUNT);
+  Logger.log(
+    "StockWebApp_doGet | initialItems=%s | rowsFetched=%s | readRange=%s:%s | timingsMs=%s",
+    initialResult.payload.items.length,
+    initialResult.meta.rowsFetched,
+    initialResult.meta.minCol,
+    initialResult.meta.maxCol,
+    JSON.stringify(initialResult.meta.timings)
+  );
+
+  const template = HtmlService.createTemplateFromFile("StockMobile");
+  template.initialBootJson = StockWebApp_safeJsonForTemplate_({
+    payload: initialResult.payload,
+    source: "server",
+    generatedAt: new Date().toISOString()
+  });
+  template.initialListMarkup = StockWebApp_renderItemsHtml_(initialResult.payload.items);
+  template.initialCountText = String(initialResult.payload.items.length || 0);
+  template.initialStatusText = initialResult.payload.items.length
+    ? initialResult.payload.items.length + " référence" + (initialResult.payload.items.length > 1 ? "s" : "") + " affichée" + (initialResult.payload.items.length > 1 ? "s" : "") + "."
+    : "";
+
+  return template.evaluate()
     .setTitle("SZFashion Stock")
     .addMetaTag("viewport", "width=device-width, initial-scale=1, viewport-fit=cover")
     .addMetaTag("mobile-web-app-capable", "yes")
@@ -12,6 +36,44 @@ function StockWebApp_getList() {
 }
 
 function StockWebApp_getList_() {
+  const result = StockWebApp_collectPayload_(null);
+  const headers = result.meta.headers;
+  const cols = result.meta.cols;
+
+  if (!result.payload.items.length) {
+    Logger.log(
+      "StockWebApp_getList_ | no items returned | sheet=%s | headers=%s | columns=%s | missingOptional=%s | missingRaw=%s | rowsRead=%s | readRange=%s:%s | timingsMs=%s | sampleReferenceValues=%s",
+      result.meta.sheetName,
+      JSON.stringify(headers),
+      JSON.stringify(StockWebApp_logColumns_(headers, cols)),
+      JSON.stringify(StockWebApp_missingOptionalColumns_(cols)),
+      JSON.stringify(StockWebApp_missingRawColumns_(cols)),
+      result.meta.rowsFetched,
+      result.meta.minCol,
+      result.meta.maxCol,
+      JSON.stringify(result.meta.timings),
+      JSON.stringify(result.meta.sampleReferenceValues)
+    );
+  }
+
+  Logger.log(
+    "StockWebApp_getList_ | sheet=%s | headers=%s | columns=%s | missingOptional=%s | missingRaw=%s | rowsRead=%s | readRange=%s:%s | itemsReturned=%s | timingsMs=%s",
+    result.meta.sheetName,
+    JSON.stringify(headers),
+    JSON.stringify(StockWebApp_logColumns_(headers, cols)),
+    JSON.stringify(StockWebApp_missingOptionalColumns_(cols)),
+    JSON.stringify(StockWebApp_missingRawColumns_(cols)),
+    result.meta.rowsFetched,
+    result.meta.minCol,
+    result.meta.maxCol,
+    result.payload.items.length,
+    JSON.stringify(result.meta.timings)
+  );
+
+  return result.payload;
+}
+
+function StockWebApp_collectPayload_(limit) {
   const totalStart = Date.now();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sh = ss.getSheetByName(SHEET_STOCK);
@@ -33,72 +95,81 @@ function StockWebApp_getList_() {
   const resolveStart = Date.now();
   const cols = StockWebApp_resolveColumns_(headers);
   const resolveMs = Date.now() - resolveStart;
+
   const rowCount = Math.max(0, lastRow - 1);
   const usedCols = StockWebApp_collectUsedColumns_(cols);
   const minCol = usedCols.length ? Math.min.apply(null, usedCols) : 1;
   const maxCol = usedCols.length ? Math.max.apply(null, usedCols) : 1;
-
-  const fetchStart = Date.now();
-  const values = rowCount
-    ? sh.getRange(2, minCol, rowCount, maxCol - minCol + 1).getDisplayValues()
-    : [];
-  const fetchMs = Date.now() - fetchStart;
-
-  const buildStart = Date.now();
   const items = [];
+  const sampleReferenceValues = [];
+  let rowsFetched = 0;
+  let fetchMs = 0;
+  let buildMs = 0;
 
-  for (let i = 0; i < values.length; i++) {
-    const item = StockWebApp_buildItem_(values[i], cols, i + 2, minCol);
-    if (item) items.push(item);
+  if (rowCount > 0) {
+    const width = maxCol - minCol + 1;
+    if (limit && limit > 0) {
+      const batchSize = Math.max(limit, 250);
+      let startRow = 2;
+
+      while (startRow <= lastRow && items.length < limit) {
+        const rowsToRead = Math.min(batchSize, lastRow - startRow + 1);
+
+        const fetchStart = Date.now();
+        const values = sh.getRange(startRow, minCol, rowsToRead, width).getDisplayValues();
+        fetchMs += Date.now() - fetchStart;
+        rowsFetched += rowsToRead;
+
+        const buildStart = Date.now();
+        for (let i = 0; i < values.length && items.length < limit; i++) {
+          if (sampleReferenceValues.length < 10) {
+            sampleReferenceValues.push(StockWebApp_getCellByAbsCol_(values[i], cols.reference, minCol));
+          }
+          const item = StockWebApp_buildItem_(values[i], cols, startRow + i, minCol);
+          if (item) items.push(item);
+        }
+        buildMs += Date.now() - buildStart;
+
+        startRow += rowsToRead;
+      }
+    } else {
+      const fetchStart = Date.now();
+      const values = sh.getRange(2, minCol, rowCount, width).getDisplayValues();
+      fetchMs += Date.now() - fetchStart;
+      rowsFetched = rowCount;
+
+      const buildStart = Date.now();
+      for (let i = 0; i < values.length; i++) {
+        if (sampleReferenceValues.length < 10) {
+          sampleReferenceValues.push(StockWebApp_getCellByAbsCol_(values[i], cols.reference, minCol));
+        }
+        const item = StockWebApp_buildItem_(values[i], cols, i + 2, minCol);
+        if (item) items.push(item);
+      }
+      buildMs += Date.now() - buildStart;
+    }
   }
-  const buildMs = Date.now() - buildStart;
-  const totalMs = Date.now() - totalStart;
 
-  if (!items.length) {
-    Logger.log(
-      "StockWebApp_getList_ | no items returned | sheet=%s | headers=%s | columns=%s | missingOptional=%s | missingRaw=%s | rowsRead=%s | readRange=%s:%s | timingsMs=%s | sampleReferenceValues=%s",
-      sh.getName(),
-      JSON.stringify(headers),
-      JSON.stringify(StockWebApp_logColumns_(headers, cols)),
-      JSON.stringify(StockWebApp_missingOptionalColumns_(cols)),
-      JSON.stringify(StockWebApp_missingRawColumns_(cols)),
-      rowCount,
-      minCol,
-      maxCol,
-      JSON.stringify({
+  return {
+    payload: { items: items },
+    meta: {
+      sheetName: sh.getName(),
+      headers: headers,
+      cols: cols,
+      rowCount: rowCount,
+      rowsFetched: rowsFetched,
+      minCol: minCol,
+      maxCol: maxCol,
+      sampleReferenceValues: sampleReferenceValues,
+      timings: {
         headers: headersMs,
         resolve: resolveMs,
         fetch: fetchMs,
         build: buildMs,
-        total: totalMs
-      }),
-      JSON.stringify(values.slice(0, 10).map(function(row) {
-        return StockWebApp_getCellByAbsCol_(row, cols.reference, minCol);
-      }))
-    );
-  }
-
-  Logger.log(
-    "StockWebApp_getList_ | sheet=%s | headers=%s | columns=%s | missingOptional=%s | missingRaw=%s | rowsRead=%s | readRange=%s:%s | itemsReturned=%s | timingsMs=%s",
-    sh.getName(),
-    JSON.stringify(headers),
-    JSON.stringify(StockWebApp_logColumns_(headers, cols)),
-    JSON.stringify(StockWebApp_missingOptionalColumns_(cols)),
-    JSON.stringify(StockWebApp_missingRawColumns_(cols)),
-    rowCount,
-    minCol,
-    maxCol,
-    items.length,
-    JSON.stringify({
-      headers: headersMs,
-      resolve: resolveMs,
-      fetch: fetchMs,
-      build: buildMs,
-      total: totalMs
-    })
-  );
-
-  return { items: items };
+        total: Date.now() - totalStart
+      }
+    }
+  };
 }
 
 function StockWebApp_resolveColumns_(headers) {
@@ -308,4 +379,52 @@ function StockWebApp_normalizeHeaderCandidate_(value) {
     .replace(/[’`´]/g, "'")
     .replace(/\s+/g, " ")
     .toLowerCase();
+}
+
+function StockWebApp_renderItemsHtml_(items) {
+  return (Array.isArray(items) ? items : []).map(function(item) {
+    return StockWebApp_renderItemHtml_(item);
+  }).join("");
+}
+
+function StockWebApp_renderItemHtml_(item) {
+  const itemClass = item && item.stockState === "positive" ? "item stock-positive" : "item stock-zero";
+  const reference = item && item.reference ? item.reference : "-";
+  const stockDisplay = item && item.stockDisplay ? item.stockDisplay : "";
+  const warehouse = item && item.warehouse ? item.warehouse : "";
+  const arrivageRef = item && item.arrivageRef ? item.arrivageRef : "";
+
+  return '' +
+    '<article class="' + itemClass + '" data-item-id="' + StockWebApp_escapeHtml_(item && item.id ? item.id : "") + '" data-reference="' + StockWebApp_escapeHtml_(item && item.reference ? item.reference : "") + '" tabindex="0" role="button" aria-label="Copier ' + StockWebApp_escapeHtml_(reference) + '">' +
+      '<div class="item-line">' +
+        '<div class="item-left">' +
+          '<p class="ref">' + StockWebApp_escapeHtml_(reference) + '</p>' +
+          (stockDisplay
+            ? '<div class="item-stock-box"><span class="item-stock">' + StockWebApp_escapeHtml_(stockDisplay) + '</span></div>'
+            : '') +
+        '</div>' +
+        '<div class="item-right">' +
+          (warehouse ? '<span class="item-warehouse">' + StockWebApp_escapeHtml_(warehouse) + '</span>' : '') +
+          (arrivageRef ? '<p class="item-arrivage">' + StockWebApp_escapeHtml_(arrivageRef) + '</p>' : '') +
+        '</div>' +
+      '</div>' +
+    '</article>';
+}
+
+function StockWebApp_escapeHtml_(value) {
+  return String(value === null || typeof value === "undefined" ? "" : value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function StockWebApp_safeJsonForTemplate_(value) {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
 }

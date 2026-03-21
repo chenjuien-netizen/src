@@ -471,15 +471,15 @@
         <section class="hero">
           <div class="hero-row">
             <p class="hero-label">Références disponibles</p>
-            <span id="countBadge" class="badge">--</span>
+            <span id="countBadge" class="badge"><?= initialCountText || "--" ?></span>
           </div>
-          <div id="status" class="status"></div>
+          <div id="status" class="status"><?= initialStatusText || "" ?></div>
           <div id="searchPanel" class="search-panel">
             <input id="searchInput" class="search-input" type="search" placeholder="Rechercher référence, entrepôt, arrivage, stock">
           </div>
         </section>
 
-        <section id="list" class="list" aria-live="polite"></section>
+        <section id="list" class="list" aria-live="polite"><?!= initialListMarkup || "" ?></section>
       </section>
       <div id="floatingScrollControls" class="floating-scroll-controls" aria-hidden="false">
         <button id="scrollTopButton" class="floating-scroll-button" type="button" aria-label="Remonter en haut">
@@ -494,6 +494,8 @@
         </button>
       </div>
     </main>
+
+    <script id="initialBootData" type="application/json"><?!= initialBootJson || "null" ?></script>
 
     <script>
       const STOCK_MOBILE_CACHE_KEY = "stockMobileCache:v1";
@@ -532,6 +534,16 @@
 
       function init() {
         bindTopbarActions_();
+        const initialBoot = loadInitialBoot_();
+        if (initialBoot && initialBoot.payload && Array.isArray(initialBoot.payload.items) && initialBoot.payload.items.length) {
+          renderPayload_(initialBoot.payload, {
+            source: initialBoot.source || "server",
+            preRendered: true
+          });
+          fetchFreshData_({ hadCache: true });
+          return;
+        }
+
         const cachedEntry = loadCache_();
         if (cachedEntry && cachedEntry.payload) {
           isShowingCache = true;
@@ -557,6 +569,22 @@
         els.countBadge.textContent = "...";
         els.list.innerHTML = "";
         updateActionStates_();
+      }
+
+      function loadInitialBoot_() {
+        try {
+          const node = document.getElementById("initialBootData");
+          if (!node) return null;
+          const raw = String(node.textContent || "").trim();
+          if (!raw) return null;
+          const parsed = JSON.parse(raw);
+          if (!parsed || typeof parsed !== "object") return null;
+          if (!parsed.payload || typeof parsed.payload !== "object") return null;
+          if (!Array.isArray(parsed.payload.items)) return null;
+          return parsed;
+        } catch (error) {
+          return null;
+        }
       }
 
       function loadCache_() {
@@ -614,6 +642,7 @@
         const source = options && options.source ? options.source : "network";
         const items = Array.isArray(payload && payload.items) ? payload.items : [];
         const metrics = options && options.metrics ? options.metrics : null;
+        const preRendered = !!(options && options.preRendered);
         currentPayload = payload;
         currentFilteredItems = filterItems_(items, searchQuery);
         isShowingCache = source === "cache";
@@ -630,10 +659,23 @@
           return;
         }
 
+        if (preRendered && source === "server" && !searchQuery && items.length <= INITIAL_RENDER_COUNT) {
+          pendingRenderItems = [];
+          renderedCount = items.length;
+          bindItemCopyHandlers();
+          updateCountBadge_();
+          setStatus_("normal", items.length + " référence" + (items.length > 1 ? "s" : "") + " affichée" + (items.length > 1 ? "s" : "") + ".", "server");
+          logRenderMetrics_(source, items.length, metrics, 0, 0, true);
+          updateActionStates_();
+          return;
+        }
+
         renderList_(currentFilteredItems, { source: source, metrics: metrics });
         updateCountBadge_();
         if (source === "cache") {
           setStatus_("normal", items.length + " référence" + (items.length > 1 ? "s" : "") + " (cache)", "cache");
+        } else if (source === "server") {
+          setStatus_("normal", items.length + " référence" + (items.length > 1 ? "s" : "") + " affichée" + (items.length > 1 ? "s" : "") + ".", "server");
         } else {
           setStatus_("normal", items.length + " référence" + (items.length > 1 ? "s" : "") + " chargée" + (items.length > 1 ? "s" : "") + ".", "network");
         }

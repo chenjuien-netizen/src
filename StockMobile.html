@@ -268,19 +268,21 @@
 
       .list {
         display: grid;
-        gap: 7px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
         width: 100%;
         max-width: 100%;
         overflow-x: hidden;
+        align-items: start;
       }
 
       .item {
         display: block;
-        padding: 9px 10px;
+        padding: 7px 8px;
         border: 1px solid var(--line);
-        border-radius: 14px;
+        border-radius: 10px;
         background: var(--surface);
-        box-shadow: 0 2px 8px rgba(32, 33, 36, 0.05);
+        box-shadow: none;
         transition: transform 0.08s ease, background 0.1s ease;
         cursor: pointer;
         -webkit-tap-highlight-color: transparent;
@@ -295,22 +297,20 @@
       }
 
       .item.stock-positive {
-        background: #b7e1cd;
+        background: #cfead9;
       }
 
       .item.stock-zero {
-        background: #f4cccc;
+        background: #f6d7d7;
       }
 
       .item.is-selected {
         border-color: #1a73e8;
-        box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.18), 0 2px 8px rgba(32, 33, 36, 0.08);
+        box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.16);
       }
 
       .item-line {
-        display: flex;
-        align-items: stretch;
-        gap: 8px;
+        display: block;
         width: 100%;
         min-width: 0;
         max-width: 100%;
@@ -319,10 +319,11 @@
 
       .item-left {
         display: flex;
-        align-items: center;
-        gap: 8px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
         min-width: 0;
-        flex: 1 1 auto;
+        width: 100%;
         overflow: hidden;
       }
 
@@ -331,48 +332,46 @@
         align-items: center;
         justify-content: center;
         flex: 0 0 auto;
-        min-width: 62px;
-        padding: 5px 10px;
-        border-radius: 10px;
-        background: rgba(255, 255, 255, 0.82);
-        border: 1px solid rgba(32, 33, 36, 0.08);
+        min-width: 0;
+        max-width: 100%;
+        padding: 1px 0;
+        border-radius: 0;
+        background: transparent;
+        border: 0;
         text-align: center;
       }
 
       .ref {
         margin: 0;
+        width: 100%;
         min-width: 0;
-        flex: 1 1 auto;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        font-size: 15px;
+        font-size: 14px;
         font-weight: 800;
-        line-height: 1.2;
+        line-height: 1.15;
         color: #202124;
       }
 
       .item-stock {
         display: inline-flex;
         align-items: center;
-        justify-content: center;
-        width: 100%;
-        font-size: 12px;
+        justify-content: flex-start;
+        width: auto;
+        max-width: 100%;
+        font-size: 11px;
         line-height: 1.2;
         font-weight: 700;
         color: #244a35;
-        text-align: center;
+        text-align: left;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
 
       .item-right {
-        display: inline-flex;
-        align-items: center;
-        justify-content: flex-end;
-        gap: 8px;
-        flex: 0 0 auto;
-        min-width: 0;
-        margin-left: auto;
-        white-space: nowrap;
+        display: none;
       }
 
       .item-warehouse {
@@ -400,12 +399,25 @@
       }
 
       .empty {
+        grid-column: 1 / -1;
         padding: 18px;
         border: 1px dashed #c8ced8;
         border-radius: 16px;
         text-align: center;
         color: var(--muted);
         background: rgba(255, 255, 255, 0.88);
+      }
+
+      @media (min-width: 680px) {
+        .list {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+      }
+
+      @media (min-width: 960px) {
+        .list {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
       }
 
       .loading {
@@ -734,10 +746,6 @@
                   (item.stockDisplay
                     ? '<div class="item-stock-box"><span class="item-stock">' + escapeHtml(item.stockDisplay) + '</span></div>'
                     : '') +
-                '</div>' +
-                '<div class="item-right">' +
-                  (item.warehouse ? '<span class="item-warehouse">' + escapeHtml(item.warehouse) + '</span>' : '') +
-                  (item.arrivageRef ? '<p class="item-arrivage">' + escapeHtml(item.arrivageRef) + '</p>' : '') +
                 '</div>' +
               '</div>' +
             '</article>';

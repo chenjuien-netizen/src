@@ -38,6 +38,13 @@
         width: 100%;
         max-width: 100%;
         overflow-x: hidden;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      html,
+      body {
+        overscroll-behavior-y: contain;
       }
 
       .app {
@@ -60,6 +67,53 @@
         background: rgba(255, 255, 255, 0.96);
         border-bottom: 1px solid var(--line);
         backdrop-filter: blur(10px);
+      }
+
+      .floating-scroll-controls {
+        position: fixed;
+        right: 12px;
+        bottom: calc(84px + env(safe-area-inset-bottom));
+        z-index: 40;
+        display: flex;
+        align-items: center;
+        flex-direction: column;
+        gap: 10px;
+        opacity: 0;
+        pointer-events: none;
+        transform: translateY(8px);
+        transition: opacity 0.18s ease, transform 0.18s ease;
+      }
+
+      .floating-scroll-controls.is-visible {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translateY(0);
+      }
+
+      .floating-scroll-button {
+        width: 42px;
+        height: 42px;
+        border: 0;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.52);
+        color: #3c4043;
+        box-shadow: 0 4px 14px rgba(32, 33, 36, 0.14);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      .floating-scroll-button:active {
+        transform: scale(0.96);
+      }
+
+      .floating-scroll-button svg {
+        width: 20px;
+        height: 20px;
       }
 
       .topbar-icon {
@@ -188,8 +242,8 @@
 
       .item-line {
         display: flex;
-        align-items: center;
-        gap: 10px;
+        align-items: stretch;
+        gap: 8px;
         width: 100%;
         min-width: 0;
         max-width: 100%;
@@ -197,21 +251,34 @@
       }
 
       .item-left {
-        display: inline-flex;
-        align-items: baseline;
+        display: flex;
+        align-items: center;
         gap: 8px;
         min-width: 0;
         flex: 1 1 auto;
         overflow: hidden;
-        white-space: nowrap;
+      }
+
+      .item-stock-box {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        min-width: 62px;
+        padding: 5px 10px;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.82);
+        border: 1px solid rgba(32, 33, 36, 0.08);
+        text-align: center;
       }
 
       .ref {
         margin: 0;
-        flex: 0 1 auto;
         min-width: 0;
+        flex: 1 1 auto;
         overflow: hidden;
         text-overflow: ellipsis;
+        white-space: nowrap;
         font-size: 15px;
         font-weight: 800;
         line-height: 1.2;
@@ -221,11 +288,13 @@
       .item-stock {
         display: inline-flex;
         align-items: center;
-        flex: 0 0 auto;
+        justify-content: center;
+        width: 100%;
         font-size: 12px;
         line-height: 1.2;
         font-weight: 700;
         color: #244a35;
+        text-align: center;
       }
 
       .item-right {
@@ -233,11 +302,9 @@
         align-items: center;
         justify-content: flex-end;
         gap: 8px;
-        flex: 0 1 auto;
+        flex: 0 0 auto;
         min-width: 0;
-        max-width: 46%;
         margin-left: auto;
-        overflow: hidden;
         white-space: nowrap;
       }
 
@@ -257,14 +324,11 @@
       }
 
       .item-arrivage {
-        flex: 1 1 auto;
-        min-width: 0;
+        flex: 0 0 auto;
         margin: 0;
         font-size: 11px;
         line-height: 1.2;
         color: #80868b;
-        overflow: hidden;
-        text-overflow: ellipsis;
         white-space: nowrap;
       }
 
@@ -308,7 +372,7 @@
     </style>
   </head>
   <body>
-    <main class="app">
+    <main class="app" id="appRoot">
       <header class="topbar">
         <svg class="topbar-icon" viewBox="0 0 24 24" aria-hidden="true">
           <path fill="currentColor" d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h12v2H3v-2z"/>
@@ -330,46 +394,112 @@
 
         <section id="list" class="list" aria-live="polite"></section>
       </section>
+      <div id="floatingScrollControls" class="floating-scroll-controls" aria-hidden="false">
+        <button id="scrollTopButton" class="floating-scroll-button" type="button" aria-label="Remonter en haut">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="currentColor" d="M7.41 14.59 12 10l4.59 4.59L18 13.17l-6-6-6 6z"/>
+          </svg>
+        </button>
+        <button id="scrollBottomButton" class="floating-scroll-button" type="button" aria-label="Descendre en bas">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="currentColor" d="m7.41 8.41 4.59 4.58 4.59-4.58L18 9.83l-6 6-6-6z"/>
+          </svg>
+        </button>
+      </div>
     </main>
 
     <script>
+      const STOCK_MOBILE_CACHE_KEY = "stockMobileCache:v1";
       const els = {
         list: document.getElementById("list"),
         status: document.getElementById("status"),
-        countBadge: document.getElementById("countBadge")
+        countBadge: document.getElementById("countBadge"),
+        floatingScrollControls: document.getElementById("floatingScrollControls"),
+        scrollTopButton: document.getElementById("scrollTopButton"),
+        scrollBottomButton: document.getElementById("scrollBottomButton")
       };
+      let currentPayload = null;
+      let currentStatusText = "";
+      let currentStatusKind = "normal";
       let restoreStatusTimeout = null;
 
       function init() {
+        const cachedEntry = loadCache_();
+        if (cachedEntry && cachedEntry.payload) {
+          renderPayload_(cachedEntry.payload, { source: "cache" });
+          fetchFreshData_({ hadCache: true });
+          return;
+        }
+
         setLoading();
-        google.script.run
-          .withSuccessHandler(onLoadSuccess)
-          .withFailureHandler(onLoadFailure)
-          .StockWebApp_getList();
+        fetchFreshData_({ hadCache: false });
       }
 
       function setLoading() {
+        currentPayload = null;
+        currentStatusText = "Chargement des références...";
+        currentStatusKind = "normal";
         els.status.className = "status";
         els.status.innerHTML = '<span class="loading">Chargement des références...</span>';
         els.countBadge.textContent = "...";
         els.list.innerHTML = "";
       }
 
-      function onLoadSuccess(payload) {
+      function loadCache_() {
+        try {
+          const raw = localStorage.getItem(STOCK_MOBILE_CACHE_KEY);
+          if (!raw) return null;
+          const parsed = JSON.parse(raw);
+          if (!parsed || typeof parsed !== "object") return null;
+          if (!parsed.payload || typeof parsed.payload !== "object") return null;
+          if (!Array.isArray(parsed.payload.items)) return null;
+          return parsed;
+        } catch (error) {
+          return null;
+        }
+      }
+
+      function saveCache_(payload) {
+        try {
+          localStorage.setItem(STOCK_MOBILE_CACHE_KEY, JSON.stringify({
+            cachedAt: Date.now(),
+            payload: payload
+          }));
+        } catch (error) {}
+      }
+
+      function isPayloadEquivalent_(a, b) {
+        const itemsA = Array.isArray(a && a.items) ? a.items : [];
+        const itemsB = Array.isArray(b && b.items) ? b.items : [];
+        if (itemsA.length !== itemsB.length) return false;
+
+        try {
+          return JSON.stringify(itemsA) === JSON.stringify(itemsB);
+        } catch (error) {
+          return false;
+        }
+      }
+
+      function renderPayload_(payload, options) {
+        const source = options && options.source ? options.source : "network";
         const items = Array.isArray(payload && payload.items) ? payload.items : [];
+        currentPayload = payload;
 
         if (!items.length) {
-          els.status.className = "status";
-          els.status.textContent = "Aucune référence exploitable dans STOCK.";
+          setStatus_("normal", "Aucune référence exploitable dans STOCK.");
           els.countBadge.textContent = "0";
           els.list.innerHTML = '<div class="empty">Aucune référence trouvée.</div>';
           return;
         }
 
         const suffix = items.length > 1 ? "s" : "";
-        els.status.className = "status";
-        els.status.textContent = items.length + " référence" + suffix + " chargée" + suffix + ".";
         els.countBadge.textContent = String(items.length);
+        setStatus_(
+          "normal",
+          source === "cache"
+            ? items.length + " référence" + suffix + " (cache)"
+            : items.length + " référence" + suffix + " chargée" + suffix + "."
+        );
         els.list.innerHTML = items.map(function(item) {
           const itemClass = item.stockState === "positive" ? "item stock-positive" : "item stock-zero";
           return '' +
@@ -377,7 +507,9 @@
               '<div class="item-line">' +
                 '<div class="item-left">' +
                   '<p class="ref">' + escapeHtml(item.reference || "-") + '</p>' +
-                  (item.stockDisplay ? '<span class="item-stock">' + escapeHtml(item.stockDisplay) + '</span>' : '') +
+                  (item.stockDisplay
+                    ? '<div class="item-stock-box"><span class="item-stock">' + escapeHtml(item.stockDisplay) + '</span></div>'
+                    : '') +
                 '</div>' +
                 '<div class="item-right">' +
                   (item.warehouse ? '<span class="item-warehouse">' + escapeHtml(item.warehouse) + '</span>' : '') +
@@ -390,12 +522,57 @@
         bindItemCopyHandlers();
       }
 
+      function fetchFreshData_(options) {
+        const hadCache = !!(options && options.hadCache);
+        google.script.run
+          .withSuccessHandler(function(payload) {
+            const validPayload = payload && Array.isArray(payload.items) ? payload : null;
+            if (!validPayload) {
+              if (hadCache && currentPayload) {
+                setStatus_("error", "Cache affiché, mise à jour impossible.");
+                return;
+              }
+              onLoadFailure(new Error("Réponse invalide du serveur."));
+              return;
+            }
+
+            const samePayload = currentPayload && isPayloadEquivalent_(currentPayload, validPayload);
+            saveCache_(validPayload);
+
+            if (!samePayload) {
+              renderPayload_(validPayload, { source: "network" });
+              return;
+            }
+
+            currentPayload = validPayload;
+            const items = validPayload.items;
+            const suffix = items.length > 1 ? "s" : "";
+            els.countBadge.textContent = String(items.length);
+            setStatus_("normal", items.length + " référence" + suffix + " chargée" + suffix + ".");
+          })
+          .withFailureHandler(function(error) {
+            if (hadCache && currentPayload) {
+              setStatus_("error", "Cache affiché, mise à jour impossible.");
+              return;
+            }
+            onLoadFailure(error);
+          })
+          .StockWebApp_getList();
+      }
+
       function onLoadFailure(error) {
         const message = error && error.message ? error.message : String(error || "Erreur inconnue");
-        els.status.className = "status error";
-        els.status.textContent = message;
+        currentPayload = null;
+        setStatus_("error", message);
         els.countBadge.textContent = "!";
         els.list.innerHTML = "";
+      }
+
+      function setStatus_(kind, text) {
+        currentStatusKind = kind || "normal";
+        currentStatusText = String(text || "");
+        els.status.className = currentStatusKind === "error" ? "status error" : "status";
+        els.status.textContent = currentStatusText;
       }
 
       function bindItemCopyHandlers() {
@@ -417,17 +594,18 @@
         const reference = String(node.getAttribute("data-reference") || "").trim();
         if (!reference) return;
 
-        const previousStatus = els.status.textContent;
+        const previousStatus = currentStatusText;
+        const previousKind = currentStatusKind;
         Promise.resolve(copyText(reference))
           .then(function() {
-            showTemporaryStatus("Copié : " + reference, previousStatus, false);
+            showTemporaryStatus("Copié : " + reference, previousStatus, previousKind, false);
           })
           .catch(function() {
-            showTemporaryStatus("Copie impossible : " + reference, previousStatus, true);
+            showTemporaryStatus("Copie impossible : " + reference, previousStatus, previousKind, true);
           });
       }
 
-      function showTemporaryStatus(message, previousStatus, isError) {
+      function showTemporaryStatus(message, previousStatus, previousKind, isError) {
         if (restoreStatusTimeout) {
           clearTimeout(restoreStatusTimeout);
           restoreStatusTimeout = null;
@@ -437,8 +615,10 @@
         els.status.textContent = message;
 
         restoreStatusTimeout = setTimeout(function() {
-          els.status.className = "status";
-          els.status.textContent = previousStatus;
+          currentStatusKind = previousKind || "normal";
+          currentStatusText = previousStatus || "";
+          els.status.className = currentStatusKind === "error" ? "status error" : "status";
+          els.status.textContent = currentStatusText;
           restoreStatusTimeout = null;
         }, 1500);
       }
@@ -480,7 +660,91 @@
           .replace(/'/g, "&#39;");
       }
 
+      let floatingControlsTimeout = null;
+
+      function scrollToPageTop() {
+        try {
+          window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+        } catch (error) {
+          window.scrollTo(0, 0);
+        }
+      }
+
+      function scrollToPageBottom() {
+        var doc = document.documentElement;
+        var body = document.body;
+        var viewportHeight = window.innerHeight || doc.clientHeight || 0;
+        var fullHeight = Math.max(
+          body.scrollHeight,
+          body.offsetHeight,
+          doc.clientHeight,
+          doc.scrollHeight,
+          doc.offsetHeight
+        );
+        var target = Math.max(0, fullHeight - viewportHeight);
+
+        try {
+          window.scrollTo({ top: target, left: 0, behavior: "smooth" });
+        } catch (error) {
+          window.scrollTo(0, target);
+        }
+      }
+
+      function showFloatingScrollControls() {
+        if (!els.floatingScrollControls) return;
+
+        els.floatingScrollControls.classList.add("is-visible");
+
+        if (floatingControlsTimeout) {
+          clearTimeout(floatingControlsTimeout);
+        }
+
+        floatingControlsTimeout = setTimeout(function() {
+          if (els.floatingScrollControls) {
+            els.floatingScrollControls.classList.remove("is-visible");
+          }
+          floatingControlsTimeout = null;
+        }, 1400);
+      }
+
+      function bindFloatingScrollControls() {
+        if (els.scrollTopButton) {
+          els.scrollTopButton.addEventListener("click", function(event) {
+            event.preventDefault();
+            showFloatingScrollControls();
+            scrollToPageTop();
+          });
+        }
+
+        if (els.scrollBottomButton) {
+          function handleBottomActivate(event) {
+            if (event) {
+              event.preventDefault();
+              event.stopPropagation();
+            }
+            showFloatingScrollControls();
+            scrollToPageBottom();
+          }
+
+          els.scrollBottomButton.addEventListener("click", handleBottomActivate);
+          els.scrollBottomButton.addEventListener("touchend", handleBottomActivate, { passive: false });
+        }
+
+        window.addEventListener("scroll", showFloatingScrollControls, { passive: true });
+        window.addEventListener("touchstart", showFloatingScrollControls, { passive: true });
+        window.addEventListener("touchmove", showFloatingScrollControls, { passive: true });
+        window.addEventListener("pointerdown", showFloatingScrollControls, { passive: true });
+        window.addEventListener("click", showFloatingScrollControls, { passive: true });
+        document.addEventListener("visibilitychange", function() {
+          if (document.visibilityState === "visible") {
+            showFloatingScrollControls();
+          }
+        });
+      }
+      bindFloatingScrollControls();
       init();
+      showFloatingScrollControls();
+      setTimeout(showFloatingScrollControls, 400);
     </script>
   </body>
 </html>

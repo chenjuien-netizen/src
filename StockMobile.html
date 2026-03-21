@@ -267,17 +267,19 @@
       }
 
       .list {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 6px;
+        column-count: 2;
+        column-gap: 6px;
         width: 100%;
         max-width: 100%;
         overflow-x: hidden;
-        align-items: start;
       }
 
       .item {
-        display: block;
+        display: inline-block;
+        vertical-align: top;
+        break-inside: avoid;
+        -webkit-column-break-inside: avoid;
+        page-break-inside: avoid;
         padding: 7px 8px;
         border: 1px solid var(--line);
         border-radius: 10px;
@@ -289,6 +291,7 @@
         width: 100%;
         max-width: 100%;
         min-width: 0;
+        margin: 0 0 6px;
       }
 
       .item:active {
@@ -310,7 +313,10 @@
       }
 
       .item-line {
-        display: block;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
         width: 100%;
         min-width: 0;
         max-width: 100%;
@@ -319,11 +325,10 @@
 
       .item-left {
         display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 4px;
+        align-items: center;
+        gap: 8px;
         min-width: 0;
-        width: 100%;
+        flex: 1 1 auto;
         overflow: hidden;
       }
 
@@ -334,17 +339,19 @@
         flex: 0 0 auto;
         min-width: 0;
         max-width: 100%;
-        padding: 1px 0;
+        padding: 0;
         border-radius: 0;
         background: transparent;
         border: 0;
-        text-align: center;
+        text-align: right;
+        margin-left: auto;
       }
 
       .ref {
         margin: 0;
-        width: 100%;
+        width: auto;
         min-width: 0;
+        flex: 1 1 auto;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -364,7 +371,7 @@
         line-height: 1.2;
         font-weight: 700;
         color: #244a35;
-        text-align: left;
+        text-align: right;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -399,7 +406,8 @@
       }
 
       .empty {
-        grid-column: 1 / -1;
+        display: block;
+        column-span: all;
         padding: 18px;
         border: 1px dashed #c8ced8;
         border-radius: 16px;
@@ -410,13 +418,13 @@
 
       @media (min-width: 680px) {
         .list {
-          grid-template-columns: repeat(3, minmax(0, 1fr));
+          column-count: 3;
         }
       }
 
       @media (min-width: 960px) {
         .list {
-          grid-template-columns: repeat(4, minmax(0, 1fr));
+          column-count: 4;
         }
       }
 
@@ -744,7 +752,7 @@
                 '<div class="item-left">' +
                   '<p class="ref">' + escapeHtml(item.reference || "-") + '</p>' +
                   (item.stockDisplay
-                    ? '<div class="item-stock-box"><span class="item-stock">' + escapeHtml(item.stockDisplay) + '</span></div>'
+                    ? '<span class="item-stock-box"><span class="item-stock">' + escapeHtml(item.stockDisplay) + '</span></span>'
                     : '') +
                 '</div>' +
               '</div>' +

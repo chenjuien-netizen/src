@@ -391,8 +391,6 @@ function StockWebApp_renderItemHtml_(item) {
   const itemClass = item && item.stockState === "positive" ? "item stock-positive" : "item stock-zero";
   const reference = item && item.reference ? item.reference : "-";
   const stockDisplay = item && item.stockDisplay ? item.stockDisplay : "";
-  const warehouse = item && item.warehouse ? item.warehouse : "";
-  const arrivageRef = item && item.arrivageRef ? item.arrivageRef : "";
 
   return '' +
     '<article class="' + itemClass + '" data-item-id="' + StockWebApp_escapeHtml_(item && item.id ? item.id : "") + '" data-reference="' + StockWebApp_escapeHtml_(item && item.reference ? item.reference : "") + '" tabindex="0" role="button" aria-label="Copier ' + StockWebApp_escapeHtml_(reference) + '">' +
@@ -400,12 +398,8 @@ function StockWebApp_renderItemHtml_(item) {
         '<div class="item-left">' +
           '<p class="ref">' + StockWebApp_escapeHtml_(reference) + '</p>' +
           (stockDisplay
-            ? '<div class="item-stock-box"><span class="item-stock">' + StockWebApp_escapeHtml_(stockDisplay) + '</span></div>'
+            ? '<span class="item-stock-box"><span class="item-stock">' + StockWebApp_escapeHtml_(stockDisplay) + '</span></span>'
             : '') +
-        '</div>' +
-        '<div class="item-right">' +
-          (warehouse ? '<span class="item-warehouse">' + StockWebApp_escapeHtml_(warehouse) + '</span>' : '') +
-          (arrivageRef ? '<p class="item-arrivage">' + StockWebApp_escapeHtml_(arrivageRef) + '</p>' : '') +
         '</div>' +
       '</div>' +
     '</article>';

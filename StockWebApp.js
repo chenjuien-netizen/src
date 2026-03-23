@@ -388,21 +388,20 @@ function StockWebApp_renderItemsHtml_(items) {
 }
 
 function StockWebApp_renderItemHtml_(item) {
-  const itemClass = item && item.stockState === "positive" ? "item stock-positive" : "item stock-zero";
+  const itemClass = item && item.stockState === "positive"
+    ? "item inventory-row stock-positive"
+    : "item inventory-row stock-zero";
   const reference = item && item.reference ? item.reference : "-";
   const stockDisplay = item && item.stockDisplay ? item.stockDisplay : "";
 
   return '' +
-    '<article class="' + itemClass + '" data-item-id="' + StockWebApp_escapeHtml_(item && item.id ? item.id : "") + '" data-reference="' + StockWebApp_escapeHtml_(item && item.reference ? item.reference : "") + '" tabindex="0" role="button" aria-label="Copier ' + StockWebApp_escapeHtml_(reference) + '">' +
-      '<div class="item-line">' +
-        '<div class="item-left">' +
-          '<p class="ref">' + StockWebApp_escapeHtml_(reference) + '</p>' +
-          (stockDisplay
-            ? '<span class="item-stock-box"><span class="item-stock">' + StockWebApp_escapeHtml_(stockDisplay) + '</span></span>'
-            : '') +
-        '</div>' +
-      '</div>' +
-    '</article>';
+    '<tr class="' + itemClass + '" data-item-id="' + StockWebApp_escapeHtml_(item && item.id ? item.id : "") + '" data-reference="' + StockWebApp_escapeHtml_(item && item.reference ? item.reference : "") + '" data-selection-mode="false" tabindex="0" role="button" aria-label="Copier ' + StockWebApp_escapeHtml_(reference) + '">' +
+      '<td class="px-3 py-2 text-center">' +
+        '<input class="item-checkbox h-3.5 w-3.5 rounded border-outline-variant text-primary focus:ring-primary/30" type="checkbox" aria-label="Sélectionner ' + StockWebApp_escapeHtml_(reference) + '">' +
+      '</td>' +
+      '<td class="px-3 py-2 truncate font-sans font-bold text-on-surface">' + StockWebApp_escapeHtml_(reference) + '</td>' +
+      '<td class="px-3 py-2 text-right tabular-nums font-bold ' + (item && item.stockState === "zero" ? 'text-on-surface-variant' : 'text-primary') + '">' + StockWebApp_escapeHtml_(stockDisplay || "-") + '</td>' +
+    '</tr>';
 }
 
 function StockWebApp_escapeHtml_(value) {

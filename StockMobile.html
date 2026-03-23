@@ -5,6 +5,40 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>SZFashion Stock</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@300;400;500;600;700;800&amp;family=Manrope:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              background: "#fdfcfd",
+              surface: "#fdfcfd",
+              "surface-container-lowest": "#ffffff",
+              "surface-container-low": "#f6f2f7",
+              "surface-container": "#f8f7f9",
+              "surface-container-high": "#e9e1ea",
+              "surface-container-highest": "#e6e1e6",
+              outline: "#7c757e",
+              "outline-variant": "#ccc4ce",
+              primary: "#6b1c85",
+              "primary-container": "#f3e8f6",
+              tertiary: "#6b1c85",
+              error: "#ba1a1a",
+              "error-container": "#ffdad6",
+              "on-surface": "#1d1a1e",
+              "on-surface-variant": "#4b454d"
+            },
+            fontFamily: {
+              serif: ["Noto Serif", "serif"],
+              sans: ["Manrope", "sans-serif"]
+            }
+          }
+        }
+      };
+    </script>
     <style>
       :root {
         --bg: #f5f5f5;
@@ -32,7 +66,7 @@
         min-height: 100vh;
         background: var(--bg);
         color: var(--ink);
-        font-family: Roboto, "Segoe UI", Arial, sans-serif;
+        font-family: "Manrope", Roboto, "Segoe UI", Arial, sans-serif;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
         width: 100%;
@@ -53,56 +87,6 @@
         width: 100%;
         max-width: 100%;
         overflow-x: hidden;
-      }
-
-      .topbar {
-        position: sticky;
-        top: 0;
-        z-index: 20;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        min-height: 56px;
-        padding: max(10px, env(safe-area-inset-top)) 16px 10px;
-        background: rgba(255, 255, 255, 0.96);
-        border-bottom: 1px solid var(--line);
-        backdrop-filter: blur(10px);
-      }
-
-      .topbar-actions {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        flex: 0 0 auto;
-      }
-
-      .topbar-action {
-        width: 36px;
-        height: 36px;
-        border: 0;
-        border-radius: 10px;
-        background: rgba(26, 115, 232, 0.08);
-        color: #3c4043;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        -webkit-tap-highlight-color: transparent;
-        transition: background 0.12s ease, transform 0.08s ease, color 0.12s ease;
-      }
-
-      .topbar-action:active {
-        transform: scale(0.96);
-      }
-
-      .topbar-action.is-active {
-        background: rgba(26, 115, 232, 0.16);
-        color: #1a73e8;
-      }
-
-      .topbar-action svg {
-        width: 18px;
-        height: 18px;
       }
 
       .floating-scroll-controls {
@@ -152,57 +136,15 @@
         height: 20px;
       }
 
-      .topbar-icon {
-        width: 24px;
-        height: 24px;
-        flex: 0 0 24px;
-        color: var(--muted);
-      }
-
-      .topbar-title {
-        min-width: 0;
-        flex: 1 1 auto;
-      }
-
-      .topbar-title p {
-        margin: 0;
-      }
-
-      .eyebrow {
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--muted);
-      }
-
-      h1 {
-        margin: 2px 0 0;
-        font-size: 20px;
-        line-height: 1.2;
-        font-weight: 500;
-        letter-spacing: -0.01em;
-      }
-
       .content {
         width: 100%;
-        max-width: 720px;
+        max-width: 1120px;
         margin: 0 auto;
-        padding: 14px 12px calc(28px + env(safe-area-inset-bottom));
+        padding: 20px 16px calc(96px + env(safe-area-inset-bottom));
         overflow-x: hidden;
       }
 
-      .hero {
-        margin-bottom: 12px;
-        padding: 14px;
-        border-radius: 18px;
-        background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-        border: 1px solid var(--line);
-        box-shadow: var(--shadow);
-      }
-
       .search-panel {
-        margin-top: 10px;
         display: none;
       }
 
@@ -210,222 +152,50 @@
         display: block;
       }
 
-      .search-input {
-        width: 100%;
-        min-width: 0;
-        border: 1px solid var(--line);
-        border-radius: 12px;
-        padding: 11px 12px;
-        background: #ffffff;
-        color: var(--ink);
-        font-size: 14px;
-        outline: none;
-      }
-
-      .search-input:focus {
-        border-color: rgba(26, 115, 232, 0.45);
-        box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.1);
-      }
-
-      .hero-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-      }
-
-      .hero-label {
-        margin: 0;
-        font-size: 13px;
-        color: var(--muted);
-      }
-
-      .badge {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 34px;
-        padding: 4px 10px;
-        border-radius: 999px;
-        background: var(--brand-soft);
-        color: var(--brand);
-        font-size: 13px;
-        font-weight: 700;
-        white-space: nowrap;
-      }
-
       .status {
-        margin-top: 8px;
-        min-height: 20px;
+        min-height: 18px;
         color: var(--muted);
-        font-size: 13px;
-        line-height: 1.45;
+        font-size: 12px;
+        line-height: 1.4;
       }
 
       .status.error {
         color: var(--danger);
       }
 
-      .list {
-        column-count: 2;
-        column-gap: 6px;
-        width: 100%;
-        max-width: 100%;
-        overflow-x: hidden;
+      .material-symbols-outlined {
+        font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 20;
       }
 
-      .item {
-        display: inline-block;
-        vertical-align: top;
-        break-inside: avoid;
-        -webkit-column-break-inside: avoid;
-        page-break-inside: avoid;
-        padding: 7px 8px;
-        border: 1px solid var(--line);
-        border-radius: 10px;
-        background: var(--surface);
-        box-shadow: none;
-        transition: transform 0.08s ease, background 0.1s ease;
+      .inventory-row {
+        transition: background-color 0.12s ease, opacity 0.12s ease;
         cursor: pointer;
-        -webkit-tap-highlight-color: transparent;
-        width: 100%;
-        max-width: 100%;
-        min-width: 0;
-        margin: 0 0 6px;
       }
 
-      .item:active {
-        transform: scale(0.98);
-        background: #f1f3f4;
+      .inventory-row:hover {
+        background: rgba(107, 28, 133, 0.08);
       }
 
-      .item.stock-positive {
-        background: #cfead9;
+      .inventory-row:active {
+        background: rgba(107, 28, 133, 0.12);
       }
 
-      .item.stock-zero {
-        background: #f6d7d7;
+      .inventory-row.stock-zero {
+        opacity: 0.5;
       }
 
-      .item.is-selected {
-        border-color: #1a73e8;
-        box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.16);
+      .inventory-row.is-selected {
+        background: rgba(107, 28, 133, 0.12);
       }
 
-      .item-line {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-        width: 100%;
-        min-width: 0;
-        max-width: 100%;
-        overflow: hidden;
+      .inventory-row[data-selection-mode="true"] {
+        cursor: pointer;
       }
 
-      .item-left {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        min-width: 0;
-        flex: 1 1 auto;
-        overflow: hidden;
-      }
-
-      .item-stock-box {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        flex: 0 0 auto;
-        min-width: 0;
-        max-width: 100%;
-        padding: 0;
-        border-radius: 0;
-        background: transparent;
-        border: 0;
-        text-align: right;
-        margin-left: auto;
-      }
-
-      .ref {
-        margin: 0;
-        width: auto;
-        min-width: 0;
-        flex: 1 1 auto;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        font-size: 14px;
-        font-weight: 800;
-        line-height: 1.15;
-        color: #202124;
-      }
-
-      .item-stock {
-        display: inline-flex;
-        align-items: center;
-        justify-content: flex-start;
-        width: auto;
-        max-width: 100%;
-        font-size: 11px;
-        line-height: 1.2;
-        font-weight: 700;
-        color: #244a35;
-        text-align: right;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-
-      .item-right {
-        display: none;
-      }
-
-      .item-warehouse {
-        display: inline-flex;
-        align-items: center;
-        flex: 0 0 auto;
-        padding: 2px 7px;
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.7);
-        color: #4b5563;
-        font-size: 10px;
-        line-height: 1.2;
-        font-weight: 700;
-        letter-spacing: 0.03em;
-        text-transform: uppercase;
-      }
-
-      .item-arrivage {
-        flex: 0 0 auto;
-        margin: 0;
-        font-size: 11px;
-        line-height: 1.2;
-        color: #80868b;
-        white-space: nowrap;
-      }
-
-      .empty {
-        display: block;
-        column-span: all;
+      .inventory-empty-row td {
         padding: 18px;
-        border: 1px dashed #c8ced8;
-        border-radius: 16px;
         text-align: center;
         color: var(--muted);
-        background: rgba(255, 255, 255, 0.88);
-      }
-
-      @media (min-width: 680px) {
-        .list {
-          column-count: 3;
-        }
-      }
-
-      @media (min-width: 960px) {
-        .list {
-          column-count: 4;
-        }
       }
 
       .loading {
@@ -450,56 +220,81 @@
         }
       }
 
-      @media (min-width: 721px) {
-        .content {
-          padding-left: 16px;
-          padding-right: 16px;
-        }
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
       }
     </style>
   </head>
-  <body>
-    <main class="app" id="appRoot">
-      <header class="topbar">
-        <svg class="topbar-icon" viewBox="0 0 24 24" aria-hidden="true">
-          <path fill="currentColor" d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h12v2H3v-2z"/>
-        </svg>
-        <div class="topbar-title">
-          <p class="eyebrow">Stock mobile</p>
-          <h1>Liste des références</h1>
+  <body class="bg-surface text-on-surface">
+    <main class="app min-h-screen bg-surface" id="appRoot">
+      <header class="fixed top-0 z-50 flex h-16 w-full items-center justify-between border-b border-zinc-100 bg-white/85 px-4 backdrop-blur-md md:px-6">
+        <div class="flex min-w-0 items-center gap-3">
+          <button type="button" class="material-symbols-outlined rounded-full p-1 text-primary transition-colors hover:bg-zinc-100" aria-label="Menu">menu</button>
+          <div class="min-w-0">
+            <p class="font-sans text-[10px] font-bold uppercase tracking-[0.15em] text-primary/70">Stock mobile</p>
+            <h1 class="truncate font-serif text-xl font-bold tracking-tight text-zinc-900">SZFASHION</h1>
+          </div>
         </div>
-        <div class="topbar-actions" aria-label="Actions">
-          <button id="reloadButton" class="topbar-action" type="button" aria-label="Recharger">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path fill="currentColor" d="M17.65 6.35A7.95 7.95 0 0 0 12 4V1L7 6l5 5V7a5 5 0 1 1-4.9 6h-2.02A7 7 0 1 0 17.65 6.35z"/>
-            </svg>
-          </button>
-          <button id="searchToggleButton" class="topbar-action" type="button" aria-label="Recherche">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path fill="currentColor" d="M15.5 14h-.79l-.28-.27a6 6 0 1 0-.71.71l.27.28v.79L20 21.5 21.5 20l-6-6zm-5.5 0A4.5 4.5 0 1 1 10 5a4.5 4.5 0 0 1 0 9z"/>
-            </svg>
-          </button>
-          <button id="selectToggleButton" class="topbar-action" type="button" aria-label="Sélection">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path fill="currentColor" d="m9 16.17-3.88-3.88L3.71 13.7 9 19l12-12-1.41-1.41z"/>
-            </svg>
-          </button>
+        <div class="flex items-center gap-2" aria-label="Actions">
+          <button id="reloadButton" type="button" class="material-symbols-outlined rounded-full p-2 text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-primary" aria-label="Recharger">refresh</button>
+          <button id="searchToggleButton" type="button" class="material-symbols-outlined rounded-full p-2 text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-primary" aria-label="Recherche">search</button>
+          <button id="selectToggleButton" type="button" class="material-symbols-outlined rounded-full p-2 text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-primary" aria-label="Sélection">checklist</button>
         </div>
       </header>
 
-      <section class="content">
-        <section class="hero">
-          <div class="hero-row">
-            <p class="hero-label">Références disponibles</p>
-            <span id="countBadge" class="badge"><?= initialCountText || "--" ?></span>
-          </div>
-          <div id="status" class="status"><?= initialStatusText || "" ?></div>
-          <div id="searchPanel" class="search-panel">
-            <input id="searchInput" class="search-input" type="search" placeholder="Rechercher référence, entrepôt, arrivage, stock">
+      <section class="content pt-20">
+        <section class="mb-6">
+          <div class="flex flex-col gap-4">
+            <div class="flex items-end justify-between gap-4">
+              <div class="min-w-0">
+                <h2 class="font-serif text-2xl font-bold text-on-surface">Inventaire Global</h2>
+                <p class="font-sans text-[10px] font-bold uppercase tracking-[0.15em] text-primary/70">Digital Atelier Management System</p>
+              </div>
+              <span id="countBadge" class="inline-flex min-w-[42px] items-center justify-center rounded-full bg-primary-container px-3 py-1 text-xs font-bold text-primary"><?= initialCountText || "--" ?></span>
+            </div>
+
+            <div id="searchPanel" class="search-panel">
+              <div class="relative">
+                <input id="searchInput" class="w-full border-0 border-b border-outline-variant/50 bg-transparent py-2 pr-8 font-sans text-xs text-on-surface placeholder:text-outline-variant/70 focus:border-primary focus:outline-none focus:ring-0" type="search" placeholder="Rechercher une référence...">
+                <span class="material-symbols-outlined pointer-events-none absolute right-0 top-2 text-base text-outline/60">filter_list</span>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-2 rounded border border-outline-variant/30 bg-surface-container-low/50 p-3 md:grid-cols-[1fr_auto] md:items-center">
+              <div class="min-w-0">
+                <p class="font-sans text-[9px] font-bold uppercase tracking-widest text-on-surface-variant/60">Pcs</p>
+                <p id="status" class="status mt-1"><?= initialStatusText || "" ?></p>
+              </div>
+              <div class="flex items-center justify-between gap-3 md:justify-end">
+                <span class="font-label text-[9px] font-bold uppercase tracking-widest text-on-surface-variant/60">Références visibles</span>
+                <span id="visibleCount" class="font-serif text-lg font-bold text-primary"><?= initialCountText || "--" ?></span>
+              </div>
+            </div>
           </div>
         </section>
 
-        <section id="list" class="list" aria-live="polite"><?!= initialListMarkup || "" ?></section>
+        <section class="overflow-x-auto rounded border border-outline-variant/20 bg-surface-container-lowest shadow-sm">
+          <table class="min-w-[420px] w-full table-fixed border-collapse text-left">
+            <thead>
+              <tr class="border-b border-outline-variant/30 bg-zinc-50">
+                <th class="w-10 px-3 py-2.5 text-center">
+                  <input id="selectAllCheckbox" class="h-3.5 w-3.5 rounded border-outline-variant text-primary focus:ring-primary/30" type="checkbox" aria-label="Tout sélectionner">
+                </th>
+                <th class="px-3 py-2.5 font-sans text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/80">Référence</th>
+                <th class="w-20 px-3 py-2.5 text-right font-sans text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/80">Pcs</th>
+              </tr>
+            </thead>
+            <tbody id="list" class="divide-y divide-outline-variant/10 text-[12px]" aria-live="polite"><?!= initialListMarkup || "" ?></tbody>
+          </table>
+        </section>
       </section>
       <div id="floatingScrollControls" class="floating-scroll-controls" aria-hidden="false">
         <button id="scrollTopButton" class="floating-scroll-button" type="button" aria-label="Remonter en haut">
@@ -525,9 +320,11 @@
         list: document.getElementById("list"),
         status: document.getElementById("status"),
         countBadge: document.getElementById("countBadge"),
+        visibleCount: document.getElementById("visibleCount"),
         reloadButton: document.getElementById("reloadButton"),
         searchToggleButton: document.getElementById("searchToggleButton"),
         selectToggleButton: document.getElementById("selectToggleButton"),
+        selectAllCheckbox: document.getElementById("selectAllCheckbox"),
         searchPanel: document.getElementById("searchPanel"),
         searchInput: document.getElementById("searchInput"),
         floatingScrollControls: document.getElementById("floatingScrollControls"),
@@ -672,7 +469,8 @@
 
         if (!items.length) {
           els.countBadge.textContent = "0";
-          els.list.innerHTML = '<div class="empty">Aucune référence trouvée.</div>';
+          if (els.visibleCount) els.visibleCount.textContent = "0";
+          els.list.innerHTML = buildEmptyRowMarkup_("Aucune référence trouvée.");
           setStatus_("normal", "Aucune référence exploitable dans STOCK.", source);
           logRenderMetrics_(source, items.length, metrics, 0, 0);
           updateActionStates_();
@@ -713,9 +511,11 @@
 
         if (!visibleItems.length) {
           els.countBadge.textContent = "0";
-          els.list.innerHTML = '<div class="empty">Aucun résultat pour cette recherche.</div>';
+          if (els.visibleCount) els.visibleCount.textContent = "0";
+          els.list.innerHTML = buildEmptyRowMarkup_("Aucun résultat pour cette recherche.");
           bindItemCopyHandlers();
           logRenderMetrics_(source, visibleItems.length, metrics, 0, 0);
+          syncSelectAllCheckbox_();
           return;
         }
 
@@ -744,20 +544,24 @@
 
       function buildItemsMarkup_(items) {
         return items.map(function(item) {
-          const itemClass = item.stockState === "positive" ? "item stock-positive" : "item stock-zero";
+          const itemClass = item.stockState === "positive" ? "item inventory-row stock-positive" : "item inventory-row stock-zero";
           const selectedClass = selectedIds[item.id] ? " is-selected" : "";
           return '' +
-            '<article class="' + itemClass + selectedClass + '" data-item-id="' + escapeHtml(item.id || "") + '" data-reference="' + escapeHtml(item.reference || "") + '" tabindex="0" role="button" aria-label="' + escapeHtml(isSelectionMode ? "Sélectionner " : "Copier ") + escapeHtml(item.reference || "") + '">' +
-              '<div class="item-line">' +
-                '<div class="item-left">' +
-                  '<p class="ref">' + escapeHtml(item.reference || "-") + '</p>' +
-                  (item.stockDisplay
-                    ? '<span class="item-stock-box"><span class="item-stock">' + escapeHtml(item.stockDisplay) + '</span></span>'
-                    : '') +
-                '</div>' +
-              '</div>' +
-            '</article>';
+            '<tr class="' + itemClass + selectedClass + '" data-item-id="' + escapeHtml(item.id || "") + '" data-reference="' + escapeHtml(item.reference || "") + '" data-selection-mode="' + (isSelectionMode ? "true" : "false") + '" tabindex="0" role="button" aria-label="' + escapeHtml(isSelectionMode ? "Sélectionner " : "Copier ") + escapeHtml(item.reference || "") + '">' +
+              '<td class="px-3 py-2 text-center">' +
+                '<input class="item-checkbox h-3.5 w-3.5 rounded border-outline-variant text-primary focus:ring-primary/30" type="checkbox" aria-label="Sélectionner ' + escapeHtml(item.reference || "") + '"' + (selectedIds[item.id] ? ' checked' : '') + '>' +
+              '</td>' +
+              '<td class="px-3 py-2 font-sans font-bold text-on-surface truncate">' + escapeHtml(item.reference || "-") + '</td>' +
+              '<td class="px-3 py-2 text-right tabular-nums font-bold ' + (item.stockState === "zero" ? 'text-on-surface-variant' : 'text-primary') + '">' + escapeHtml(item.stockDisplay || "-") + '</td>' +
+            '</tr>';
         }).join("");
+      }
+
+      function buildEmptyRowMarkup_(message) {
+        return '' +
+          '<tr class="inventory-empty-row">' +
+            '<td colspan="3">' + escapeHtml(message || "") + '</td>' +
+          '</tr>';
       }
 
       function scheduleProgressiveRender_(token, context) {
@@ -821,9 +625,13 @@
         const visibleCount = Array.isArray(currentFilteredItems) ? currentFilteredItems.length : 0;
         if (searchQuery) {
           els.countBadge.textContent = String(visibleCount) + "/" + String(totalItems);
+          if (els.visibleCount) els.visibleCount.textContent = String(visibleCount);
+          syncSelectAllCheckbox_();
           return;
         }
         els.countBadge.textContent = String(visibleCount);
+        if (els.visibleCount) els.visibleCount.textContent = String(visibleCount);
+        syncSelectAllCheckbox_();
       }
 
       function fetchFreshData_(options) {
@@ -892,6 +700,7 @@
         isShowingCache = false;
         setStatus_("error", message, "error");
         els.countBadge.textContent = "!";
+        if (els.visibleCount) els.visibleCount.textContent = "!";
         els.list.innerHTML = "";
         updateActionStates_();
       }
@@ -922,6 +731,17 @@
           if (node.getAttribute("data-bound") === "1") return;
           node.setAttribute("data-bound", "1");
 
+          const checkbox = node.querySelector(".item-checkbox");
+          if (checkbox) {
+            checkbox.addEventListener("click", function(event) {
+              event.stopPropagation();
+            });
+            checkbox.addEventListener("change", function(event) {
+              event.stopPropagation();
+              setSelectedItem_(String(node.getAttribute("data-item-id") || ""), !!event.target.checked);
+            });
+          }
+
           node.addEventListener("click", function() {
             handleItemActivate_(node);
           });
@@ -947,6 +767,15 @@
         if (!itemId) return;
         if (selectedIds[itemId]) delete selectedIds[itemId];
         else selectedIds[itemId] = true;
+        renderList_(currentFilteredItems);
+        updateCountBadge_();
+        updateStatusDisplay_();
+      }
+
+      function setSelectedItem_(itemId, selected) {
+        if (!itemId) return;
+        if (selected) selectedIds[itemId] = true;
+        else delete selectedIds[itemId];
         renderList_(currentFilteredItems);
         updateCountBadge_();
         updateStatusDisplay_();
@@ -1020,6 +849,21 @@
             applySearch_();
           });
         }
+
+        if (els.selectAllCheckbox) {
+          els.selectAllCheckbox.addEventListener("change", function(event) {
+            const checked = !!event.target.checked;
+            for (let i = 0; i < currentFilteredItems.length; i++) {
+              const item = currentFilteredItems[i];
+              if (!item || !item.id) continue;
+              if (checked) selectedIds[item.id] = true;
+              else delete selectedIds[item.id];
+            }
+            renderList_(currentFilteredItems);
+            updateCountBadge_();
+            updateStatusDisplay_();
+          });
+        }
       }
 
       function updateActionStates_() {
@@ -1027,14 +871,35 @@
           els.searchPanel.classList.toggle("is-open", isSearchOpen);
         }
         if (els.searchToggleButton) {
-          els.searchToggleButton.classList.toggle("is-active", isSearchOpen);
+          els.searchToggleButton.classList.toggle("text-primary", isSearchOpen);
+          els.searchToggleButton.classList.toggle("bg-primary-container", isSearchOpen);
         }
         if (els.selectToggleButton) {
-          els.selectToggleButton.classList.toggle("is-active", isSelectionMode);
+          els.selectToggleButton.classList.toggle("text-primary", isSelectionMode);
+          els.selectToggleButton.classList.toggle("bg-primary-container", isSelectionMode);
         }
         if (els.reloadButton) {
-          els.reloadButton.classList.toggle("is-active", isRefreshing);
+          els.reloadButton.classList.toggle("text-primary", isRefreshing);
+          els.reloadButton.classList.toggle("bg-primary-container", isRefreshing);
         }
+        syncSelectAllCheckbox_();
+      }
+
+      function syncSelectAllCheckbox_() {
+        if (!els.selectAllCheckbox) return;
+        const visibleItems = Array.isArray(currentFilteredItems) ? currentFilteredItems : [];
+        const visibleIds = visibleItems.map(function(item) { return item && item.id; }).filter(Boolean);
+        if (!visibleIds.length) {
+          els.selectAllCheckbox.checked = false;
+          els.selectAllCheckbox.indeterminate = false;
+          return;
+        }
+        let selectedCount = 0;
+        for (let i = 0; i < visibleIds.length; i++) {
+          if (selectedIds[visibleIds[i]]) selectedCount += 1;
+        }
+        els.selectAllCheckbox.checked = selectedCount === visibleIds.length;
+        els.selectAllCheckbox.indeterminate = selectedCount > 0 && selectedCount < visibleIds.length;
       }
 
       function copyReferenceFromNode(node) {

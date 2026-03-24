@@ -148,7 +148,7 @@
               <select class="w-full border-outline-variant/30 bg-surface-container-lowest text-[12px] font-medium text-on-surface" id="stockStateFilter">
                 <option value="all">Tous</option>
                 <option value="positive">En stock</option>
-                <option value="zero">Zero</option>
+                <option value="zero">En rupture</option>
               </select>
             </label>
             <label class="block">
@@ -192,7 +192,7 @@
       </section>
 
       <section class="bg-outline-variant/20">
-        <div class="grid grid-cols-2 gap-px bg-outline-variant/20 min-[720px]:grid-cols-3 min-[980px]:grid-cols-4" id="inventoryGrid">
+        <div class="bg-outline-variant/20" id="inventoryGrid">
           <?!= initialListMarkup ?>
         </div>
         <div class="hidden border-t border-outline-variant/20 bg-surface-container-lowest px-4 py-5 text-center" id="emptyState">
@@ -232,6 +232,7 @@
           stockState: "all",
           warehouse: "",
           sort: initialPayload.ui && initialPayload.ui.defaultSort ? initialPayload.ui.defaultSort : "ref_asc",
+          columnCount: 2,
           isRefreshing: false,
           filterPanelOpen: false,
           lastError: ""
@@ -284,6 +285,15 @@
                 '<span class="block truncate text-[13px] font-medium ' + stockClass + '">' + escapeHtml(stockDisplay) + '</span>' +
               '</div>' +
             '</article>';
+        }
+
+        function renderColumnLayoutMarkup(columns) {
+          if (!columns.length) return "";
+          return '<div class="flex items-start gap-px bg-outline-variant/20">' + columns.map(function(columnItems) {
+            return '<div class="inventory-column flex min-w-0 flex-1 flex-col gap-px bg-outline-variant/20">' +
+              columnItems.map(renderItemMarkup).join("") +
+            '</div>';
+          }).join("") + '</div>';
         }
 
         function formatDateLabel(isoText) {
@@ -366,8 +376,6 @@
             if (colisage > 0) {
               acc.totalPacks += Math.floor(itemPieces / colisage);
               acc.hasPackData = true;
-            } else {
-              acc.allItemsHaveColisage = false;
             }
 
             return acc;
@@ -375,8 +383,7 @@
             totalBoxes: 0,
             totalPieces: 0,
             totalPacks: 0,
-            hasPackData: false,
-            allItemsHaveColisage: true
+            hasPackData: false
           });
         }
 
@@ -389,11 +396,25 @@
           return labels;
         }
 
+        function compareBySortKey(left, right) {
+          const leftSortKey = String(left && left.sortKey ? left.sortKey : "").trim();
+          const rightSortKey = String(right && right.sortKey ? right.sortKey : "").trim();
+          const leftRef = String(left && left.reference ? left.reference : "");
+          const rightRef = String(right && right.reference ? right.reference : "");
+
+          if (leftSortKey && rightSortKey && leftSortKey !== rightSortKey) {
+            return leftSortKey.localeCompare(rightSortKey);
+          }
+          if (leftSortKey && !rightSortKey) return -1;
+          if (!leftSortKey && rightSortKey) return 1;
+          return leftRef.localeCompare(rightRef);
+        }
+
         function sortItems(items) {
           const next = items.slice();
           if (state.sort === "ref_desc") {
             next.sort(function(a, b) {
-              return String(b.reference || "").localeCompare(String(a.reference || ""));
+              return -compareBySortKey(a, b);
             });
             return next;
           }
@@ -403,15 +424,37 @@
               const leftState = a && a.stockState === "positive" ? 0 : 1;
               const rightState = b && b.stockState === "positive" ? 0 : 1;
               if (leftState !== rightState) return leftState - rightState;
-              return String(a.reference || "").localeCompare(String(b.reference || ""));
+              return compareBySortKey(a, b);
             });
             return next;
           }
 
           next.sort(function(a, b) {
-            return String(a.reference || "").localeCompare(String(b.reference || ""));
+            return compareBySortKey(a, b);
           });
           return next;
+        }
+
+        function getColumnCount() {
+          const width = window.innerWidth || document.documentElement.clientWidth || 0;
+          const isLandscape = width > (window.innerHeight || 0);
+          if (width >= 980) return 4;
+          if (width >= 720 || (isLandscape && width >= 560)) return 3;
+          return 2;
+        }
+
+        function buildColumnLayout_(items, columnCount) {
+          const normalizedCount = Math.max(1, Math.trunc(Number(columnCount) || 1));
+          if (!items.length) return [];
+
+          const itemsPerColumn = Math.ceil(items.length / normalizedCount);
+          const columns = [];
+          for (let i = 0; i < normalizedCount; i++) {
+            const start = i * itemsPerColumn;
+            const slice = items.slice(start, start + itemsPerColumn);
+            if (slice.length) columns.push(slice);
+          }
+          return columns;
         }
 
         function getVisibleItems() {
@@ -443,13 +486,13 @@
           const totals = computeInventoryTotals_(visibleItems);
           const totalLoaded = state.summary && state.summary.totalRows ? state.summary.totalRows : state.items.length;
           const refsText = state.summary && state.summary.isPartial && state.items.length < totalLoaded
-            ? visibleItems.length + " / " + totalLoaded + " refs"
-            : visibleItems.length + " refs";
+            ? visibleItems.length + " / " + totalLoaded + " " + (visibleItems.length === 1 ? "ref" : "refs")
+            : visibleItems.length + " " + (visibleItems.length === 1 ? "ref" : "refs");
           const summarySegments = [
             formatMetricNumber(totals.totalBoxes) + " 箱"
           ];
 
-          if (totals.hasPackData && totals.allItemsHaveColisage && totals.totalPacks > 0) {
+          if (totals.hasPackData && totals.totalPacks > 0) {
             summarySegments.push(formatMetricNumber(totals.totalPacks) + " 包");
           }
           summarySegments.push(formatMetricNumber(totals.totalPieces) + " 件");
@@ -475,7 +518,8 @@
 
         function renderGrid() {
           const visibleItems = getVisibleItems();
-          els.grid.innerHTML = visibleItems.map(renderItemMarkup).join("");
+          const columns = buildColumnLayout_(visibleItems, state.columnCount);
+          els.grid.innerHTML = renderColumnLayoutMarkup(columns);
           els.emptyState.classList.toggle("hidden", visibleItems.length > 0);
           renderSummary(visibleItems);
           renderActiveFilters();
@@ -505,6 +549,13 @@
           state.lastError = "";
           populateWarehouseFilter();
           syncUtilityPanel();
+          renderGrid();
+        }
+
+        function syncColumnLayout(force) {
+          const nextCount = getColumnCount();
+          if (!force && nextCount === state.columnCount) return;
+          state.columnCount = nextCount;
           renderGrid();
         }
 
@@ -568,7 +619,19 @@
           renderGrid();
         });
 
+        let resizeTimer = 0;
+        window.addEventListener("resize", function() {
+          window.clearTimeout(resizeTimer);
+          resizeTimer = window.setTimeout(function() {
+            syncColumnLayout(false);
+          }, 100);
+        });
+
+        state.columnCount = 2;
         hydrate(initialPayload);
+        window.setTimeout(function() {
+          syncColumnLayout(false);
+        }, 0);
 
         if (state.summary && state.summary.isPartial) {
           window.setTimeout(function() {

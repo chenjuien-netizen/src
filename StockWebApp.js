@@ -9,7 +9,7 @@ function doGet() {
     source: "server",
     generatedAt: new Date().toISOString()
   });
-  template.initialListMarkup = StockWebApp_renderItemsHtml_(initialResult.payload.items);
+  template.initialListMarkup = StockWebApp_renderColumnLayoutHtml_(initialResult.payload.items, 2);
 
   Logger.log(
     "StockWebApp_doGet | initialItems=%s | totalRows=%s | partial=%s | readRange=%s:%s | timingsMs=%s",
@@ -113,7 +113,7 @@ function StockWebApp_collectPayload_(limit) {
     }
   }
 
-  StockWebApp_sortItemsByReference_(items);
+  StockWebApp_sortItems_(items, "ref_asc");
 
   const availableFilters = StockWebApp_collectAvailableFilters_(items);
   const generatedAt = new Date().toISOString();
@@ -176,6 +176,7 @@ function StockWebApp_resolveColumns_(headers) {
 
   const cols = {
     reference: findCol(["货号", "Reference", "Référence", "ref"]),
+    sortKey: findCol(["SortKey"]),
     tailRaw: findCol(["尾箱"]),
     unitsPerBoxRaw: findCol(["件/箱", "每箱件数2"]),
     boxesRaw: findCol(["箱数"]),
@@ -203,6 +204,7 @@ function StockWebApp_buildItem_(row, cols, rowIndex, baseCol) {
   return {
     id: "row_" + String(rowIndex || 0),
     reference: reference,
+    sortKey: StockWebApp_optionalText_(row, cols.sortKey, baseCol),
     stockDisplay: stockDisplay,
     stockState: StockWebApp_computeStockStateFromModel_(stateModel),
     tail: stateModel.tail,
@@ -339,12 +341,34 @@ function StockWebApp_collectAvailableFilters_(items) {
   };
 }
 
-function StockWebApp_sortItemsByReference_(items) {
+function StockWebApp_sortItems_(items, sortMode) {
   (items || []).sort(function(a, b) {
-    const left = String(a && a.reference ? a.reference : "");
-    const right = String(b && b.reference ? b.reference : "");
-    return left.localeCompare(right);
+    if (sortMode === "ref_desc") {
+      return -StockWebApp_compareBySortKey_(a, b);
+    }
+
+    if (sortMode === "stock_first") {
+      const leftState = a && a.stockState === "positive" ? 0 : 1;
+      const rightState = b && b.stockState === "positive" ? 0 : 1;
+      if (leftState !== rightState) return leftState - rightState;
+    }
+
+    return StockWebApp_compareBySortKey_(a, b);
   });
+}
+
+function StockWebApp_compareBySortKey_(a, b) {
+  const leftSortKey = String(a && a.sortKey ? a.sortKey : "").trim();
+  const rightSortKey = String(b && b.sortKey ? b.sortKey : "").trim();
+  const leftReference = String(a && a.reference ? a.reference : "");
+  const rightReference = String(b && b.reference ? b.reference : "");
+
+  if (leftSortKey && rightSortKey && leftSortKey !== rightSortKey) {
+    return leftSortKey.localeCompare(rightSortKey);
+  }
+  if (leftSortKey && !rightSortKey) return -1;
+  if (!leftSortKey && rightSortKey) return 1;
+  return leftReference.localeCompare(rightReference);
 }
 
 function StockWebApp_normalizeReference_(value) {
@@ -495,6 +519,28 @@ function StockWebApp_renderItemsHtml_(items) {
   return (Array.isArray(items) ? items : []).map(function(item) {
     return StockWebApp_renderItemHtml_(item);
   }).join("");
+}
+
+function StockWebApp_renderColumnLayoutHtml_(items, columnCount) {
+  const normalizedCount = Math.max(1, Math.trunc(Number(columnCount) || 1));
+  const sourceItems = Array.isArray(items) ? items : [];
+  const perColumn = Math.ceil(sourceItems.length / normalizedCount) || 1;
+  const columns = [];
+
+  for (let i = 0; i < normalizedCount; i++) {
+    const start = i * perColumn;
+    const slice = sourceItems.slice(start, start + perColumn);
+    if (!slice.length) continue;
+    columns.push(
+      '<div class="inventory-column flex min-w-0 flex-1 flex-col gap-px bg-outline-variant/20">' +
+        StockWebApp_renderItemsHtml_(slice) +
+      '</div>'
+    );
+  }
+
+  return columns.length
+    ? '<div class="flex items-start gap-px bg-outline-variant/20">' + columns.join("") + '</div>'
+    : "";
 }
 
 function StockWebApp_renderItemHtml_(item) {

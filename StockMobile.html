@@ -183,6 +183,8 @@
               <span id="summaryPositive">0 stock</span>
               <span class="text-outline-variant/40">//</span>
               <span id="summaryZero">0 zero</span>
+              <span class="text-outline-variant/40">//</span>
+              <span id="summaryTotals">0 箱 0 件</span>
             </div>
           </div>
           <div class="text-right text-[9px] font-bold uppercase tracking-[0.2em] text-on-surface-variant" id="summaryStatus">Pret</div>
@@ -253,6 +255,7 @@
           summaryRefs: document.getElementById("summaryRefs"),
           summaryPositive: document.getElementById("summaryPositive"),
           summaryZero: document.getElementById("summaryZero"),
+          summaryTotals: document.getElementById("summaryTotals"),
           summaryStatus: document.getElementById("summaryStatus"),
           activeFilters: document.getElementById("activeFilters")
         };
@@ -297,6 +300,64 @@
 
         function normalizeText(value) {
           return String(value || "").toLowerCase().trim();
+        }
+
+        function toPositiveNumber(value) {
+          const numeric = Number(value);
+          return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
+        }
+
+        function parseFraction(text) {
+          const normalized = String(text || "").trim().replace(/\s+/g, "");
+          if (!normalized) return 0;
+          const fractionMatch = normalized.match(/^(\d+)\/(\d+)$/);
+          if (fractionMatch) {
+            const numerator = Number(fractionMatch[1]);
+            const denominator = Number(fractionMatch[2]);
+            return denominator > 0 ? numerator / denominator : 0;
+          }
+          const numeric = Number(normalized.replace(",", "."));
+          return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
+        }
+
+        function formatMetricNumber(value) {
+          const numeric = Number(value || 0);
+          if (!Number.isFinite(numeric) || numeric <= 0) return "0";
+          const rounded = Math.round(numeric * 100) / 100;
+          return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2).replace(/\.?0+$/, "");
+        }
+
+        function computeInventoryTotals_(items) {
+          return (items || []).reduce(function(acc, item) {
+            const tail = toPositiveNumber(item && item.tail);
+            const unitsPerBox = toPositiveNumber(item && item.unitsPerBox);
+            const itemBoxes = toPositiveNumber(item && item.itemBoxes);
+            const fractionValue = toPositiveNumber(item && item.fractionValue) || parseFraction(item && item.fractionText);
+            const colisage = toPositiveNumber(item && item.colisage);
+            const itemPieces = tail + ((unitsPerBox > 0) ? ((unitsPerBox * itemBoxes) + (unitsPerBox * fractionValue)) : 0);
+
+            acc.totalPieces += itemPieces;
+            if (tail > 0) acc.totalBoxes += 1;
+
+            if (unitsPerBox > 0) {
+              acc.totalBoxes += itemBoxes + fractionValue;
+            }
+
+            if (colisage > 0) {
+              acc.totalPacks += itemPieces / colisage;
+              acc.hasPackData = true;
+            } else {
+              acc.allItemsHaveColisage = false;
+            }
+
+            return acc;
+          }, {
+            totalBoxes: 0,
+            totalPieces: 0,
+            totalPacks: 0,
+            hasPackData: false,
+            allItemsHaveColisage: true
+          });
         }
 
         function getActiveFilterLabels() {
@@ -359,15 +420,25 @@
           const positiveCount = visibleItems.filter(function(item) {
             return item && item.stockState === "positive";
           }).length;
+          const totals = computeInventoryTotals_(visibleItems);
           const totalLoaded = state.summary && state.summary.totalRows ? state.summary.totalRows : state.items.length;
           const refsText = state.summary && state.summary.isPartial && state.items.length < totalLoaded
             ? visibleItems.length + " / " + totalLoaded + " refs"
             : visibleItems.length + " refs";
+          const summarySegments = [
+            formatMetricNumber(totals.totalBoxes) + " 箱"
+          ];
+
+          if (totals.hasPackData && totals.allItemsHaveColisage && totals.totalPacks > 0) {
+            summarySegments.push(formatMetricNumber(totals.totalPacks) + " 包");
+          }
+          summarySegments.push(formatMetricNumber(totals.totalPieces) + " 件");
 
           els.summaryDate.textContent = formatDateLabel(state.generatedAt || (state.summary && state.summary.generatedAt) || "");
           els.summaryRefs.textContent = refsText;
           els.summaryPositive.textContent = positiveCount + " stock";
           els.summaryZero.textContent = Math.max(0, visibleItems.length - positiveCount) + " zero";
+          els.summaryTotals.textContent = summarySegments.join(" ");
 
           if (state.isRefreshing) {
             els.summaryStatus.textContent = "Refresh...";

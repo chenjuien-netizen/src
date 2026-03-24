@@ -181,6 +181,7 @@ function StockWebApp_resolveColumns_(headers) {
     boxesRaw: findCol(["箱数"]),
     signRaw: findCol(["当前signe"]),
     fractionRaw: findCol(["当前箱数分数"]),
+    colisage: findCol(["Colisage"]),
     warehouse: findCol(["仓库", "entrepot", "entrepôt"]),
     createdAt: findCol(["date de création", "修改日期", "进货"])
   };
@@ -204,6 +205,12 @@ function StockWebApp_buildItem_(row, cols, rowIndex, baseCol) {
     reference: reference,
     stockDisplay: stockDisplay,
     stockState: StockWebApp_computeStockStateFromModel_(stateModel),
+    tail: stateModel.tail,
+    unitsPerBox: stateModel.unitsPerBox,
+    itemBoxes: stateModel.itemBoxes,
+    fractionText: stateModel.fractionText,
+    fractionValue: stateModel.fractionValue,
+    colisage: stateModel.colisage,
     warehouse: StockWebApp_optionalText_(row, cols.warehouse, baseCol),
     createdAt: StockWebApp_optionalText_(row, cols.createdAt, baseCol)
   };
@@ -211,13 +218,15 @@ function StockWebApp_buildItem_(row, cols, rowIndex, baseCol) {
 
 function StockWebApp_extractStateModel_(row, cols, baseCol) {
   const fractionRawValue = StockWebApp_getCellByAbsCol_(row, cols.fractionRaw, baseCol);
+  const fractionText = StockWebApp_normalizeFractionText_(fractionRawValue);
   return {
     tail: StockWebApp_tailDisplayToTotal_(StockWebApp_getCellByAbsCol_(row, cols.tailRaw, baseCol)),
     unitsPerBox: StockWebApp_toInt_(StockWebApp_getCellByAbsCol_(row, cols.unitsPerBoxRaw, baseCol)),
-    boxes: StockWebApp_toInt_(StockWebApp_getCellByAbsCol_(row, cols.boxesRaw, baseCol)),
+    itemBoxes: StockWebApp_toInt_(StockWebApp_getCellByAbsCol_(row, cols.boxesRaw, baseCol)),
     sign: StockWebApp_normalizeSign_(StockWebApp_getCellByAbsCol_(row, cols.signRaw, baseCol)),
-    fraction: StockWebApp_parseFractionValue_(fractionRawValue),
-    fractionTextRaw: StockWebApp_normalizeFractionText_(fractionRawValue)
+    fractionText: fractionText,
+    fractionValue: StockWebApp_parseFractionValue_(fractionRawValue),
+    colisage: cols.colisage ? StockWebApp_parsePositiveNumber_(StockWebApp_getCellByAbsCol_(row, cols.colisage, baseCol)) : 0
   };
 }
 
@@ -225,24 +234,23 @@ function StockWebApp_buildStockDisplay_(stateInput) {
   const state = StockWebApp_normalizeStateModel_(stateInput || {});
   const tail = state.tail;
   const unitsPerBox = state.unitsPerBox;
-  const boxes = state.boxes;
+  const itemBoxes = state.itemBoxes;
   const sign = state.sign;
-  const fractionText = StockWebApp_fractionToText_(state.fraction);
-  const plusFractionDisplay = StockWebApp_fractionDisplayForPlus_(state);
+  const fractionText = state.fractionText || StockWebApp_fractionToText_(state.fractionValue);
 
   let core = "";
   if (unitsPerBox > 0) {
     core = String(unitsPerBox) + "p";
     if (sign === "×" && fractionText) {
-      if (boxes > 1) {
-        core += "×" + String(boxes) + "×" + fractionText;
+      if (itemBoxes > 1) {
+        core += "×" + String(itemBoxes) + "×" + fractionText;
       } else {
         core += "×" + fractionText;
       }
     } else if (sign === "+" && fractionText) {
-      core += "×" + plusFractionDisplay;
-    } else if (boxes > 0) {
-      core += "×" + String(boxes);
+      core += "×" + String(itemBoxes) + "+" + fractionText;
+    } else if (itemBoxes > 0) {
+      core += "×" + String(itemBoxes);
     }
   }
 
@@ -257,54 +265,42 @@ function StockWebApp_normalizeStateModel_(stateInput) {
   const state = {
     tail: Math.max(0, StockWebApp_toInt_(stateInput.tail)),
     unitsPerBox: Math.max(0, StockWebApp_toInt_(stateInput.unitsPerBox)),
-    boxes: Math.max(0, StockWebApp_toInt_(stateInput.boxes)),
+    itemBoxes: Math.max(0, StockWebApp_toInt_(stateInput.itemBoxes)),
     sign: StockWebApp_normalizeSign_(stateInput.sign),
-    fraction: StockWebApp_parseFractionValue_(stateInput.fraction),
-    fractionTextRaw: StockWebApp_normalizeFractionText_(stateInput.fractionTextRaw)
+    fractionText: StockWebApp_normalizeFractionText_(stateInput.fractionText),
+    fractionValue: StockWebApp_parseFractionValue_(stateInput.fractionValue),
+    colisage: StockWebApp_parsePositiveNumber_(stateInput.colisage)
   };
 
-  if (!(state.fraction > 0)) {
-    state.fraction = 0;
+  if (!(state.fractionValue > 0)) {
+    state.fractionValue = 0;
+    state.fractionText = "";
     state.sign = "";
   } else if (!state.sign) {
-    state.sign = state.boxes > 0 ? "+" : "×";
+    state.sign = state.itemBoxes > 0 ? "+" : "×";
   }
 
-  if (state.sign === "×" && state.boxes <= 0) {
-    state.boxes = 1;
+  if (!state.fractionText && state.fractionValue > 0) {
+    state.fractionText = StockWebApp_fractionToText_(state.fractionValue);
   }
 
-  if (state.sign === "+" && state.boxes <= 0) {
+  if (state.sign === "×" && state.itemBoxes <= 0) {
+    state.itemBoxes = 1;
+  }
+
+  if (state.sign === "+" && state.itemBoxes <= 0) {
     state.sign = "×";
-    state.boxes = 1;
+    state.itemBoxes = 1;
   }
 
   return state;
 }
 
-function StockWebApp_fractionDisplayForPlus_(state) {
-  const rawText = StockWebApp_normalizeFractionText_(state && state.fractionTextRaw ? state.fractionTextRaw : "");
-  const boxes = Math.max(0, StockWebApp_toInt_(state && state.boxes));
-  if (rawText) {
-    const match = rawText.match(/^(\d+)\/(\d+)$/);
-    if (match && boxes > 0) return String(boxes) + "/" + match[2];
-    return rawText;
-  }
-
-  if (boxes > 0) {
-    const fractionText = StockWebApp_fractionToText_(state && state.fraction ? state.fraction : 0);
-    const parts = fractionText ? fractionText.split("/") : [];
-    if (parts.length === 2) return String(boxes) + "/" + parts[1];
-  }
-
-  return StockWebApp_fractionToText_(state && state.fraction ? state.fraction : 0);
-}
-
 function StockWebApp_computeStockStateFromModel_(stateInput) {
   const state = StockWebApp_normalizeStateModel_(stateInput || {});
   if (state.tail > 0) return "positive";
-  if (state.unitsPerBox > 0 && state.boxes > 0) return "positive";
-  if (state.unitsPerBox > 0 && state.fraction > 0) return "positive";
+  if (state.unitsPerBox > 0 && state.itemBoxes > 0) return "positive";
+  if (state.unitsPerBox > 0 && state.fractionValue > 0) return "positive";
   return "zero";
 }
 
@@ -351,10 +347,14 @@ function StockWebApp_sortItemsByReference_(items) {
 }
 
 function StockWebApp_normalizeReference_(value) {
-  if (typeof cleanRef_ === "function") {
-    return cleanRef_(value).toUpperCase();
-  }
-  return String(value || "").trim().toUpperCase();
+  const normalized = typeof cleanRef_ === "function"
+    ? cleanRef_(value).toUpperCase()
+    : String(value || "").trim().toUpperCase();
+
+  return normalized
+    .replace(/([A-Z0-9]+-\d+)(?=[A-Z0-9]+-\d+)/g, "$1 ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function StockWebApp_getCellByAbsCol_(row, absCol, baseCol) {
@@ -413,6 +413,15 @@ function StockWebApp_parseFractionValue_(value) {
 
   const numeric = Number(text);
   return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
+}
+
+function StockWebApp_parsePositiveNumber_(value) {
+  if (value === null || typeof value === "undefined" || value === "") return 0;
+  if (typeof value === "number") return Number.isFinite(value) && value > 0 ? value : 0;
+  const normalized = String(value).trim().replace(",", ".");
+  if (!normalized) return 0;
+  const numberValue = Number(normalized);
+  return Number.isFinite(numberValue) && numberValue > 0 ? numberValue : 0;
 }
 
 function StockWebApp_normalizeFractionText_(value) {

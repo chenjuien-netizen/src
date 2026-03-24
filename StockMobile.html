@@ -91,11 +91,12 @@
 
       html,
       body {
-        min-height: 100%;
+        height: 100%;
+        overflow: hidden;
       }
 
       body {
-        min-height: max(100dvh, 100%);
+        min-height: 100dvh;
         font-family: "Inter", sans-serif;
         background-color: #f7f9fb;
       }
@@ -104,12 +105,17 @@
         -webkit-overflow-scrolling: touch;
         overscroll-behavior: contain;
       }
+
+      .quick-edit-overlay {
+        backdrop-filter: blur(2px);
+      }
     </style>
   </head>
-  <body class="overflow-hidden bg-background text-on-surface antialiased">
+  <body class="h-[100dvh] overflow-hidden bg-background text-on-surface antialiased">
     <script id="inventory-boot" type="application/json"><?!= initialBootJson ?></script>
 
-    <main class="flex h-[100dvh] flex-col overflow-hidden pb-16">
+    <main class="fixed inset-x-0 top-0 bottom-16 flex overflow-hidden bg-background">
+      <div class="flex min-h-0 w-full flex-col overflow-hidden">
       <div class="z-40 shrink-0 bg-background">
         <header class="flex h-14 items-center justify-between border-b border-slate-200 bg-slate-50 px-4">
           <div class="flex items-center gap-3">
@@ -198,7 +204,7 @@
         </section>
       </div>
 
-      <section class="inventory-scroll min-h-0 flex-1 overflow-y-auto bg-outline-variant/20" id="inventoryScroll">
+      <section class="inventory-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain bg-outline-variant/20" id="inventoryScroll">
         <div class="bg-outline-variant/20" id="inventoryGrid">
           <?!= initialListMarkup ?>
         </div>
@@ -207,7 +213,59 @@
           <p class="mt-1 text-[12px] text-on-surface-variant">Ajuste la recherche ou les filtres pour afficher des references.</p>
         </div>
       </section>
+      </div>
     </main>
+
+    <div class="quick-edit-overlay fixed inset-0 z-[60] hidden items-center justify-center bg-on-background/35 px-3 py-6" id="quickEditOverlay" role="presentation">
+      <div aria-modal="true" class="max-h-[calc(100dvh-4rem)] w-full max-w-md overflow-hidden border border-outline-variant/20 bg-surface-container-lowest shadow-[0_18px_48px_rgba(11,15,16,0.18)]" id="quickEditModal" role="dialog" aria-labelledby="quickEditReference">
+        <div class="border-b border-outline-variant/20 px-4 py-3">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <div class="text-[0.625rem] font-bold uppercase tracking-[0.2em] text-on-surface-variant">SKU_REFERENCE</div>
+              <div class="truncate text-lg font-black tracking-tight text-on-surface" id="quickEditReference">-</div>
+            </div>
+            <div class="text-right">
+              <div class="text-[0.625rem] font-bold uppercase tracking-[0.2em] text-on-surface-variant">STOCK_ACTUEL</div>
+              <div class="text-sm font-bold text-primary" id="quickEditStockDisplay">-</div>
+            </div>
+          </div>
+        </div>
+        <div class="max-h-[calc(100dvh-13rem)] overflow-y-auto px-4 py-4">
+          <form class="space-y-3" id="quickEditForm" novalidate>
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label class="block">
+                <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">尾箱</span>
+                <input class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-semibold text-on-surface" id="quickEditTail" inputmode="numeric" min="0" step="1" type="number" />
+              </label>
+              <label class="block">
+                <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">件/箱</span>
+                <input class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-semibold text-on-surface" id="quickEditUnitsPerBox" inputmode="numeric" min="0" step="1" type="number" />
+              </label>
+              <label class="block">
+                <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">箱数</span>
+                <input class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-semibold text-on-surface" id="quickEditItemBoxes" inputmode="numeric" min="0" step="1" type="number" />
+              </label>
+              <label class="block">
+                <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">当前signe</span>
+                <select class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-semibold text-on-surface" id="quickEditSign">
+                  <option value="+">+</option>
+                  <option value="×">×</option>
+                </select>
+              </label>
+              <label class="block sm:col-span-2">
+                <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">当前箱数分数</span>
+                <input class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-semibold text-on-surface" id="quickEditFractionText" inputmode="text" maxlength="10" placeholder="1/2" type="text" />
+                <span class="mt-1 block text-[10px] text-on-surface-variant" id="quickEditFractionHint">Format attendu: 1/2, 2/3, 3/4</span>
+              </label>
+            </div>
+          </form>
+        </div>
+        <div class="grid grid-cols-2 gap-3 border-t border-outline-variant/20 bg-surface-container-low px-4 py-4">
+          <button class="border border-outline-variant/30 py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-on-surface-variant transition-colors duration-150 hover:bg-surface-container" id="quickEditCancel" type="button">ANNULER</button>
+          <button class="bg-surface-tint py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-on-primary transition-colors duration-150 hover:bg-primary-dim" id="quickEditSave" type="button">ENREGISTRER</button>
+        </div>
+      </div>
+    </div>
 
     <nav class="fixed inset-x-0 bottom-0 z-50 flex h-16 items-stretch justify-around border-t border-slate-200 bg-slate-50">
       <a class="flex flex-col items-center justify-center px-2 py-1 text-slate-400" href="javascript:void(0)" tabindex="-1" aria-disabled="true">
@@ -242,7 +300,10 @@
           columnCount: 2,
           isRefreshing: false,
           filterPanelOpen: false,
-          lastError: ""
+          lastError: "",
+          quickEditOpen: false,
+          quickEditItem: null,
+          quickEditForm: null
         };
 
         const els = {
@@ -265,7 +326,20 @@
           summaryZero: document.getElementById("summaryZero"),
           summaryTotals: document.getElementById("summaryTotals"),
           summaryStatus: document.getElementById("summaryStatus"),
-          activeFilters: document.getElementById("activeFilters")
+          activeFilters: document.getElementById("activeFilters"),
+          quickEditOverlay: document.getElementById("quickEditOverlay"),
+          quickEditModal: document.getElementById("quickEditModal"),
+          quickEditForm: document.getElementById("quickEditForm"),
+          quickEditReference: document.getElementById("quickEditReference"),
+          quickEditStockDisplay: document.getElementById("quickEditStockDisplay"),
+          quickEditTail: document.getElementById("quickEditTail"),
+          quickEditUnitsPerBox: document.getElementById("quickEditUnitsPerBox"),
+          quickEditItemBoxes: document.getElementById("quickEditItemBoxes"),
+          quickEditSign: document.getElementById("quickEditSign"),
+          quickEditFractionText: document.getElementById("quickEditFractionText"),
+          quickEditFractionHint: document.getElementById("quickEditFractionHint"),
+          quickEditCancel: document.getElementById("quickEditCancel"),
+          quickEditSave: document.getElementById("quickEditSave")
         };
 
         function escapeHtml(value) {
@@ -280,20 +354,21 @@
         function renderItemMarkup(item) {
           const reference = item && item.reference ? item.reference : "-";
           const stockDisplay = item && item.stockDisplay ? item.stockDisplay : "-";
+          const itemId = item && item.id ? item.id : reference;
           const accentClass = item && item.stockState === "positive" ? "border-emerald-400/50" : "border-rose-400/50";
           const stockClass = item && item.stockState === "positive" ? "text-primary" : "text-on-surface-variant";
 
           return '' +
-            '<article class="inventory-card bg-surface-container-lowest relative border-l-4 ' + accentClass + ' flex min-h-[4.1rem] items-stretch transition-colors duration-150 hover:bg-surface-container select-none" data-reference="' + escapeHtml(reference) + '" data-stock-display="' + escapeHtml(stockDisplay) + '" data-stock-state="' + escapeHtml(item && item.stockState ? item.stockState : "zero") + '">' +
-              '<div class="flex min-w-0 flex-1 flex-col justify-between px-2.5 py-2">' +
+            '<article class="inventory-card bg-surface-container-lowest relative border-l-4 ' + accentClass + ' flex min-h-[4.1rem] items-stretch transition-colors duration-150 hover:bg-surface-container select-none" data-item-id="' + escapeHtml(itemId) + '" data-reference="' + escapeHtml(reference) + '" data-stock-display="' + escapeHtml(stockDisplay) + '" data-stock-state="' + escapeHtml(item && item.stockState ? item.stockState : "zero") + '">' +
+              '<button class="inventory-card-main flex min-w-0 flex-1 flex-col justify-between px-2.5 py-2 text-left" type="button" data-action="open-quick-edit" data-item-id="' + escapeHtml(itemId) + '">' +
                 '<div class="flex items-start gap-2">' +
                   '<span class="truncate pr-2 text-[12px] font-bold tracking-tight text-on-surface">' + escapeHtml(reference) + '</span>' +
                 '</div>' +
                 '<div class="mt-1.5">' +
                   '<span class="block truncate text-[13px] font-medium ' + stockClass + '">' + escapeHtml(stockDisplay) + '</span>' +
                 '</div>' +
-              '</div>' +
-              '<button class="reference-detail-trigger flex w-10 shrink-0 touch-manipulation select-none items-center justify-center border-l border-outline-variant/20 text-outline-variant transition-colors duration-150 hover:bg-surface-container-highest hover:text-on-surface-variant active:bg-surface-container-high" type="button" aria-label="Ouvrir la fiche de ' + escapeHtml(reference) + '" data-action="open-detail" data-reference="' + escapeHtml(reference) + '">' +
+              '</button>' +
+              '<button class="reference-detail-trigger flex w-10 shrink-0 touch-manipulation select-none items-center justify-center border-l border-outline-variant/20 text-outline-variant transition-colors duration-150 hover:bg-surface-container-highest hover:text-on-surface-variant active:bg-surface-container-high" type="button" aria-label="Ouvrir la fiche de ' + escapeHtml(reference) + '" data-action="open-detail" data-item-id="' + escapeHtml(itemId) + '" data-reference="' + escapeHtml(reference) + '">' +
                 '<span class="material-symbols-outlined !text-[16px]">chevron_right</span>' +
               '</button>' +
             '</article>';
@@ -491,6 +566,108 @@
           }).join("");
         }
 
+        function sanitizeIntegerInput(value) {
+          if (value === "" || value == null) return "";
+          const normalized = String(value).trim();
+          if (!normalized) return "";
+          const numeric = Number(normalized);
+          if (!Number.isFinite(numeric) || numeric < 0) return "";
+          return String(Math.trunc(numeric));
+        }
+
+        function sanitizeSign(value) {
+          return value === "×" ? "×" : "+";
+        }
+
+        function sanitizeFractionText(value) {
+          const normalized = String(value || "").trim().replace(/\s+/g, "");
+          if (!normalized) return "";
+          return /^(\d+)\/(\d+)$/.test(normalized) ? normalized : normalized;
+        }
+
+        function isFractionTextValid(value) {
+          const normalized = String(value || "").trim();
+          return !normalized || /^(\d+)\/(\d+)$/.test(normalized);
+        }
+
+        function getItemById(itemId) {
+          const normalizedId = String(itemId || "").trim();
+          if (!normalizedId) return null;
+          return state.items.find(function(item) {
+            return String(item && item.id ? item.id : "") === normalizedId;
+          }) || null;
+        }
+
+        function renderQuickEdit() {
+          const isOpen = !!state.quickEditOpen && !!state.quickEditItem;
+          els.quickEditOverlay.classList.toggle("hidden", !isOpen);
+          els.quickEditOverlay.classList.toggle("flex", isOpen);
+          document.body.classList.toggle("overflow-hidden", isOpen);
+          if (!isOpen) return;
+
+          const item = state.quickEditItem || {};
+          const form = state.quickEditForm || {};
+          els.quickEditReference.textContent = item.reference || "-";
+          els.quickEditStockDisplay.textContent = item.stockDisplay || "-";
+          els.quickEditTail.value = form.tail;
+          els.quickEditUnitsPerBox.value = form.unitsPerBox;
+          els.quickEditItemBoxes.value = form.itemBoxes;
+          els.quickEditSign.value = sanitizeSign(form.sign);
+          els.quickEditFractionText.value = form.fractionText;
+          els.quickEditFractionHint.textContent = isFractionTextValid(form.fractionText)
+            ? "Format attendu: 1/2, 2/3, 3/4"
+            : "Format invalide. Exemple: 1/2";
+          els.quickEditFractionHint.className = "mt-1 block text-[10px] " + (isFractionTextValid(form.fractionText) ? "text-on-surface-variant" : "text-error");
+        }
+
+        function openQuickEdit(item) {
+          if (!item) return;
+          state.quickEditItem = item;
+          state.quickEditOpen = true;
+          state.quickEditForm = {
+            tail: sanitizeIntegerInput(item.tail),
+            unitsPerBox: sanitizeIntegerInput(item.unitsPerBox),
+            itemBoxes: sanitizeIntegerInput(item.itemBoxes),
+            sign: sanitizeSign(item.sign),
+            fractionText: sanitizeFractionText(item.fractionText)
+          };
+          renderQuickEdit();
+          window.setTimeout(function() {
+            els.quickEditTail.focus();
+            els.quickEditTail.select();
+          }, 0);
+        }
+
+        function closeQuickEdit() {
+          state.quickEditOpen = false;
+          state.quickEditItem = null;
+          state.quickEditForm = null;
+          renderQuickEdit();
+        }
+
+        function handleQuickEditFieldChange(field, value) {
+          if (!state.quickEditForm) return;
+          if (field === "sign") {
+            state.quickEditForm.sign = sanitizeSign(value);
+          } else if (field === "fractionText") {
+            state.quickEditForm.fractionText = sanitizeFractionText(value);
+          } else {
+            state.quickEditForm[field] = sanitizeIntegerInput(value);
+          }
+          renderQuickEdit();
+        }
+
+        function handleQuickEditSave() {
+          if (!state.quickEditForm) return;
+          if (!isFractionTextValid(state.quickEditForm.fractionText)) {
+            renderQuickEdit();
+            return;
+          }
+          state.lastError = "";
+          els.summaryStatus.textContent = "Quick edit bientot disponible";
+          closeQuickEdit();
+        }
+
         function handleOpenReferenceDetail(reference) {
           const normalizedReference = String(reference || "").trim();
           if (!normalizedReference) return;
@@ -613,10 +790,18 @@
 
         els.grid.addEventListener("click", function(event) {
           const trigger = event.target.closest('[data-action="open-detail"]');
-          if (!trigger) return;
+          if (trigger) {
+            event.preventDefault();
+            event.stopPropagation();
+            handleOpenReferenceDetail(trigger.getAttribute("data-reference"));
+            return;
+          }
+
+          const quickEditTrigger = event.target.closest('[data-action="open-quick-edit"]');
+          if (!quickEditTrigger) return;
           event.preventDefault();
-          event.stopPropagation();
-          handleOpenReferenceDetail(trigger.getAttribute("data-reference"));
+          const item = getItemById(quickEditTrigger.getAttribute("data-item-id"));
+          if (item) openQuickEdit(item);
         });
 
         els.toggleFilterButton.addEventListener("click", function() {
@@ -646,6 +831,46 @@
           renderGrid();
         });
 
+        els.quickEditTail.addEventListener("input", function(event) {
+          handleQuickEditFieldChange("tail", event.target.value);
+        });
+
+        els.quickEditUnitsPerBox.addEventListener("input", function(event) {
+          handleQuickEditFieldChange("unitsPerBox", event.target.value);
+        });
+
+        els.quickEditItemBoxes.addEventListener("input", function(event) {
+          handleQuickEditFieldChange("itemBoxes", event.target.value);
+        });
+
+        els.quickEditSign.addEventListener("change", function(event) {
+          handleQuickEditFieldChange("sign", event.target.value);
+        });
+
+        els.quickEditFractionText.addEventListener("input", function(event) {
+          handleQuickEditFieldChange("fractionText", event.target.value);
+        });
+
+        els.quickEditCancel.addEventListener("click", function() {
+          closeQuickEdit();
+        });
+
+        els.quickEditSave.addEventListener("click", function() {
+          handleQuickEditSave();
+        });
+
+        els.quickEditOverlay.addEventListener("click", function(event) {
+          if (event.target === els.quickEditOverlay) {
+            closeQuickEdit();
+          }
+        });
+
+        document.addEventListener("keydown", function(event) {
+          if (event.key === "Escape" && state.quickEditOpen) {
+            closeQuickEdit();
+          }
+        });
+
         let resizeTimer = 0;
         window.addEventListener("resize", function() {
           window.clearTimeout(resizeTimer);
@@ -656,6 +881,7 @@
 
         state.columnCount = 2;
         hydrate(initialPayload);
+        renderQuickEdit();
         window.setTimeout(function() {
           syncColumnLayout(false);
         }, 0);

@@ -546,6 +546,7 @@ function StockWebApp_renderColumnLayoutHtml_(items, columnCount) {
 function StockWebApp_renderItemHtml_(item) {
   const reference = item && item.reference ? item.reference : "-";
   const stockDisplay = item && item.stockDisplay ? item.stockDisplay : "-";
+  const itemId = item && item.id ? item.id : reference;
   const accentClass = item && item.stockState === "positive"
     ? "border-emerald-400/50"
     : "border-rose-400/50";
@@ -554,16 +555,16 @@ function StockWebApp_renderItemHtml_(item) {
     : "text-on-surface-variant";
 
   return '' +
-    '<article class="inventory-card bg-surface-container-lowest relative border-l-4 ' + accentClass + ' flex min-h-[4.1rem] items-stretch transition-colors duration-150 hover:bg-surface-container select-none" data-reference="' + StockWebApp_escapeHtml_(reference) + '" data-stock-display="' + StockWebApp_escapeHtml_(stockDisplay) + '" data-stock-state="' + StockWebApp_escapeHtml_(item && item.stockState ? item.stockState : "zero") + '">' +
-      '<div class="flex min-w-0 flex-1 flex-col justify-between px-2.5 py-2">' +
+    '<article class="inventory-card bg-surface-container-lowest relative border-l-4 ' + accentClass + ' flex min-h-[4.1rem] items-stretch transition-colors duration-150 hover:bg-surface-container select-none" data-item-id="' + StockWebApp_escapeHtml_(itemId) + '" data-reference="' + StockWebApp_escapeHtml_(reference) + '" data-stock-display="' + StockWebApp_escapeHtml_(stockDisplay) + '" data-stock-state="' + StockWebApp_escapeHtml_(item && item.stockState ? item.stockState : "zero") + '">' +
+      '<button class="inventory-card-main flex min-w-0 flex-1 flex-col justify-between px-2.5 py-2 text-left" type="button" data-action="open-quick-edit" data-item-id="' + StockWebApp_escapeHtml_(itemId) + '">' +
         '<div class="flex items-start gap-2">' +
           '<span class="truncate pr-2 text-[12px] font-bold tracking-tight text-on-surface">' + StockWebApp_escapeHtml_(reference) + '</span>' +
         '</div>' +
         '<div class="mt-1.5">' +
           '<span class="block truncate text-[13px] font-medium ' + stockClass + '">' + StockWebApp_escapeHtml_(stockDisplay) + '</span>' +
         '</div>' +
-      '</div>' +
-      '<button class="reference-detail-trigger flex w-10 shrink-0 touch-manipulation select-none items-center justify-center border-l border-outline-variant/20 text-outline-variant transition-colors duration-150 hover:bg-surface-container-highest hover:text-on-surface-variant active:bg-surface-container-high" type="button" aria-label="Ouvrir la fiche de ' + StockWebApp_escapeHtml_(reference) + '" data-action="open-detail" data-reference="' + StockWebApp_escapeHtml_(reference) + '">' +
+      '</button>' +
+      '<button class="reference-detail-trigger flex w-10 shrink-0 touch-manipulation select-none items-center justify-center border-l border-outline-variant/20 text-outline-variant transition-colors duration-150 hover:bg-surface-container-highest hover:text-on-surface-variant active:bg-surface-container-high" type="button" aria-label="Ouvrir la fiche de ' + StockWebApp_escapeHtml_(reference) + '" data-action="open-detail" data-item-id="' + StockWebApp_escapeHtml_(itemId) + '" data-reference="' + StockWebApp_escapeHtml_(reference) + '">' +
         '<span class="material-symbols-outlined !text-[16px]">chevron_right</span>' +
       '</button>' +
     '</article>';

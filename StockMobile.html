@@ -1,1084 +1,490 @@
 <!DOCTYPE html>
-<html>
+<html class="light" lang="fr">
   <head>
-    <base target="_top">
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>SZFashion Stock</title>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>SZFASHION | Inventaire</title>
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@300;400;500;600;700;800&amp;family=Manrope:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet" />
     <script>
       tailwind.config = {
         darkMode: "class",
         theme: {
           extend: {
             colors: {
-              background: "#fdfcfd",
-              surface: "#fdfcfd",
+              "on-secondary-fixed-variant": "#4e5c71",
+              "inverse-on-surface": "#9a9d9f",
+              "on-secondary-fixed": "#324053",
+              "background": "#f7f9fb",
+              "tertiary-container": "#dad6f7",
+              "surface-variant": "#d9e4ea",
+              "on-surface-variant": "#566166",
+              "on-tertiary-fixed": "#393751",
+              "on-tertiary-container": "#4b4a65",
+              "on-tertiary": "#fcf7ff",
+              "surface-bright": "#f7f9fb",
               "surface-container-lowest": "#ffffff",
-              "surface-container-low": "#f6f2f7",
-              "surface-container": "#f8f7f9",
-              "surface-container-high": "#e9e1ea",
-              "surface-container-highest": "#e6e1e6",
-              outline: "#7c757e",
-              "outline-variant": "#ccc4ce",
-              primary: "#6b1c85",
-              "primary-container": "#f3e8f6",
-              tertiary: "#6b1c85",
-              error: "#ba1a1a",
-              "error-container": "#ffdad6",
-              "on-surface": "#1d1a1e",
-              "on-surface-variant": "#4b454d"
+              "error-dim": "#4e0309",
+              "primary-fixed-dim": "#ccd4ee",
+              "surface-tint": "#565e74",
+              "outline": "#717c82",
+              "tertiary-fixed": "#dad6f7",
+              "secondary-fixed-dim": "#c7d5ed",
+              "primary-fixed": "#dae2fd",
+              "primary-container": "#dae2fd",
+              "tertiary-fixed-dim": "#ccc9e9",
+              "inverse-surface": "#0b0f10",
+              "on-background": "#2a3439",
+              "on-surface": "#2a3439",
+              "on-primary-fixed": "#373f54",
+              "on-primary-fixed-variant": "#535b71",
+              "tertiary": "#5e5c78",
+              "surface-container-highest": "#d9e4ea",
+              "secondary-container": "#d5e3fc",
+              "surface-container": "#e8eff3",
+              "surface": "#f7f9fb",
+              "secondary-fixed": "#d5e3fc",
+              "secondary": "#526074",
+              "error-container": "#fe8983",
+              "tertiary-dim": "#52506b",
+              "on-secondary-container": "#455367",
+              "on-error-container": "#752121",
+              "inverse-primary": "#dae2fd",
+              "surface-container-low": "#f0f4f7",
+              "on-primary-container": "#4a5167",
+              "surface-dim": "#cfdce3",
+              "outline-variant": "#a9b4b9",
+              "on-primary": "#f7f7ff",
+              "surface-container-high": "#e1e9ee",
+              "on-error": "#fff7f6",
+              "on-secondary": "#f8f8ff",
+              "secondary-dim": "#465468",
+              "on-tertiary-fixed-variant": "#55536f",
+              "primary-dim": "#4a5268",
+              "error": "#9f403d",
+              "primary": "#565e74"
             },
             fontFamily: {
-              serif: ["Noto Serif", "serif"],
-              sans: ["Manrope", "sans-serif"]
+              headline: ["Inter", "sans-serif"],
+              body: ["Inter", "sans-serif"],
+              label: ["Inter", "sans-serif"]
+            },
+            borderRadius: {
+              DEFAULT: "0px",
+              lg: "0px",
+              xl: "0px",
+              full: "9999px"
+            },
+            boxShadow: {
+              ledger: "0 1px 0 rgba(113, 124, 130, 0.12)"
             }
           }
         }
       };
     </script>
     <style>
-      :root {
-        --bg: #f5f5f5;
-        --surface: #ffffff;
-        --surface-soft: #f8f9fb;
-        --ink: #202124;
-        --muted: #5f6368;
-        --line: #e6e9ef;
-        --brand: #1a73e8;
-        --brand-soft: #e8f0fe;
-        --danger: #b3261e;
-        --shadow: 0 4px 16px rgba(32, 33, 36, 0.08);
-      }
-
-      * {
-        box-sizing: border-box;
-      }
-
-      html {
-        height: 100%;
-      }
-
-      body {
-        margin: 0;
-        min-height: 100vh;
-        background: var(--bg);
-        color: var(--ink);
-        font-family: "Manrope", Roboto, "Segoe UI", Arial, sans-serif;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
-        width: 100%;
-        max-width: 100%;
-        overflow-x: hidden;
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
+      .material-symbols-outlined {
+        font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 20;
+        font-size: 18px;
       }
 
       html,
       body {
-        overscroll-behavior-y: contain;
+        min-height: 100%;
       }
 
-      .app {
-        min-height: 100vh;
-        background: var(--bg);
-        width: 100%;
-        max-width: 100%;
-        overflow-x: hidden;
-      }
-
-      .floating-scroll-controls {
-        position: fixed;
-        right: 12px;
-        bottom: calc(84px + env(safe-area-inset-bottom));
-        z-index: 40;
-        display: flex;
-        align-items: center;
-        flex-direction: column;
-        gap: 10px;
-        opacity: 0;
-        pointer-events: none;
-        transform: translateY(8px);
-        transition: opacity 0.18s ease, transform 0.18s ease;
-      }
-
-      .floating-scroll-controls.is-visible {
-        opacity: 1;
-        pointer-events: auto;
-        transform: translateY(0);
-      }
-
-      .floating-scroll-button {
-        width: 42px;
-        height: 42px;
-        border: 0;
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.52);
-        color: #3c4043;
-        box-shadow: 0 4px 14px rgba(32, 33, 36, 0.14);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        -webkit-tap-highlight-color: transparent;
-      }
-
-      .floating-scroll-button:active {
-        transform: scale(0.96);
-      }
-
-      .floating-scroll-button svg {
-        width: 20px;
-        height: 20px;
-      }
-
-      .content {
-        width: 100%;
-        max-width: 1120px;
-        margin: 0 auto;
-        padding: 20px 16px calc(96px + env(safe-area-inset-bottom));
-        overflow-x: hidden;
-      }
-
-      .search-panel {
-        display: none;
-      }
-
-      .search-panel.is-open {
-        display: block;
-      }
-
-      .status {
-        min-height: 18px;
-        color: var(--muted);
-        font-size: 12px;
-        line-height: 1.4;
-      }
-
-      .status.error {
-        color: var(--danger);
-      }
-
-      .material-symbols-outlined {
-        font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 20;
-      }
-
-      .inventory-row {
-        transition: background-color 0.12s ease, opacity 0.12s ease;
-        cursor: pointer;
-      }
-
-      .inventory-row:hover {
-        background: rgba(107, 28, 133, 0.08);
-      }
-
-      .inventory-row:active {
-        background: rgba(107, 28, 133, 0.12);
-      }
-
-      .inventory-row.stock-zero {
-        opacity: 0.5;
-      }
-
-      .inventory-row.is-selected {
-        background: rgba(107, 28, 133, 0.12);
-      }
-
-      .inventory-row[data-selection-mode="true"] {
-        cursor: pointer;
-      }
-
-      .inventory-empty-row td {
-        padding: 18px;
-        text-align: center;
-        color: var(--muted);
-      }
-
-      .loading {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-      }
-
-      .loading::before {
-        content: "";
-        width: 14px;
-        height: 14px;
-        border-radius: 999px;
-        border: 2px solid rgba(26, 115, 232, 0.2);
-        border-top-color: var(--brand);
-        animation: spin 0.9s linear infinite;
-      }
-
-      @keyframes spin {
-        to {
-          transform: rotate(360deg);
-        }
-      }
-
-      .sr-only {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        padding: 0;
-        margin: -1px;
-        overflow: hidden;
-        clip: rect(0, 0, 0, 0);
-        white-space: nowrap;
-        border: 0;
+      body {
+        min-height: max(100dvh, 100%);
+        font-family: "Inter", sans-serif;
+        background-color: #f7f9fb;
       }
     </style>
   </head>
-  <body class="bg-surface text-on-surface">
-    <main class="app min-h-screen bg-surface" id="appRoot">
-      <header class="fixed top-0 z-50 flex h-16 w-full items-center justify-between border-b border-zinc-100 bg-white/85 px-4 backdrop-blur-md md:px-6">
-        <div class="flex min-w-0 items-center gap-3">
-          <button type="button" class="material-symbols-outlined rounded-full p-1 text-primary transition-colors hover:bg-zinc-100" aria-label="Menu">menu</button>
-          <div class="min-w-0">
-            <p class="font-sans text-[10px] font-bold uppercase tracking-[0.15em] text-primary/70">Stock mobile</p>
-            <h1 class="truncate font-serif text-xl font-bold tracking-tight text-zinc-900">SZFASHION</h1>
-          </div>
-        </div>
-        <div class="flex items-center gap-2" aria-label="Actions">
-          <button id="reloadButton" type="button" class="material-symbols-outlined rounded-full p-2 text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-primary" aria-label="Recharger">refresh</button>
-          <button id="searchToggleButton" type="button" class="material-symbols-outlined rounded-full p-2 text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-primary" aria-label="Recherche">search</button>
-          <button id="selectToggleButton" type="button" class="material-symbols-outlined rounded-full p-2 text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-primary" aria-label="Sélection">checklist</button>
-        </div>
-      </header>
+  <body class="bg-background text-on-surface antialiased">
+    <script id="inventory-boot" type="application/json"><?!= initialBootJson ?></script>
 
-      <section class="content pt-20">
-        <section class="mb-6">
-          <div class="flex flex-col gap-4">
-            <div class="flex items-end justify-between gap-4">
-              <div class="min-w-0">
-                <h2 class="font-serif text-2xl font-bold text-on-surface">Inventaire Global</h2>
-                <p class="font-sans text-[10px] font-bold uppercase tracking-[0.15em] text-primary/70">Digital Atelier Management System</p>
-              </div>
-              <span id="countBadge" class="inline-flex min-w-[42px] items-center justify-center rounded-full bg-primary-container px-3 py-1 text-xs font-bold text-primary"><?= initialCountText || "--" ?></span>
-            </div>
-
-            <div id="searchPanel" class="search-panel">
-              <div class="relative">
-                <input id="searchInput" class="w-full border-0 border-b border-outline-variant/50 bg-transparent py-2 pr-8 font-sans text-xs text-on-surface placeholder:text-outline-variant/70 focus:border-primary focus:outline-none focus:ring-0" type="search" placeholder="Rechercher une référence...">
-                <span class="material-symbols-outlined pointer-events-none absolute right-0 top-2 text-base text-outline/60">filter_list</span>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-1 gap-2 rounded border border-outline-variant/30 bg-surface-container-low/50 p-3 md:grid-cols-[1fr_auto] md:items-center">
-              <div class="min-w-0">
-                <p class="font-sans text-[9px] font-bold uppercase tracking-widest text-on-surface-variant/60">Pcs</p>
-                <p id="status" class="status mt-1"><?= initialStatusText || "" ?></p>
-              </div>
-              <div class="flex items-center justify-between gap-3 md:justify-end">
-                <span class="font-label text-[9px] font-bold uppercase tracking-widest text-on-surface-variant/60">Références visibles</span>
-                <span id="visibleCount" class="font-serif text-lg font-bold text-primary"><?= initialCountText || "--" ?></span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section class="overflow-x-auto rounded border border-outline-variant/20 bg-surface-container-lowest shadow-sm">
-          <table class="min-w-[420px] w-full table-fixed border-collapse text-left">
-            <thead>
-              <tr class="border-b border-outline-variant/30 bg-zinc-50">
-                <th class="w-10 px-3 py-2.5 text-center">
-                  <input id="selectAllCheckbox" class="h-3.5 w-3.5 rounded border-outline-variant text-primary focus:ring-primary/30" type="checkbox" aria-label="Tout sélectionner">
-                </th>
-                <th class="px-3 py-2.5 font-sans text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/80">Référence</th>
-                <th class="w-20 px-3 py-2.5 text-right font-sans text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/80">Pcs</th>
-              </tr>
-            </thead>
-            <tbody id="list" class="divide-y divide-outline-variant/10 text-[12px]" aria-live="polite"><?!= initialListMarkup || "" ?></tbody>
-          </table>
-        </section>
-      </section>
-      <div id="floatingScrollControls" class="floating-scroll-controls" aria-hidden="false">
-        <button id="scrollTopButton" class="floating-scroll-button" type="button" aria-label="Remonter en haut">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path fill="currentColor" d="M7.41 14.59 12 10l4.59 4.59L18 13.17l-6-6-6 6z"/>
-          </svg>
+    <header class="fixed inset-x-0 top-0 z-50 flex h-14 items-center justify-between border-b border-slate-200 bg-slate-50 px-4">
+      <div class="flex items-center gap-3">
+        <button aria-label="Menu" class="rounded-full p-1 text-slate-700 transition-colors duration-150 hover:bg-slate-100">
+          <span class="material-symbols-outlined">menu</span>
         </button>
-        <button id="scrollBottomButton" class="floating-scroll-button" type="button" aria-label="Descendre en bas">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path fill="currentColor" d="m7.41 8.41 4.59 4.58 4.59-4.58L18 9.83l-6 6-6-6z"/>
-          </svg>
+        <div>
+          <p class="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-500">Stock Ledger</p>
+          <h1 class="text-lg font-extrabold uppercase tracking-tight text-slate-900">SZFASHION</h1>
+        </div>
+      </div>
+      <div class="flex items-center gap-1">
+        <button aria-label="Rafraîchir" class="rounded-full p-1 text-slate-700 transition-colors duration-150 hover:bg-slate-100" id="refreshButton" type="button">
+          <span class="material-symbols-outlined">refresh</span>
         </button>
       </div>
+    </header>
+
+    <main class="min-h-screen pb-20 pt-14">
+      <section class="border-b border-outline-variant/20 bg-surface-container-low px-3 py-2 shadow-ledger">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-on-surface-variant">search</span>
+          <input autocomplete="off" class="w-full border-none bg-transparent p-0 text-[11px] font-medium tracking-tight text-on-surface placeholder:text-outline focus:ring-0" id="searchInput" placeholder="RECHERCHE RÉFÉRENCE / STOCK..." type="search" />
+          <span class="hidden rounded-full border border-outline-variant/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.2em] text-on-surface-variant sm:inline-flex" id="sortBadge">REF ASC</span>
+        </div>
+      </section>
+
+      <section class="border-b border-outline-variant/30 bg-surface-container-high">
+        <div class="flex divide-x divide-outline-variant/30">
+          <button class="flex flex-1 items-center justify-center gap-2 py-2 transition-colors duration-150 hover:bg-surface-container-highest" id="toggleFilterButton" type="button">
+            <span class="material-symbols-outlined !text-[16px] text-on-surface-variant">filter_list</span>
+            <span class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Filtrer</span>
+          </button>
+          <button class="flex flex-1 items-center justify-center gap-2 py-2 transition-colors duration-150 hover:bg-surface-container-highest" id="toggleSortButton" type="button">
+            <span class="material-symbols-outlined !text-[16px] text-on-surface-variant">sort</span>
+            <span class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Trier</span>
+          </button>
+        </div>
+
+        <div class="hidden border-t border-outline-variant/20 px-3 py-3" id="utilityPanel">
+          <div class="grid gap-3 sm:grid-cols-2">
+            <label class="block">
+              <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant">Etat stock</span>
+              <select class="w-full border-outline-variant/30 bg-surface-container-lowest text-[12px] font-medium text-on-surface" id="stockStateFilter">
+                <option value="all">Tous</option>
+                <option value="positive">En stock</option>
+                <option value="zero">Zero</option>
+              </select>
+            </label>
+            <label class="block">
+              <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant">Tri</span>
+              <select class="w-full border-outline-variant/30 bg-surface-container-lowest text-[12px] font-medium text-on-surface" id="sortSelect">
+                <option value="ref_asc">Ref asc</option>
+                <option value="ref_desc">Ref desc</option>
+                <option value="stock_first">Stock d'abord</option>
+              </select>
+            </label>
+            <label class="block sm:col-span-2" id="warehouseFilterWrap">
+              <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant">Entrepot</span>
+              <select class="w-full border-outline-variant/30 bg-surface-container-lowest text-[12px] font-medium text-on-surface" id="warehouseFilter">
+                <option value="">Tous</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section class="border-b border-outline-variant/30 bg-surface-container-high px-3 py-2">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex min-w-0 flex-wrap items-center gap-2">
+            <div class="flex items-center gap-1 border border-outline-variant/20 bg-surface-container-lowest px-2 py-0.5">
+              <span class="material-symbols-outlined !text-[12px] text-primary">calendar_today</span>
+              <span class="text-[9px] font-bold tracking-tight text-primary" id="summaryDate">--/--/----</span>
+            </div>
+            <div class="flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">
+              <span id="summaryRefs">0 refs</span>
+              <span class="text-outline-variant/40">//</span>
+              <span id="summaryPositive">0 stock</span>
+              <span class="text-outline-variant/40">//</span>
+              <span id="summaryZero">0 zero</span>
+            </div>
+          </div>
+          <div class="text-right text-[9px] font-bold uppercase tracking-[0.2em] text-on-surface-variant" id="summaryStatus">Pret</div>
+        </div>
+        <div class="mt-2 flex flex-wrap gap-1" id="activeFilters"></div>
+      </section>
+
+      <section class="bg-outline-variant/20">
+        <div class="grid grid-cols-2 gap-px bg-outline-variant/20 min-[720px]:grid-cols-3 min-[980px]:grid-cols-4" id="inventoryGrid">
+          <?!= initialListMarkup ?>
+        </div>
+        <div class="hidden border-t border-outline-variant/20 bg-surface-container-lowest px-4 py-5 text-center" id="emptyState">
+          <p class="text-[12px] font-semibold uppercase tracking-[0.18em] text-on-surface-variant">Aucun resultat</p>
+          <p class="mt-1 text-[12px] text-on-surface-variant">Ajuste la recherche ou les filtres pour afficher des references.</p>
+        </div>
+      </section>
     </main>
 
-    <script id="initialBootData" type="application/json"><?!= initialBootJson || "null" ?></script>
+    <nav class="fixed inset-x-0 bottom-0 z-50 flex h-16 items-stretch justify-around border-t border-slate-200 bg-slate-50">
+      <a class="flex flex-col items-center justify-center px-2 py-1 text-slate-400" href="javascript:void(0)" tabindex="-1" aria-disabled="true">
+        <span class="material-symbols-outlined">dashboard</span>
+        <span class="mt-1 text-[10px] font-bold uppercase tracking-widest">Dashboard</span>
+      </a>
+      <a class="flex flex-col items-center justify-center bg-slate-200 px-2 py-1 text-slate-900" href="javascript:void(0)" aria-current="page">
+        <span class="material-symbols-outlined">inventory_2</span>
+        <span class="mt-1 text-[10px] font-bold uppercase tracking-widest">Inventaire</span>
+      </a>
+      <a class="flex flex-col items-center justify-center px-2 py-1 text-slate-400" href="javascript:void(0)" tabindex="-1" aria-disabled="true">
+        <span class="material-symbols-outlined">history</span>
+        <span class="mt-1 text-[10px] font-bold uppercase tracking-widest">Historique</span>
+      </a>
+    </nav>
 
     <script>
-      const STOCK_MOBILE_CACHE_KEY = "stockMobileCache:v1";
-      const INITIAL_RENDER_COUNT = 100;
-      const BACKGROUND_RENDER_CHUNK = 100;
-      const els = {
-        list: document.getElementById("list"),
-        status: document.getElementById("status"),
-        countBadge: document.getElementById("countBadge"),
-        visibleCount: document.getElementById("visibleCount"),
-        reloadButton: document.getElementById("reloadButton"),
-        searchToggleButton: document.getElementById("searchToggleButton"),
-        selectToggleButton: document.getElementById("selectToggleButton"),
-        selectAllCheckbox: document.getElementById("selectAllCheckbox"),
-        searchPanel: document.getElementById("searchPanel"),
-        searchInput: document.getElementById("searchInput"),
-        floatingScrollControls: document.getElementById("floatingScrollControls"),
-        scrollTopButton: document.getElementById("scrollTopButton"),
-        scrollBottomButton: document.getElementById("scrollBottomButton")
-      };
-      let currentPayload = null;
-      let currentFilteredItems = [];
-      let currentStatusText = "";
-      let currentStatusKind = "normal";
-      let currentStatusSource = "normal";
-      let restoreStatusTimeout = null;
-      let isShowingCache = false;
-      let isSearchOpen = false;
-      let searchQuery = "";
-      let isSelectionMode = false;
-      let selectedIds = {};
-      let isRefreshing = false;
-      let renderedCount = 0;
-      let renderToken = 0;
-      let pendingRenderItems = [];
-      let pendingRenderHandle = null;
-      let renderMetrics = null;
+      (function() {
+        const bootElement = document.getElementById("inventory-boot");
+        const boot = bootElement ? JSON.parse(bootElement.textContent || "{}") : {};
+        const initialPayload = boot && boot.payload ? boot.payload : {};
 
-      function init() {
-        bindTopbarActions_();
-        const initialBoot = loadInitialBoot_();
-        if (initialBoot && initialBoot.payload && Array.isArray(initialBoot.payload.items) && initialBoot.payload.items.length) {
-          renderPayload_(initialBoot.payload, {
-            source: initialBoot.source || "server",
-            preRendered: true
-          });
-          fetchFreshData_({ hadCache: true });
-          return;
+        const state = {
+          items: Array.isArray(initialPayload.items) ? initialPayload.items.slice() : [],
+          filters: initialPayload.filters || {},
+          summary: initialPayload.summary || {},
+          generatedAt: initialPayload.generatedAt || "",
+          query: "",
+          stockState: "all",
+          warehouse: "",
+          sort: initialPayload.ui && initialPayload.ui.defaultSort ? initialPayload.ui.defaultSort : "ref_asc",
+          isRefreshing: false,
+          filterPanelOpen: false,
+          lastError: ""
+        };
+
+        const els = {
+          grid: document.getElementById("inventoryGrid"),
+          emptyState: document.getElementById("emptyState"),
+          searchInput: document.getElementById("searchInput"),
+          refreshButton: document.getElementById("refreshButton"),
+          toggleFilterButton: document.getElementById("toggleFilterButton"),
+          toggleSortButton: document.getElementById("toggleSortButton"),
+          utilityPanel: document.getElementById("utilityPanel"),
+          stockStateFilter: document.getElementById("stockStateFilter"),
+          warehouseFilter: document.getElementById("warehouseFilter"),
+          warehouseFilterWrap: document.getElementById("warehouseFilterWrap"),
+          sortSelect: document.getElementById("sortSelect"),
+          sortBadge: document.getElementById("sortBadge"),
+          summaryDate: document.getElementById("summaryDate"),
+          summaryRefs: document.getElementById("summaryRefs"),
+          summaryPositive: document.getElementById("summaryPositive"),
+          summaryZero: document.getElementById("summaryZero"),
+          summaryStatus: document.getElementById("summaryStatus"),
+          activeFilters: document.getElementById("activeFilters")
+        };
+
+        function escapeHtml(value) {
+          return String(value == null ? "" : value)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
         }
 
-        const cachedEntry = loadCache_();
-        if (cachedEntry && cachedEntry.payload) {
-          isShowingCache = true;
-          renderPayload_(cachedEntry.payload, { source: "cache" });
-          fetchFreshData_({ hadCache: true });
-          return;
-        }
+        function renderItemMarkup(item) {
+          const reference = item && item.reference ? item.reference : "-";
+          const stockDisplay = item && item.stockDisplay ? item.stockDisplay : "-";
+          const accentClass = item && item.stockState === "positive" ? "border-emerald-400/50" : "border-rose-400/50";
+          const stockClass = item && item.stockState === "positive" ? "text-primary" : "text-on-surface-variant";
 
-        setLoading();
-        fetchFreshData_({ hadCache: false });
-      }
-
-      function setLoading() {
-        currentPayload = null;
-        currentFilteredItems = [];
-        isShowingCache = false;
-        selectedIds = {};
-        els.status.className = "status";
-        els.status.innerHTML = '<span class="loading">Chargement des références...</span>';
-        currentStatusText = "Chargement des références...";
-        currentStatusKind = "normal";
-        currentStatusSource = "loading";
-        els.countBadge.textContent = "...";
-        els.list.innerHTML = "";
-        updateActionStates_();
-      }
-
-      function loadInitialBoot_() {
-        try {
-          const node = document.getElementById("initialBootData");
-          if (!node) return null;
-          const raw = String(node.textContent || "").trim();
-          if (!raw) return null;
-          const parsed = JSON.parse(raw);
-          if (!parsed || typeof parsed !== "object") return null;
-          if (!parsed.payload || typeof parsed.payload !== "object") return null;
-          if (!Array.isArray(parsed.payload.items)) return null;
-          return parsed;
-        } catch (error) {
-          return null;
-        }
-      }
-
-      function loadCache_() {
-        try {
-          const raw = localStorage.getItem(STOCK_MOBILE_CACHE_KEY);
-          if (!raw) return null;
-          const parsed = JSON.parse(raw);
-          if (!parsed || typeof parsed !== "object") return null;
-          if (!parsed.payload || typeof parsed.payload !== "object") return null;
-          if (!Array.isArray(parsed.payload.items)) return null;
-          return parsed;
-        } catch (error) {
-          return null;
-        }
-      }
-
-      function saveCache_(payload) {
-        try {
-          localStorage.setItem(STOCK_MOBILE_CACHE_KEY, JSON.stringify({
-            cachedAt: Date.now(),
-            payload: payload
-          }));
-        } catch (error) {}
-      }
-
-      function isPayloadEquivalent_(a, b) {
-        const itemsA = Array.isArray(a && a.items) ? a.items : [];
-        const itemsB = Array.isArray(b && b.items) ? b.items : [];
-        if (itemsA.length !== itemsB.length) return false;
-
-        try {
-          return JSON.stringify(itemsA) === JSON.stringify(itemsB);
-        } catch (error) {
-          return false;
-        }
-      }
-
-      function filterItems_(items, query) {
-        const list = Array.isArray(items) ? items : [];
-        const q = normalizeSearchText_(query);
-        if (!q) return list.slice();
-
-        return list.filter(function(item) {
-          const haystack = [
-            item && item.reference,
-            item && item.warehouse,
-            item && item.arrivageRef,
-            item && item.stockDisplay
-          ].map(normalizeSearchText_).join("\n");
-          return haystack.indexOf(q) !== -1;
-        });
-      }
-
-      function renderPayload_(payload, options) {
-        const source = options && options.source ? options.source : "network";
-        const items = Array.isArray(payload && payload.items) ? payload.items : [];
-        const metrics = options && options.metrics ? options.metrics : null;
-        const preRendered = !!(options && options.preRendered);
-        currentPayload = payload;
-        currentFilteredItems = filterItems_(items, searchQuery);
-        isShowingCache = source === "cache";
-        pruneSelectedIds_();
-        cancelProgressiveRender_();
-        renderMetrics = metrics;
-
-        if (!items.length) {
-          els.countBadge.textContent = "0";
-          if (els.visibleCount) els.visibleCount.textContent = "0";
-          els.list.innerHTML = buildEmptyRowMarkup_("Aucune référence trouvée.");
-          setStatus_("normal", "Aucune référence exploitable dans STOCK.", source);
-          logRenderMetrics_(source, items.length, metrics, 0, 0);
-          updateActionStates_();
-          return;
-        }
-
-        if (preRendered && source === "server" && !searchQuery && items.length <= INITIAL_RENDER_COUNT) {
-          pendingRenderItems = [];
-          renderedCount = items.length;
-          bindItemCopyHandlers();
-          updateCountBadge_();
-          setStatus_("normal", items.length + " référence" + (items.length > 1 ? "s" : "") + " affichée" + (items.length > 1 ? "s" : "") + ".", "server");
-          logRenderMetrics_(source, items.length, metrics, 0, 0, true);
-          updateActionStates_();
-          return;
-        }
-
-        renderList_(currentFilteredItems, { source: source, metrics: metrics });
-        updateCountBadge_();
-        if (source === "cache") {
-          setStatus_("normal", items.length + " référence" + (items.length > 1 ? "s" : "") + " (cache)", "cache");
-        } else if (source === "server") {
-          setStatus_("normal", items.length + " référence" + (items.length > 1 ? "s" : "") + " affichée" + (items.length > 1 ? "s" : "") + ".", "server");
-        } else {
-          setStatus_("normal", items.length + " référence" + (items.length > 1 ? "s" : "") + " chargée" + (items.length > 1 ? "s" : "") + ".", "network");
-        }
-        updateActionStates_();
-      }
-
-      function renderList_(items, options) {
-        const visibleItems = Array.isArray(items) ? items : [];
-        const source = options && options.source ? options.source : "network";
-        const metrics = options && options.metrics ? options.metrics : null;
-        currentFilteredItems = visibleItems;
-        renderedCount = 0;
-        const token = ++renderToken;
-        const renderStartedAt = performance.now();
-
-        if (!visibleItems.length) {
-          els.countBadge.textContent = "0";
-          if (els.visibleCount) els.visibleCount.textContent = "0";
-          els.list.innerHTML = buildEmptyRowMarkup_("Aucun résultat pour cette recherche.");
-          bindItemCopyHandlers();
-          logRenderMetrics_(source, visibleItems.length, metrics, 0, 0);
-          syncSelectAllCheckbox_();
-          return;
-        }
-
-        const firstBatch = visibleItems.slice(0, INITIAL_RENDER_COUNT);
-        els.list.innerHTML = buildItemsMarkup_(firstBatch);
-        bindItemCopyHandlers();
-        renderedCount = firstBatch.length;
-
-        const firstRenderMs = performance.now() - renderStartedAt;
-        const remainingItems = visibleItems.slice(renderedCount);
-        pendingRenderItems = remainingItems;
-
-        if (!remainingItems.length) {
-          logRenderMetrics_(source, visibleItems.length, metrics, firstRenderMs, performance.now() - renderStartedAt);
-          return;
-        }
-
-        scheduleProgressiveRender_(token, {
-          source: source,
-          metrics: metrics,
-          totalItems: visibleItems.length,
-          firstRenderMs: firstRenderMs,
-          renderStartedAt: renderStartedAt
-        });
-      }
-
-      function buildItemsMarkup_(items) {
-        return items.map(function(item) {
-          const itemClass = item.stockState === "positive" ? "item inventory-row stock-positive" : "item inventory-row stock-zero";
-          const selectedClass = selectedIds[item.id] ? " is-selected" : "";
           return '' +
-            '<tr class="' + itemClass + selectedClass + '" data-item-id="' + escapeHtml(item.id || "") + '" data-reference="' + escapeHtml(item.reference || "") + '" data-selection-mode="' + (isSelectionMode ? "true" : "false") + '" tabindex="0" role="button" aria-label="' + escapeHtml(isSelectionMode ? "Sélectionner " : "Copier ") + escapeHtml(item.reference || "") + '">' +
-              '<td class="px-3 py-2 text-center">' +
-                '<input class="item-checkbox h-3.5 w-3.5 rounded border-outline-variant text-primary focus:ring-primary/30" type="checkbox" aria-label="Sélectionner ' + escapeHtml(item.reference || "") + '"' + (selectedIds[item.id] ? ' checked' : '') + '>' +
-              '</td>' +
-              '<td class="px-3 py-2 font-sans font-bold text-on-surface truncate">' + escapeHtml(item.reference || "-") + '</td>' +
-              '<td class="px-3 py-2 text-right tabular-nums font-bold ' + (item.stockState === "zero" ? 'text-on-surface-variant' : 'text-primary') + '">' + escapeHtml(item.stockDisplay || "-") + '</td>' +
-            '</tr>';
-        }).join("");
-      }
-
-      function buildEmptyRowMarkup_(message) {
-        return '' +
-          '<tr class="inventory-empty-row">' +
-            '<td colspan="3">' + escapeHtml(message || "") + '</td>' +
-          '</tr>';
-      }
-
-      function scheduleProgressiveRender_(token, context) {
-        if (pendingRenderHandle) {
-          cancelAnimationFrameIfNeeded_(pendingRenderHandle);
-          pendingRenderHandle = null;
+            '<article class="inventory-card bg-surface-container-lowest relative border-l-4 ' + accentClass + ' flex min-h-[4.25rem] flex-col justify-between px-2.5 py-2 transition-colors duration-150 hover:bg-surface-container" data-reference="' + escapeHtml(reference) + '" data-stock-display="' + escapeHtml(stockDisplay) + '" data-stock-state="' + escapeHtml(item && item.stockState ? item.stockState : "zero") + '">' +
+              '<div class="flex items-start justify-between gap-2">' +
+                '<span class="truncate pr-2 text-[12px] font-bold tracking-tight text-on-surface">' + escapeHtml(reference) + '</span>' +
+                '<span class="material-symbols-outlined shrink-0 text-outline-variant !text-[14px]">inventory_2</span>' +
+              '</div>' +
+              '<div class="mt-2">' +
+                '<span class="block truncate text-[13px] font-medium ' + stockClass + '">' + escapeHtml(stockDisplay) + '</span>' +
+              '</div>' +
+            '</article>';
         }
 
-        const run = function() {
-          continueRender_(token, context);
-        };
-
-        if (typeof requestAnimationFrame === "function") {
-          pendingRenderHandle = requestAnimationFrame(run);
-          return;
+        function formatDateLabel(isoText) {
+          if (!isoText) return "--/--/----";
+          const date = new Date(isoText);
+          if (Number.isNaN(date.getTime())) return "--/--/----";
+          return new Intl.DateTimeFormat("fr-FR", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric"
+          }).format(date);
         }
 
-        pendingRenderHandle = setTimeout(run, 0);
-      }
-
-      function continueRender_(token, context) {
-        pendingRenderHandle = null;
-        if (token !== renderToken) return;
-        if (!pendingRenderItems.length) {
-          logRenderMetrics_(context.source, context.totalItems, context.metrics, context.firstRenderMs, performance.now() - context.renderStartedAt);
-          return;
+        function normalizeText(value) {
+          return String(value || "").toLowerCase().trim();
         }
 
-        const nextChunk = pendingRenderItems.splice(0, BACKGROUND_RENDER_CHUNK);
-        els.list.insertAdjacentHTML("beforeend", buildItemsMarkup_(nextChunk));
-        bindItemCopyHandlers();
-        renderedCount += nextChunk.length;
-
-        if (!pendingRenderItems.length) {
-          logRenderMetrics_(context.source, context.totalItems, context.metrics, context.firstRenderMs, performance.now() - context.renderStartedAt);
-          return;
+        function getActiveFilterLabels() {
+          const labels = [];
+          if (state.query) labels.push("Recherche: " + state.query);
+          if (state.stockState === "positive") labels.push("En stock");
+          if (state.stockState === "zero") labels.push("Zero");
+          if (state.warehouse) labels.push(state.warehouse);
+          return labels;
         }
 
-        scheduleProgressiveRender_(token, context);
-      }
-
-      function cancelProgressiveRender_() {
-        renderToken += 1;
-        pendingRenderItems = [];
-        renderedCount = 0;
-        if (!pendingRenderHandle) return;
-        cancelAnimationFrameIfNeeded_(pendingRenderHandle);
-        pendingRenderHandle = null;
-      }
-
-      function cancelAnimationFrameIfNeeded_(handle) {
-        if (typeof cancelAnimationFrame === "function") {
-          cancelAnimationFrame(handle);
-          return;
-        }
-        clearTimeout(handle);
-      }
-
-      function updateCountBadge_() {
-        const totalItems = Array.isArray(currentPayload && currentPayload.items) ? currentPayload.items.length : 0;
-        const visibleCount = Array.isArray(currentFilteredItems) ? currentFilteredItems.length : 0;
-        if (searchQuery) {
-          els.countBadge.textContent = String(visibleCount) + "/" + String(totalItems);
-          if (els.visibleCount) els.visibleCount.textContent = String(visibleCount);
-          syncSelectAllCheckbox_();
-          return;
-        }
-        els.countBadge.textContent = String(visibleCount);
-        if (els.visibleCount) els.visibleCount.textContent = String(visibleCount);
-        syncSelectAllCheckbox_();
-      }
-
-      function fetchFreshData_(options) {
-        if (isRefreshing) return;
-        isRefreshing = true;
-        updateActionStates_();
-        const hadCache = !!(options && options.hadCache);
-        const manual = !!(options && options.manual);
-        const requestStartedAt = performance.now();
-        if (manual && currentPayload) {
-          setStatus_("normal", "Mise à jour...", "refresh");
-        }
-        google.script.run
-          .withSuccessHandler(function(payload) {
-            isRefreshing = false;
-            const responseReceivedAt = performance.now();
-            const validPayload = payload && Array.isArray(payload.items) ? payload : null;
-            if (!validPayload) {
-              if (hadCache && currentPayload) {
-                  setStatus_("error", "Cache affiché, mise à jour impossible.", "cache-error");
-                updateActionStates_();
-                return;
-              }
-              onLoadFailure(new Error("Réponse invalide du serveur."));
-              return;
-            }
-
-            const samePayload = currentPayload && isPayloadEquivalent_(currentPayload, validPayload);
-            saveCache_(validPayload);
-            const metrics = {
-              requestStartedAt: requestStartedAt,
-              responseReceivedAt: responseReceivedAt,
-              networkRoundTripMs: responseReceivedAt - requestStartedAt,
-              itemsReceived: validPayload.items.length
-            };
-
-            if (!samePayload) {
-              renderPayload_(validPayload, { source: "network", metrics: metrics });
-              return;
-            }
-
-            currentPayload = validPayload;
-            currentFilteredItems = filterItems_(validPayload.items, searchQuery);
-            pruneSelectedIds_();
-            updateCountBadge_();
-            setStatus_("normal", validPayload.items.length + " référence" + (validPayload.items.length > 1 ? "s" : "") + " chargée" + (validPayload.items.length > 1 ? "s" : "") + ".", "network");
-            logRenderMetrics_("network", validPayload.items.length, metrics, 0, 0, true);
-            updateActionStates_();
-          })
-          .withFailureHandler(function(error) {
-            isRefreshing = false;
-            if (hadCache && currentPayload) {
-              setStatus_("error", "Cache affiché, mise à jour impossible.", "cache-error");
-              updateActionStates_();
-              return;
-            }
-            onLoadFailure(error);
-          })
-          .StockWebApp_getList();
-      }
-
-      function onLoadFailure(error) {
-        const message = error && error.message ? error.message : String(error || "Erreur inconnue");
-        currentPayload = null;
-        currentFilteredItems = [];
-        isShowingCache = false;
-        setStatus_("error", message, "error");
-        els.countBadge.textContent = "!";
-        if (els.visibleCount) els.visibleCount.textContent = "!";
-        els.list.innerHTML = "";
-        updateActionStates_();
-      }
-
-      function setStatus_(kind, text, source) {
-        currentStatusKind = kind || "normal";
-        currentStatusText = String(text || "");
-        currentStatusSource = source || currentStatusSource || "normal";
-        updateStatusDisplay_();
-      }
-
-      function updateStatusDisplay_() {
-        let effectiveKind = currentStatusKind;
-        let effectiveText = currentStatusText;
-
-        const selectionCount = getSelectedCount_();
-        if (effectiveKind !== "error" && isSelectionMode && selectionCount > 0) {
-          effectiveKind = "normal";
-          effectiveText = selectionCount + " sélectionné" + (selectionCount > 1 ? "s" : "");
-        }
-
-        els.status.className = effectiveKind === "error" ? "status error" : "status";
-        els.status.textContent = effectiveText;
-      }
-
-      function bindItemCopyHandlers() {
-        Array.prototype.forEach.call(els.list.querySelectorAll(".item"), function(node) {
-          if (node.getAttribute("data-bound") === "1") return;
-          node.setAttribute("data-bound", "1");
-
-          const checkbox = node.querySelector(".item-checkbox");
-          if (checkbox) {
-            checkbox.addEventListener("click", function(event) {
-              event.stopPropagation();
+        function sortItems(items) {
+          const next = items.slice();
+          if (state.sort === "ref_desc") {
+            next.sort(function(a, b) {
+              return String(b.reference || "").localeCompare(String(a.reference || ""));
             });
-            checkbox.addEventListener("change", function(event) {
-              event.stopPropagation();
-              setSelectedItem_(String(node.getAttribute("data-item-id") || ""), !!event.target.checked);
+            return next;
+          }
+
+          if (state.sort === "stock_first") {
+            next.sort(function(a, b) {
+              const leftState = a && a.stockState === "positive" ? 0 : 1;
+              const rightState = b && b.stockState === "positive" ? 0 : 1;
+              if (leftState !== rightState) return leftState - rightState;
+              return String(a.reference || "").localeCompare(String(b.reference || ""));
             });
+            return next;
           }
 
-          node.addEventListener("click", function() {
-            handleItemActivate_(node);
+          next.sort(function(a, b) {
+            return String(a.reference || "").localeCompare(String(b.reference || ""));
           });
+          return next;
+        }
 
-          node.addEventListener("keydown", function(event) {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              handleItemActivate_(node);
-            }
-          });
+        function getVisibleItems() {
+          const query = normalizeText(state.query);
+          return sortItems(state.items.filter(function(item) {
+            if (state.stockState !== "all" && String(item.stockState || "") !== state.stockState) return false;
+            if (state.warehouse && String(item.warehouse || "") !== state.warehouse) return false;
+            if (!query) return true;
+
+            const haystack = [
+              item.reference || "",
+              item.stockDisplay || ""
+            ].join(" ").toLowerCase();
+            return haystack.indexOf(query) !== -1;
+          }));
+        }
+
+        function renderActiveFilters() {
+          const labels = getActiveFilterLabels();
+          els.activeFilters.innerHTML = labels.map(function(label) {
+            return '<span class="inline-flex items-center border border-outline-variant/20 bg-surface-container-lowest px-2 py-1 text-[9px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">' + escapeHtml(label) + '</span>';
+          }).join("");
+        }
+
+        function renderSummary(visibleItems) {
+          const positiveCount = visibleItems.filter(function(item) {
+            return item && item.stockState === "positive";
+          }).length;
+          const totalLoaded = state.summary && state.summary.totalRows ? state.summary.totalRows : state.items.length;
+          const refsText = state.summary && state.summary.isPartial && state.items.length < totalLoaded
+            ? visibleItems.length + " / " + totalLoaded + " refs"
+            : visibleItems.length + " refs";
+
+          els.summaryDate.textContent = formatDateLabel(state.generatedAt || (state.summary && state.summary.generatedAt) || "");
+          els.summaryRefs.textContent = refsText;
+          els.summaryPositive.textContent = positiveCount + " stock";
+          els.summaryZero.textContent = Math.max(0, visibleItems.length - positiveCount) + " zero";
+
+          if (state.isRefreshing) {
+            els.summaryStatus.textContent = "Refresh...";
+          } else if (state.lastError) {
+            els.summaryStatus.textContent = state.lastError;
+          } else if (getActiveFilterLabels().length) {
+            els.summaryStatus.textContent = "Filtres actifs";
+          } else if (state.summary && state.summary.isPartial) {
+            els.summaryStatus.textContent = "Lot initial";
+          } else {
+            els.summaryStatus.textContent = "Pret";
+          }
+        }
+
+        function renderGrid() {
+          const visibleItems = getVisibleItems();
+          els.grid.innerHTML = visibleItems.map(renderItemMarkup).join("");
+          els.emptyState.classList.toggle("hidden", visibleItems.length > 0);
+          renderSummary(visibleItems);
+          renderActiveFilters();
+        }
+
+        function syncUtilityPanel() {
+          els.utilityPanel.classList.toggle("hidden", !state.filterPanelOpen);
+          els.sortSelect.value = state.sort;
+          els.stockStateFilter.value = state.stockState;
+          els.sortBadge.textContent = state.sort === "ref_desc" ? "REF DESC" : (state.sort === "stock_first" ? "STOCK" : "REF ASC");
+        }
+
+        function populateWarehouseFilter() {
+          const warehouses = state.filters && Array.isArray(state.filters.warehouses) ? state.filters.warehouses : [];
+          els.warehouseFilter.innerHTML = '<option value="">Tous</option>' + warehouses.map(function(value) {
+            return '<option value="' + escapeHtml(value) + '">' + escapeHtml(value) + '</option>';
+          }).join("");
+          els.warehouseFilter.value = state.warehouse;
+          els.warehouseFilterWrap.classList.toggle("hidden", warehouses.length === 0);
+        }
+
+        function hydrate(payload) {
+          state.items = Array.isArray(payload && payload.items) ? payload.items.slice() : [];
+          state.filters = payload && payload.filters ? payload.filters : {};
+          state.summary = payload && payload.summary ? payload.summary : {};
+          state.generatedAt = payload && payload.generatedAt ? payload.generatedAt : "";
+          state.lastError = "";
+          populateWarehouseFilter();
+          syncUtilityPanel();
+          renderGrid();
+        }
+
+        function runRefresh(isAuto) {
+          if (state.isRefreshing) return;
+          if (typeof google === "undefined" || !google.script || !google.script.run) return;
+          state.isRefreshing = true;
+          state.lastError = "";
+          renderSummary(getVisibleItems());
+
+          google.script.run
+            .withSuccessHandler(function(payload) {
+              state.isRefreshing = false;
+              hydrate(payload || {});
+            })
+            .withFailureHandler(function(error) {
+              state.isRefreshing = false;
+              state.lastError = error && error.message ? error.message : "Erreur de rafraichissement";
+              renderGrid();
+            })
+            .StockWebApp_getList();
+
+          if (isAuto) {
+            els.summaryStatus.textContent = "Sync...";
+          }
+        }
+
+        els.searchInput.addEventListener("input", function(event) {
+          state.query = String(event.target.value || "").trim();
+          renderGrid();
         });
-      }
 
-      function handleItemActivate_(node) {
-        if (isSelectionMode) {
-          toggleSelectedItem_(String(node.getAttribute("data-item-id") || ""));
-          return;
-        }
-        copyReferenceFromNode(node);
-      }
-
-      function toggleSelectedItem_(itemId) {
-        if (!itemId) return;
-        if (selectedIds[itemId]) delete selectedIds[itemId];
-        else selectedIds[itemId] = true;
-        renderList_(currentFilteredItems);
-        updateCountBadge_();
-        updateStatusDisplay_();
-      }
-
-      function setSelectedItem_(itemId, selected) {
-        if (!itemId) return;
-        if (selected) selectedIds[itemId] = true;
-        else delete selectedIds[itemId];
-        renderList_(currentFilteredItems);
-        updateCountBadge_();
-        updateStatusDisplay_();
-      }
-
-      function getSelectedCount_() {
-        return Object.keys(selectedIds).length;
-      }
-
-      function pruneSelectedIds_() {
-        const validIds = {};
-        const items = Array.isArray(currentPayload && currentPayload.items) ? currentPayload.items : [];
-        for (let i = 0; i < items.length; i++) {
-          const itemId = items[i] && items[i].id;
-          if (itemId && selectedIds[itemId]) validIds[itemId] = true;
-        }
-        selectedIds = validIds;
-      }
-
-      function toggleSearch_() {
-        isSearchOpen = !isSearchOpen;
-        if (!isSearchOpen) {
-          searchQuery = "";
-          if (els.searchInput) els.searchInput.value = "";
-        }
-        updateActionStates_();
-        applySearch_();
-        if (isSearchOpen && els.searchInput) {
-          try { els.searchInput.focus(); } catch (error) {}
-        }
-      }
-
-      function toggleSelectionMode_() {
-        isSelectionMode = !isSelectionMode;
-        updateActionStates_();
-        renderList_(currentFilteredItems);
-        updateCountBadge_();
-        updateStatusDisplay_();
-      }
-
-      function applySearch_() {
-        const baseItems = Array.isArray(currentPayload && currentPayload.items) ? currentPayload.items : [];
-        currentFilteredItems = filterItems_(baseItems, searchQuery);
-        renderList_(currentFilteredItems, { source: "search", metrics: null });
-        updateCountBadge_();
-        updateStatusDisplay_();
-      }
-
-      function bindTopbarActions_() {
-        if (els.reloadButton) {
-          els.reloadButton.addEventListener("click", function() {
-            fetchFreshData_({ manual: true, hadCache: !!currentPayload });
-          });
-        }
-
-        if (els.searchToggleButton) {
-          els.searchToggleButton.addEventListener("click", function() {
-            toggleSearch_();
-          });
-        }
-
-        if (els.selectToggleButton) {
-          els.selectToggleButton.addEventListener("click", function() {
-            toggleSelectionMode_();
-          });
-        }
-
-        if (els.searchInput) {
-          els.searchInput.addEventListener("input", function(event) {
-            searchQuery = String(event.target.value || "");
-            applySearch_();
-          });
-        }
-
-        if (els.selectAllCheckbox) {
-          els.selectAllCheckbox.addEventListener("change", function(event) {
-            const checked = !!event.target.checked;
-            for (let i = 0; i < currentFilteredItems.length; i++) {
-              const item = currentFilteredItems[i];
-              if (!item || !item.id) continue;
-              if (checked) selectedIds[item.id] = true;
-              else delete selectedIds[item.id];
-            }
-            renderList_(currentFilteredItems);
-            updateCountBadge_();
-            updateStatusDisplay_();
-          });
-        }
-      }
-
-      function updateActionStates_() {
-        if (els.searchPanel) {
-          els.searchPanel.classList.toggle("is-open", isSearchOpen);
-        }
-        if (els.searchToggleButton) {
-          els.searchToggleButton.classList.toggle("text-primary", isSearchOpen);
-          els.searchToggleButton.classList.toggle("bg-primary-container", isSearchOpen);
-        }
-        if (els.selectToggleButton) {
-          els.selectToggleButton.classList.toggle("text-primary", isSelectionMode);
-          els.selectToggleButton.classList.toggle("bg-primary-container", isSelectionMode);
-        }
-        if (els.reloadButton) {
-          els.reloadButton.classList.toggle("text-primary", isRefreshing);
-          els.reloadButton.classList.toggle("bg-primary-container", isRefreshing);
-        }
-        syncSelectAllCheckbox_();
-      }
-
-      function syncSelectAllCheckbox_() {
-        if (!els.selectAllCheckbox) return;
-        const visibleItems = Array.isArray(currentFilteredItems) ? currentFilteredItems : [];
-        const visibleIds = visibleItems.map(function(item) { return item && item.id; }).filter(Boolean);
-        if (!visibleIds.length) {
-          els.selectAllCheckbox.checked = false;
-          els.selectAllCheckbox.indeterminate = false;
-          return;
-        }
-        let selectedCount = 0;
-        for (let i = 0; i < visibleIds.length; i++) {
-          if (selectedIds[visibleIds[i]]) selectedCount += 1;
-        }
-        els.selectAllCheckbox.checked = selectedCount === visibleIds.length;
-        els.selectAllCheckbox.indeterminate = selectedCount > 0 && selectedCount < visibleIds.length;
-      }
-
-      function copyReferenceFromNode(node) {
-        const reference = String(node.getAttribute("data-reference") || "").trim();
-        if (!reference) return;
-
-        const previousStatus = currentStatusText;
-        const previousKind = currentStatusKind;
-        const previousSource = currentStatusSource;
-        Promise.resolve(copyText(reference))
-          .then(function() {
-            showTemporaryStatus("Copié : " + reference, previousStatus, previousKind, previousSource, false);
-          })
-          .catch(function() {
-            showTemporaryStatus("Copie impossible : " + reference, previousStatus, previousKind, previousSource, true);
-          });
-      }
-
-      function showTemporaryStatus(message, previousStatus, previousKind, previousSource, isError) {
-        if (restoreStatusTimeout) {
-          clearTimeout(restoreStatusTimeout);
-          restoreStatusTimeout = null;
-        }
-
-        els.status.className = isError ? "status error" : "status";
-        els.status.textContent = message;
-
-        restoreStatusTimeout = setTimeout(function() {
-          currentStatusKind = previousKind || "normal";
-          currentStatusText = previousStatus || "";
-          currentStatusSource = previousSource || "normal";
-          updateStatusDisplay_();
-          restoreStatusTimeout = null;
-        }, 1500);
-      }
-
-      function copyText(text) {
-        if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
-          return navigator.clipboard.writeText(text);
-        }
-
-        return new Promise(function(resolve, reject) {
-          try {
-            const textarea = document.createElement("textarea");
-            textarea.value = text;
-            textarea.setAttribute("readonly", "");
-            textarea.style.position = "fixed";
-            textarea.style.opacity = "0";
-            textarea.style.pointerEvents = "none";
-            document.body.appendChild(textarea);
-            textarea.focus();
-            textarea.select();
-
-            const ok = document.execCommand("copy");
-            document.body.removeChild(textarea);
-
-            if (ok) resolve();
-            else reject(new Error("copy failed"));
-          } catch (error) {
-            reject(error);
-          }
+        els.refreshButton.addEventListener("click", function() {
+          runRefresh(false);
         });
-      }
 
-      function escapeHtml(value) {
-        return String(value || "")
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;")
-          .replace(/\"/g, "&quot;")
-          .replace(/'/g, "&#39;");
-      }
-
-      function normalizeSearchText_(value) {
-        return String(value || "").toLowerCase().trim();
-      }
-
-      function logRenderMetrics_(source, itemCount, metrics, firstRenderMs, fullRenderMs, noRenderNeeded) {
-        const networkRoundTripMs = metrics && typeof metrics.networkRoundTripMs === "number"
-          ? metrics.networkRoundTripMs
-          : null;
-        const output = {
-          source: source,
-          items: itemCount,
-          networkRoundTripMs: networkRoundTripMs,
-          firstRenderMs: firstRenderMs,
-          fullRenderMs: fullRenderMs,
-          noRenderNeeded: !!noRenderNeeded
-        };
-        try {
-          console.log("[StockMobile perf]", output);
-        } catch (error) {}
-      }
-
-      let floatingControlsTimeout = null;
-
-      function scrollToPageTop() {
-        try {
-          window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
-        } catch (error) {
-          window.scrollTo(0, 0);
-        }
-      }
-
-      function scrollToPageBottom() {
-        var doc = document.documentElement;
-        var body = document.body;
-        var viewportHeight = window.innerHeight || doc.clientHeight || 0;
-        var fullHeight = Math.max(
-          body.scrollHeight,
-          body.offsetHeight,
-          doc.clientHeight,
-          doc.scrollHeight,
-          doc.offsetHeight
-        );
-        var target = Math.max(0, fullHeight - viewportHeight);
-
-        try {
-          window.scrollTo({ top: target, left: 0, behavior: "smooth" });
-        } catch (error) {
-          window.scrollTo(0, target);
-        }
-      }
-
-      function showFloatingScrollControls() {
-        if (!els.floatingScrollControls) return;
-
-        els.floatingScrollControls.classList.add("is-visible");
-
-        if (floatingControlsTimeout) {
-          clearTimeout(floatingControlsTimeout);
-        }
-
-        floatingControlsTimeout = setTimeout(function() {
-          if (els.floatingScrollControls) {
-            els.floatingScrollControls.classList.remove("is-visible");
-          }
-          floatingControlsTimeout = null;
-        }, 1400);
-      }
-
-      function bindFloatingScrollControls() {
-        if (els.scrollTopButton) {
-          els.scrollTopButton.addEventListener("click", function(event) {
-            event.preventDefault();
-            showFloatingScrollControls();
-            scrollToPageTop();
-          });
-        }
-
-        if (els.scrollBottomButton) {
-          function handleBottomActivate(event) {
-            if (event) {
-              event.preventDefault();
-              event.stopPropagation();
-            }
-            showFloatingScrollControls();
-            scrollToPageBottom();
-          }
-
-          els.scrollBottomButton.addEventListener("click", handleBottomActivate);
-          els.scrollBottomButton.addEventListener("touchend", handleBottomActivate, { passive: false });
-        }
-
-        window.addEventListener("scroll", showFloatingScrollControls, { passive: true });
-        window.addEventListener("touchstart", showFloatingScrollControls, { passive: true });
-        window.addEventListener("touchmove", showFloatingScrollControls, { passive: true });
-        window.addEventListener("pointerdown", showFloatingScrollControls, { passive: true });
-        window.addEventListener("click", showFloatingScrollControls, { passive: true });
-        document.addEventListener("visibilitychange", function() {
-          if (document.visibilityState === "visible") {
-            showFloatingScrollControls();
-          }
+        els.toggleFilterButton.addEventListener("click", function() {
+          state.filterPanelOpen = !state.filterPanelOpen;
+          syncUtilityPanel();
         });
-      }
-      bindFloatingScrollControls();
-      init();
-      showFloatingScrollControls();
-      setTimeout(showFloatingScrollControls, 400);
+
+        els.toggleSortButton.addEventListener("click", function() {
+          state.filterPanelOpen = true;
+          syncUtilityPanel();
+          els.sortSelect.focus();
+        });
+
+        els.stockStateFilter.addEventListener("change", function(event) {
+          state.stockState = event.target.value || "all";
+          renderGrid();
+        });
+
+        els.warehouseFilter.addEventListener("change", function(event) {
+          state.warehouse = event.target.value || "";
+          renderGrid();
+        });
+
+        els.sortSelect.addEventListener("change", function(event) {
+          state.sort = event.target.value || "ref_asc";
+          syncUtilityPanel();
+          renderGrid();
+        });
+
+        hydrate(initialPayload);
+
+        if (state.summary && state.summary.isPartial) {
+          window.setTimeout(function() {
+            runRefresh(true);
+          }, 250);
+        }
+      })();
     </script>
   </body>
 </html>

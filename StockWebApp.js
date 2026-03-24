@@ -1,30 +1,28 @@
-const INITIAL_SERVER_RENDER_COUNT = 100;
+const INITIAL_SERVER_RENDER_COUNT = 120;
 
 function doGet() {
   const initialResult = StockWebApp_collectPayload_(INITIAL_SERVER_RENDER_COUNT);
-  Logger.log(
-    "StockWebApp_doGet | initialItems=%s | rowsFetched=%s | readRange=%s:%s | timingsMs=%s",
-    initialResult.payload.items.length,
-    initialResult.meta.rowsFetched,
-    initialResult.meta.minCol,
-    initialResult.meta.maxCol,
-    JSON.stringify(initialResult.meta.timings)
-  );
-
   const template = HtmlService.createTemplateFromFile("StockMobile");
+
   template.initialBootJson = StockWebApp_safeJsonForTemplate_({
     payload: initialResult.payload,
     source: "server",
     generatedAt: new Date().toISOString()
   });
   template.initialListMarkup = StockWebApp_renderItemsHtml_(initialResult.payload.items);
-  template.initialCountText = String(initialResult.payload.items.length || 0);
-  template.initialStatusText = initialResult.payload.items.length
-    ? initialResult.payload.items.length + " référence" + (initialResult.payload.items.length > 1 ? "s" : "") + " affichée" + (initialResult.payload.items.length > 1 ? "s" : "") + "."
-    : "";
+
+  Logger.log(
+    "StockWebApp_doGet | initialItems=%s | totalRows=%s | partial=%s | readRange=%s:%s | timingsMs=%s",
+    initialResult.payload.items.length,
+    initialResult.payload.summary.totalRows,
+    initialResult.payload.summary.isPartial,
+    initialResult.meta.minCol,
+    initialResult.meta.maxCol,
+    JSON.stringify(initialResult.meta.timings)
+  );
 
   return template.evaluate()
-    .setTitle("SZFashion Stock")
+    .setTitle("SZFashion | Inventaire")
     .addMetaTag("viewport", "width=device-width, initial-scale=1, viewport-fit=cover")
     .addMetaTag("mobile-web-app-capable", "yes")
     .addMetaTag("apple-mobile-web-app-capable", "yes")
@@ -32,41 +30,14 @@ function doGet() {
 }
 
 function StockWebApp_getList() {
-  return StockWebApp_getList_();
-}
-
-function StockWebApp_getList_() {
   const result = StockWebApp_collectPayload_(null);
-  const headers = result.meta.headers;
-  const cols = result.meta.cols;
-
-  if (!result.payload.items.length) {
-    Logger.log(
-      "StockWebApp_getList_ | no items returned | sheet=%s | headers=%s | columns=%s | missingOptional=%s | missingRaw=%s | rowsRead=%s | readRange=%s:%s | timingsMs=%s | sampleReferenceValues=%s",
-      result.meta.sheetName,
-      JSON.stringify(headers),
-      JSON.stringify(StockWebApp_logColumns_(headers, cols)),
-      JSON.stringify(StockWebApp_missingOptionalColumns_(cols)),
-      JSON.stringify(StockWebApp_missingRawColumns_(cols)),
-      result.meta.rowsFetched,
-      result.meta.minCol,
-      result.meta.maxCol,
-      JSON.stringify(result.meta.timings),
-      JSON.stringify(result.meta.sampleReferenceValues)
-    );
-  }
 
   Logger.log(
-    "StockWebApp_getList_ | sheet=%s | headers=%s | columns=%s | missingOptional=%s | missingRaw=%s | rowsRead=%s | readRange=%s:%s | itemsReturned=%s | timingsMs=%s",
-    result.meta.sheetName,
-    JSON.stringify(headers),
-    JSON.stringify(StockWebApp_logColumns_(headers, cols)),
-    JSON.stringify(StockWebApp_missingOptionalColumns_(cols)),
-    JSON.stringify(StockWebApp_missingRawColumns_(cols)),
-    result.meta.rowsFetched,
+    "StockWebApp_getList | items=%s | totalRows=%s | readRange=%s:%s | timingsMs=%s",
+    result.payload.items.length,
+    result.payload.summary.totalRows,
     result.meta.minCol,
     result.meta.maxCol,
-    result.payload.items.length,
     JSON.stringify(result.meta.timings)
   );
 
@@ -85,7 +56,7 @@ function StockWebApp_collectPayload_(limit) {
   const lastRow = sh.getLastRow();
   const lastCol = sh.getLastColumn();
   if (lastCol < 1) {
-    throw new Error("La feuille STOCK ne contient aucun en-tête.");
+    throw new Error("La feuille STOCK ne contient aucun en-tete.");
   }
 
   const headersStart = Date.now();
@@ -100,14 +71,13 @@ function StockWebApp_collectPayload_(limit) {
   const usedCols = StockWebApp_collectUsedColumns_(cols);
   const minCol = usedCols.length ? Math.min.apply(null, usedCols) : 1;
   const maxCol = usedCols.length ? Math.max.apply(null, usedCols) : 1;
+  const width = maxCol - minCol + 1;
   const items = [];
-  const sampleReferenceValues = [];
   let rowsFetched = 0;
   let fetchMs = 0;
   let buildMs = 0;
 
-  if (rowCount > 0) {
-    const width = maxCol - minCol + 1;
+  if (rowCount > 0 && width > 0) {
     if (limit && limit > 0) {
       const batchSize = Math.max(limit, 250);
       let startRow = 2;
@@ -122,14 +92,10 @@ function StockWebApp_collectPayload_(limit) {
 
         const buildStart = Date.now();
         for (let i = 0; i < values.length && items.length < limit; i++) {
-          if (sampleReferenceValues.length < 10) {
-            sampleReferenceValues.push(StockWebApp_getCellByAbsCol_(values[i], cols.reference, minCol));
-          }
           const item = StockWebApp_buildItem_(values[i], cols, startRow + i, minCol);
           if (item) items.push(item);
         }
         buildMs += Date.now() - buildStart;
-
         startRow += rowsToRead;
       }
     } else {
@@ -140,9 +106,6 @@ function StockWebApp_collectPayload_(limit) {
 
       const buildStart = Date.now();
       for (let i = 0; i < values.length; i++) {
-        if (sampleReferenceValues.length < 10) {
-          sampleReferenceValues.push(StockWebApp_getCellByAbsCol_(values[i], cols.reference, minCol));
-        }
         const item = StockWebApp_buildItem_(values[i], cols, i + 2, minCol);
         if (item) items.push(item);
       }
@@ -150,17 +113,32 @@ function StockWebApp_collectPayload_(limit) {
     }
   }
 
+  StockWebApp_sortItemsByReference_(items);
+
+  const availableFilters = StockWebApp_collectAvailableFilters_(items);
+  const generatedAt = new Date().toISOString();
+
   return {
-    payload: { items: items },
+    payload: {
+      items: items,
+      summary: StockWebApp_buildSummary_(items, rowCount, !!(limit && rowCount > items.length), generatedAt),
+      filters: availableFilters,
+      ui: {
+        defaultSort: "ref_asc",
+        availableSorts: [
+          { value: "ref_asc", label: "REF ASC" },
+          { value: "ref_desc", label: "REF DESC" },
+          { value: "stock_first", label: "STOCK" }
+        ]
+      },
+      generatedAt: generatedAt
+    },
     meta: {
-      sheetName: sh.getName(),
       headers: headers,
       cols: cols,
-      rowCount: rowCount,
       rowsFetched: rowsFetched,
       minCol: minCol,
       maxCol: maxCol,
-      sampleReferenceValues: sampleReferenceValues,
       timings: {
         headers: headersMs,
         resolve: resolveMs,
@@ -198,14 +176,13 @@ function StockWebApp_resolveColumns_(headers) {
 
   const cols = {
     reference: findCol(["货号", "Reference", "Référence", "ref"]),
-    stockDisplay: findCol(["剩下 / RESTE", "剩下", "RESTE"]),
-    arrivageRef: findCol(["到货单", "arrivage", "arrivage id"]),
-    warehouse: findCol(["仓库", "entrepot", "entrepôt"]),
     tailRaw: findCol(["尾箱"]),
     unitsPerBoxRaw: findCol(["件/箱", "每箱件数2"]),
     boxesRaw: findCol(["箱数"]),
+    signRaw: findCol(["当前signe"]),
     fractionRaw: findCol(["当前箱数分数"]),
-    stockRaw: findCol(["stock"])
+    warehouse: findCol(["仓库", "entrepot", "entrepôt"]),
+    createdAt: findCol(["date de création", "修改日期", "进货"])
   };
 
   if (!cols.reference) {
@@ -219,14 +196,158 @@ function StockWebApp_buildItem_(row, cols, rowIndex, baseCol) {
   const reference = StockWebApp_normalizeReference_(StockWebApp_getCellByAbsCol_(row, cols.reference, baseCol));
   if (!reference) return null;
 
+  const stateModel = StockWebApp_extractStateModel_(row, cols, baseCol);
+  const stockDisplay = StockWebApp_buildStockDisplay_(stateModel);
+
   return {
     id: "row_" + String(rowIndex || 0),
     reference: reference,
-    stockDisplay: StockWebApp_optionalText_(row, cols.stockDisplay, baseCol),
-    arrivageRef: StockWebApp_optionalText_(row, cols.arrivageRef, baseCol),
+    stockDisplay: stockDisplay,
+    stockState: StockWebApp_computeStockStateFromModel_(stateModel),
     warehouse: StockWebApp_optionalText_(row, cols.warehouse, baseCol),
-    stockState: StockWebApp_computeStockState_(row, cols, baseCol).state
+    createdAt: StockWebApp_optionalText_(row, cols.createdAt, baseCol)
   };
+}
+
+function StockWebApp_extractStateModel_(row, cols, baseCol) {
+  const fractionRawValue = StockWebApp_getCellByAbsCol_(row, cols.fractionRaw, baseCol);
+  return {
+    tail: StockWebApp_tailDisplayToTotal_(StockWebApp_getCellByAbsCol_(row, cols.tailRaw, baseCol)),
+    unitsPerBox: StockWebApp_toInt_(StockWebApp_getCellByAbsCol_(row, cols.unitsPerBoxRaw, baseCol)),
+    boxes: StockWebApp_toInt_(StockWebApp_getCellByAbsCol_(row, cols.boxesRaw, baseCol)),
+    sign: StockWebApp_normalizeSign_(StockWebApp_getCellByAbsCol_(row, cols.signRaw, baseCol)),
+    fraction: StockWebApp_parseFractionValue_(fractionRawValue),
+    fractionTextRaw: StockWebApp_normalizeFractionText_(fractionRawValue)
+  };
+}
+
+function StockWebApp_buildStockDisplay_(stateInput) {
+  const state = StockWebApp_normalizeStateModel_(stateInput || {});
+  const tail = state.tail;
+  const unitsPerBox = state.unitsPerBox;
+  const boxes = state.boxes;
+  const sign = state.sign;
+  const fractionText = StockWebApp_fractionToText_(state.fraction);
+  const plusFractionDisplay = StockWebApp_fractionDisplayForPlus_(state);
+
+  let core = "";
+  if (unitsPerBox > 0) {
+    core = String(unitsPerBox) + "p";
+    if (sign === "×" && fractionText) {
+      if (boxes > 1) {
+        core += "×" + String(boxes) + "×" + fractionText;
+      } else {
+        core += "×" + fractionText;
+      }
+    } else if (sign === "+" && fractionText) {
+      core += "×" + plusFractionDisplay;
+    } else if (boxes > 0) {
+      core += "×" + String(boxes);
+    }
+  }
+
+  if (tail > 0) {
+    return "(" + String(tail) + "p)" + (core ? "+" + core : "");
+  }
+
+  return core || "-";
+}
+
+function StockWebApp_normalizeStateModel_(stateInput) {
+  const state = {
+    tail: Math.max(0, StockWebApp_toInt_(stateInput.tail)),
+    unitsPerBox: Math.max(0, StockWebApp_toInt_(stateInput.unitsPerBox)),
+    boxes: Math.max(0, StockWebApp_toInt_(stateInput.boxes)),
+    sign: StockWebApp_normalizeSign_(stateInput.sign),
+    fraction: StockWebApp_parseFractionValue_(stateInput.fraction),
+    fractionTextRaw: StockWebApp_normalizeFractionText_(stateInput.fractionTextRaw)
+  };
+
+  if (!(state.fraction > 0)) {
+    state.fraction = 0;
+    state.sign = "";
+  } else if (!state.sign) {
+    state.sign = state.boxes > 0 ? "+" : "×";
+  }
+
+  if (state.sign === "×" && state.boxes <= 0) {
+    state.boxes = 1;
+  }
+
+  if (state.sign === "+" && state.boxes <= 0) {
+    state.sign = "×";
+    state.boxes = 1;
+  }
+
+  return state;
+}
+
+function StockWebApp_fractionDisplayForPlus_(state) {
+  const rawText = StockWebApp_normalizeFractionText_(state && state.fractionTextRaw ? state.fractionTextRaw : "");
+  const boxes = Math.max(0, StockWebApp_toInt_(state && state.boxes));
+  if (rawText) {
+    const match = rawText.match(/^(\d+)\/(\d+)$/);
+    if (match && boxes > 0) return String(boxes) + "/" + match[2];
+    return rawText;
+  }
+
+  if (boxes > 0) {
+    const fractionText = StockWebApp_fractionToText_(state && state.fraction ? state.fraction : 0);
+    const parts = fractionText ? fractionText.split("/") : [];
+    if (parts.length === 2) return String(boxes) + "/" + parts[1];
+  }
+
+  return StockWebApp_fractionToText_(state && state.fraction ? state.fraction : 0);
+}
+
+function StockWebApp_computeStockStateFromModel_(stateInput) {
+  const state = StockWebApp_normalizeStateModel_(stateInput || {});
+  if (state.tail > 0) return "positive";
+  if (state.unitsPerBox > 0 && state.boxes > 0) return "positive";
+  if (state.unitsPerBox > 0 && state.fraction > 0) return "positive";
+  return "zero";
+}
+
+function StockWebApp_buildSummary_(items, totalRows, isPartial, generatedAt) {
+  const positiveCount = (items || []).filter(function(item) {
+    return item && item.stockState === "positive";
+  }).length;
+
+  return {
+    visibleCount: (items || []).length,
+    positiveCount: positiveCount,
+    zeroCount: Math.max(0, (items || []).length - positiveCount),
+    totalRows: totalRows || 0,
+    isPartial: !!isPartial,
+    generatedAt: generatedAt
+  };
+}
+
+function StockWebApp_collectAvailableFilters_(items) {
+  const warehouses = [];
+  (items || []).forEach(function(item) {
+    const value = String(item && item.warehouse ? item.warehouse : "").trim();
+    if (value && warehouses.indexOf(value) === -1) warehouses.push(value);
+  });
+
+  warehouses.sort();
+
+  return {
+    warehouses: warehouses,
+    stockStates: [
+      { value: "all", label: "Tous" },
+      { value: "positive", label: "En stock" },
+      { value: "zero", label: "Zero" }
+    ]
+  };
+}
+
+function StockWebApp_sortItemsByReference_(items) {
+  (items || []).sort(function(a, b) {
+    const left = String(a && a.reference ? a.reference : "");
+    const right = String(b && b.reference ? b.reference : "");
+    return left.localeCompare(right);
+  });
 }
 
 function StockWebApp_normalizeReference_(value) {
@@ -258,119 +379,98 @@ function StockWebApp_collectUsedColumns_(cols) {
   return out;
 }
 
-function StockWebApp_logColumns_(headers, cols) {
+function StockWebApp_tailDisplayToTotal_(value) {
+  if (value === null || typeof value === "undefined" || value === "") return 0;
+  if (typeof value === "number") return Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0;
+  const matches = String(value).match(/-?\d+/g);
+  if (!matches || !matches.length) return 0;
+  return Math.max(0, matches.reduce(function(sum, part) {
+    return sum + (Number(part) || 0);
+  }, 0));
+}
+
+function StockWebApp_toInt_(value) {
+  if (value === null || typeof value === "undefined" || value === "") return 0;
+  if (typeof value === "number") return Number.isFinite(value) ? Math.trunc(value) : 0;
+  const match = String(value).trim().match(/-?\d+/);
+  return match ? Number(match[0]) : 0;
+}
+
+function StockWebApp_parseFractionValue_(value) {
+  if (value === null || typeof value === "undefined" || value === "") return 0;
+  if (typeof value === "number") return Number.isFinite(value) && value > 0 ? value : 0;
+
+  const text = String(value).trim().replace(",", ".");
+  if (!text) return 0;
+
+  const fractionMatch = text.match(/^(\d+)\s*\/\s*(\d+)$/);
+  if (fractionMatch) {
+    const numerator = Number(fractionMatch[1]);
+    const denominator = Number(fractionMatch[2]);
+    if (!denominator) return 0;
+    return numerator > 0 ? numerator / denominator : 0;
+  }
+
+  const numeric = Number(text);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
+}
+
+function StockWebApp_normalizeFractionText_(value) {
+  const text = String(value === null || typeof value === "undefined" ? "" : value).trim().replace(/\s+/g, "");
+  if (!text) return "";
+  const match = text.match(/^(\d+)\/(\d+)$/);
+  if (match) return match[1] + "/" + match[2];
+  const numeric = Number(text.replace(",", "."));
+  return Number.isFinite(numeric) && numeric > 0 ? StockWebApp_fractionToText_(numeric) : "";
+}
+
+function StockWebApp_normalizeSign_(value) {
+  const sign = String(value || "").trim();
+  return (sign === "+" || sign === "×" || sign === "x" || sign === "X") ? (sign === "+" ? "+" : "×") : "";
+}
+
+function StockWebApp_fractionToText_(value) {
+  const numeric = Number(value || 0);
+  if (!Number.isFinite(numeric) || numeric <= 0) return "";
+
+  const candidates = [2, 3, 4, 6, 8, 12];
+  let best = null;
+  let bestErr = Infinity;
+
+  for (let i = 0; i < candidates.length; i++) {
+    const den = candidates[i];
+    const num = Math.round(numeric * den);
+    const approx = num / den;
+    const err = Math.abs(numeric - approx);
+    if (err < bestErr) {
+      bestErr = err;
+      best = { num: num, den: den };
+    }
+  }
+
+  if (!best || !best.den || best.num <= 0) return "";
+  const reduced = StockWebApp_reduceFraction_(best.num, best.den);
+  return reduced.num + "/" + reduced.den;
+}
+
+function StockWebApp_reduceFraction_(num, den) {
+  if (!den) return { num: 0, den: 1 };
+  const divisor = StockWebApp_gcd_(num, den);
   return {
-    reference: cols.reference ? (headers[cols.reference - 1] || "") : "",
-    stockDisplay: cols.stockDisplay ? (headers[cols.stockDisplay - 1] || "") : "",
-    arrivageRef: cols.arrivageRef ? (headers[cols.arrivageRef - 1] || "") : "",
-    warehouse: cols.warehouse ? (headers[cols.warehouse - 1] || "") : "",
-    tailRaw: cols.tailRaw ? (headers[cols.tailRaw - 1] || "") : "",
-    unitsPerBoxRaw: cols.unitsPerBoxRaw ? (headers[cols.unitsPerBoxRaw - 1] || "") : "",
-    boxesRaw: cols.boxesRaw ? (headers[cols.boxesRaw - 1] || "") : "",
-    fractionRaw: cols.fractionRaw ? (headers[cols.fractionRaw - 1] || "") : "",
-    stockRaw: cols.stockRaw ? (headers[cols.stockRaw - 1] || "") : ""
+    num: num / divisor,
+    den: den / divisor
   };
 }
 
-function StockWebApp_missingOptionalColumns_(cols) {
-  const missing = [];
-  if (!cols.stockDisplay) missing.push("剩下 / RESTE");
-  if (!cols.arrivageRef) missing.push("到货单");
-  if (!cols.warehouse) missing.push("仓库");
-  return missing;
-}
-
-function StockWebApp_missingRawColumns_(cols) {
-  const missing = [];
-  if (!cols.tailRaw) missing.push("尾箱");
-  if (!cols.unitsPerBoxRaw) missing.push("件/箱|每箱件数2");
-  if (!cols.boxesRaw) missing.push("箱数");
-  if (!cols.fractionRaw) missing.push("当前箱数分数");
-  if (!cols.stockRaw) missing.push("stock");
-  return missing;
-}
-
-function StockWebApp_computeStockState_(row, cols, baseCol) {
-  const tail = StockWebApp_parsePositiveNumber_(row, cols.tailRaw, baseCol);
-  const unitsPerBox = StockWebApp_parsePositiveNumber_(row, cols.unitsPerBoxRaw, baseCol);
-  const boxes = StockWebApp_parsePositiveNumber_(row, cols.boxesRaw, baseCol);
-  const fractionPositive = StockWebApp_isPositiveFractionLike_(row, cols.fractionRaw, baseCol);
-
-  if (tail > 0) return { state: "positive", source: "raw-columns" };
-  if (unitsPerBox > 0 && boxes > 0) return { state: "positive", source: "raw-columns" };
-  if (unitsPerBox > 0 && fractionPositive) return { state: "positive", source: "raw-columns" };
-
-  if (cols.tailRaw || cols.unitsPerBoxRaw || cols.boxesRaw || cols.fractionRaw) {
-    const stockNumeric = StockWebApp_parseFiniteNumber_(row, cols.stockRaw, baseCol);
-    if (stockNumeric !== null) {
-      return { state: stockNumeric > 0 ? "positive" : "zero", source: "stock" };
-    }
-
-    const displayNumber = StockWebApp_extractFirstNumber_(StockWebApp_optionalText_(row, cols.stockDisplay, baseCol));
-    if (displayNumber !== null) {
-      return { state: displayNumber > 0 ? "positive" : "zero", source: "rest-display" };
-    }
-
-    return { state: "zero", source: "default-zero" };
+function StockWebApp_gcd_(a, b) {
+  let left = Math.abs(Math.trunc(a || 0));
+  let right = Math.abs(Math.trunc(b || 0));
+  while (right) {
+    const next = right;
+    right = left % right;
+    left = next;
   }
-
-  const stockNumeric = StockWebApp_parseFiniteNumber_(row, cols.stockRaw, baseCol);
-  if (stockNumeric !== null) {
-    return { state: stockNumeric > 0 ? "positive" : "zero", source: "stock" };
-  }
-
-  const displayNumber = StockWebApp_extractFirstNumber_(StockWebApp_optionalText_(row, cols.stockDisplay, baseCol));
-  if (displayNumber !== null) {
-    return { state: displayNumber > 0 ? "positive" : "zero", source: "rest-display" };
-  }
-
-  return { state: "zero", source: "default-zero" };
-}
-
-function StockWebApp_parseFiniteNumber_(row, col, baseCol) {
-  if (!col) return null;
-  const raw = StockWebApp_getCellByAbsCol_(row, col, baseCol);
-  if (raw === null || typeof raw === "undefined" || String(raw).trim() === "") return null;
-  const normalized = String(raw).trim().replace(",", ".");
-  if (!/^[-+]?\d+(?:\.\d+)?$/.test(normalized)) return null;
-  const numberValue = Number(normalized);
-  return Number.isFinite(numberValue) ? numberValue : null;
-}
-
-function StockWebApp_parsePositiveNumber_(row, col, baseCol) {
-  const numberValue = StockWebApp_parseFiniteNumber_(row, col, baseCol);
-  return numberValue !== null && numberValue > 0 ? numberValue : 0;
-}
-
-function StockWebApp_isPositiveFractionLike_(row, col, baseCol) {
-  const numberValue = StockWebApp_parseFiniteNumber_(row, col, baseCol);
-  if (numberValue !== null) return numberValue > 0;
-  if (!col) return false;
-
-  const raw = StockWebApp_getCellByAbsCol_(row, col, baseCol);
-  const normalized = String(raw === null || typeof raw === "undefined" ? "" : raw)
-    .trim()
-    .replace(/\s*\/\s*/g, "/");
-  if (!normalized) return false;
-
-  const match = normalized.match(/^(\d+)\/(\d+)$/);
-  if (!match) return false;
-
-  const numerator = Number(match[1]);
-  const denominator = Number(match[2]);
-  return Number.isFinite(numerator) &&
-    Number.isFinite(denominator) &&
-    numerator > 0 &&
-    denominator > 0;
-}
-
-function StockWebApp_extractFirstNumber_(value) {
-  const text = String(value || "").trim().replace(",", ".");
-  if (!text) return null;
-  const match = text.match(/[-+]?\d+(?:\.\d+)?/);
-  if (!match) return null;
-  const numberValue = Number(match[0]);
-  return Number.isFinite(numberValue) ? numberValue : null;
+  return left || 1;
 }
 
 function StockWebApp_normalizeHeaderCandidate_(value) {
@@ -388,20 +488,25 @@ function StockWebApp_renderItemsHtml_(items) {
 }
 
 function StockWebApp_renderItemHtml_(item) {
-  const itemClass = item && item.stockState === "positive"
-    ? "item inventory-row stock-positive"
-    : "item inventory-row stock-zero";
   const reference = item && item.reference ? item.reference : "-";
-  const stockDisplay = item && item.stockDisplay ? item.stockDisplay : "";
+  const stockDisplay = item && item.stockDisplay ? item.stockDisplay : "-";
+  const accentClass = item && item.stockState === "positive"
+    ? "border-emerald-400/50"
+    : "border-rose-400/50";
+  const stockClass = item && item.stockState === "positive"
+    ? "text-primary"
+    : "text-on-surface-variant";
 
   return '' +
-    '<tr class="' + itemClass + '" data-item-id="' + StockWebApp_escapeHtml_(item && item.id ? item.id : "") + '" data-reference="' + StockWebApp_escapeHtml_(item && item.reference ? item.reference : "") + '" data-selection-mode="false" tabindex="0" role="button" aria-label="Copier ' + StockWebApp_escapeHtml_(reference) + '">' +
-      '<td class="px-3 py-2 text-center">' +
-        '<input class="item-checkbox h-3.5 w-3.5 rounded border-outline-variant text-primary focus:ring-primary/30" type="checkbox" aria-label="Sélectionner ' + StockWebApp_escapeHtml_(reference) + '">' +
-      '</td>' +
-      '<td class="px-3 py-2 truncate font-sans font-bold text-on-surface">' + StockWebApp_escapeHtml_(reference) + '</td>' +
-      '<td class="px-3 py-2 text-right tabular-nums font-bold ' + (item && item.stockState === "zero" ? 'text-on-surface-variant' : 'text-primary') + '">' + StockWebApp_escapeHtml_(stockDisplay || "-") + '</td>' +
-    '</tr>';
+    '<article class="inventory-card bg-surface-container-lowest relative border-l-4 ' + accentClass + ' flex min-h-[4.25rem] flex-col justify-between px-2.5 py-2 transition-colors duration-150 hover:bg-surface-container" data-reference="' + StockWebApp_escapeHtml_(reference) + '" data-stock-display="' + StockWebApp_escapeHtml_(stockDisplay) + '" data-stock-state="' + StockWebApp_escapeHtml_(item && item.stockState ? item.stockState : "zero") + '">' +
+      '<div class="flex items-start justify-between gap-2">' +
+        '<span class="truncate pr-2 text-[12px] font-bold tracking-tight text-on-surface">' + StockWebApp_escapeHtml_(reference) + '</span>' +
+        '<span class="material-symbols-outlined shrink-0 text-outline-variant !text-[14px]">inventory_2</span>' +
+      '</div>' +
+      '<div class="mt-2">' +
+        '<span class="block truncate text-[13px] font-medium ' + stockClass + '">' + StockWebApp_escapeHtml_(stockDisplay) + '</span>' +
+      '</div>' +
+    '</article>';
 }
 
 function StockWebApp_escapeHtml_(value) {

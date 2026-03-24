@@ -224,7 +224,6 @@
         <div class="border-b border-outline-variant/20 px-4 py-3">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
-              <div class="text-[0.625rem] font-bold uppercase tracking-[0.2em] text-on-surface-variant">SKU_REFERENCE</div>
               <div class="truncate text-lg font-black tracking-tight text-on-surface" id="quickEditReference">-</div>
             </div>
             <div class="text-right">
@@ -233,39 +232,91 @@
             </div>
           </div>
         </div>
-        <div class="max-h-[calc(100dvh-13rem)] overflow-y-auto px-4 py-4">
-          <form class="space-y-3" id="quickEditForm" novalidate>
-            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div class="border-b border-outline-variant/20 bg-surface-container-low px-4 py-2">
+          <div class="grid grid-cols-2 gap-2">
+            <button class="border border-outline-variant/30 px-2 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant" id="quickEditTabQuickExit" type="button">Sortie rapide</button>
+            <button class="border border-outline-variant/30 px-2 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant" id="quickEditTabEdit" type="button">Modifier</button>
+          </div>
+        </div>
+        <div class="max-h-[calc(100dvh-15rem)] overflow-y-auto px-4 py-4">
+          <div class="space-y-4">
+            <section id="quickExitPanel">
+              <div class="rounded border border-outline-variant/20 bg-surface-container-low px-3 py-2">
+                <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Stock actuel</div>
+                <div class="mt-1 text-sm font-semibold text-primary" id="quickExitCurrentStock">-</div>
+                <div class="mt-2 hidden text-[11px] text-on-surface-variant" id="quickExitPreviewWrap">
+                  <span class="font-bold uppercase tracking-[0.16em] text-on-surface-variant">Apres sortie</span>
+                  <span class="ml-2 font-semibold text-on-surface" id="quickExitPreview">-</span>
+                </div>
+              </div>
+              <div class="grid grid-cols-3 gap-2">
+                <button class="border border-outline-variant/30 px-2 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant" data-quick-exit-mode="boxes" id="quickExitModeBoxes" type="button">Cartons</button>
+                <button class="border border-outline-variant/30 px-2 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant" data-quick-exit-mode="fraction" id="quickExitModeFraction" type="button">Fraction</button>
+                <button class="border border-outline-variant/30 px-2 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant" data-quick-exit-mode="packs" id="quickExitModePacks" type="button">Paquets</button>
+              </div>
+              <div class="space-y-3" id="quickExitBoxesPanel">
+                <label class="block">
+                  <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Cartons</span>
+                  <input class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-semibold text-on-surface" id="quickExitBoxesValue" inputmode="numeric" min="0" step="1" type="number" />
+                </label>
+              </div>
+              <div class="hidden space-y-3" id="quickExitFractionPanel">
+                <div>
+                  <span class="mb-2 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Fraction</span>
+                  <div class="grid grid-cols-4 gap-2">
+                    <button class="border border-outline-variant/30 px-2 py-2 text-[11px] font-bold text-on-surface-variant" data-fraction-choice="1/2" type="button">1/2</button>
+                    <button class="border border-outline-variant/30 px-2 py-2 text-[11px] font-bold text-on-surface-variant" data-fraction-choice="1/3" type="button">1/3</button>
+                    <button class="border border-outline-variant/30 px-2 py-2 text-[11px] font-bold text-on-surface-variant" data-fraction-choice="1/4" type="button">1/4</button>
+                    <button class="border border-outline-variant/30 px-2 py-2 text-[11px] font-bold text-on-surface-variant" data-fraction-choice="2/3" type="button">2/3</button>
+                  </div>
+                </div>
+              </div>
+              <div class="hidden space-y-3" id="quickExitPacksPanel">
+                <label class="block">
+                  <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Paquets</span>
+                  <input class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-semibold text-on-surface" id="quickExitPacksValue" inputmode="numeric" min="0" step="1" type="number" />
+                </label>
+                <p class="text-[10px] text-on-surface-variant" id="quickExitPacksHint">Mode disponible si Colisage est renseigne.</p>
+              </div>
+            </section>
+
+            <form class="hidden space-y-3" id="quickEditForm" novalidate>
               <label class="block">
                 <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">尾箱</span>
-                <input class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-semibold text-on-surface" id="quickEditTail" inputmode="numeric" min="0" step="1" type="number" />
+                <input class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-semibold text-on-surface" id="quickEditTail" inputmode="text" maxlength="16" placeholder="(360p)" type="text" />
               </label>
-              <label class="block">
-                <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">件/箱</span>
-                <input class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-semibold text-on-surface" id="quickEditUnitsPerBox" inputmode="numeric" min="0" step="1" type="number" />
-              </label>
-              <label class="block">
-                <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">箱数</span>
-                <input class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-semibold text-on-surface" id="quickEditItemBoxes" inputmode="numeric" min="0" step="1" type="number" />
-              </label>
-              <label class="block">
-                <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">当前signe</span>
-                <select class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-semibold text-on-surface" id="quickEditSign">
-                  <option value="+">+</option>
-                  <option value="×">×</option>
-                </select>
-              </label>
-              <label class="block sm:col-span-2">
-                <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">当前箱数分数</span>
-                <input class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-semibold text-on-surface" id="quickEditFractionText" inputmode="text" maxlength="10" placeholder="1/2" type="text" />
-                <span class="mt-1 block text-[10px] text-on-surface-variant" id="quickEditFractionHint">Format attendu: 1/2, 2/3, 3/4</span>
-              </label>
-            </div>
-          </form>
+              <div class="grid grid-cols-2 gap-3">
+                <label class="block">
+                  <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">件/箱</span>
+                  <input class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-semibold text-on-surface" id="quickEditUnitsPerBox" inputmode="text" maxlength="16" placeholder="336p" type="text" />
+                </label>
+                <label class="block">
+                  <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">箱数</span>
+                  <input class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-semibold text-on-surface" id="quickEditItemBoxes" inputmode="numeric" min="0" step="1" type="number" />
+                </label>
+              </div>
+              <div class="grid grid-cols-[6rem,1fr] gap-3">
+                <label class="block">
+                  <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">当前signe</span>
+                  <select class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-semibold text-on-surface" id="quickEditSign">
+                    <option value="+">+</option>
+                    <option value="×">×</option>
+                  </select>
+                </label>
+                <label class="block">
+                  <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">当前箱数分数</span>
+                  <input class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-semibold text-on-surface" id="quickEditFractionText" inputmode="text" maxlength="10" placeholder="1/2" type="text" />
+                  <span class="mt-1 block text-[10px] text-on-surface-variant" id="quickEditFractionHint">Format attendu: 1/2, 2/3, 3/4</span>
+                </label>
+              </div>
+            </form>
+
+            <p class="hidden rounded border border-error/20 bg-error-container/20 px-3 py-2 text-[11px] font-medium text-on-error-container" id="quickEditMessage"></p>
+          </div>
         </div>
         <div class="grid grid-cols-2 gap-3 border-t border-outline-variant/20 bg-surface-container-low px-4 py-4">
-          <button class="border border-outline-variant/30 py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-on-surface-variant transition-colors duration-150 hover:bg-surface-container" id="quickEditCancel" type="button">ANNULER</button>
-          <button class="bg-surface-tint py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-on-primary transition-colors duration-150 hover:bg-primary-dim" id="quickEditSave" type="button">ENREGISTRER</button>
+          <button class="border border-outline-variant/30 py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-on-surface-variant transition-colors duration-150 hover:bg-surface-container disabled:opacity-50" id="quickEditCancel" type="button">ANNULER</button>
+          <button class="bg-surface-tint py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-on-primary transition-colors duration-150 hover:bg-primary-dim disabled:opacity-50" id="quickEditSave" type="button">APPLIQUER LA SORTIE</button>
         </div>
       </div>
     </div>
@@ -306,7 +357,12 @@
           lastError: "",
           quickEditOpen: false,
           quickEditItem: null,
-          quickEditForm: null
+          quickEditForm: null,
+          quickEditTab: "quick-exit",
+          quickExitMode: "boxes",
+          quickExitForm: null,
+          quickEditError: "",
+          quickEditSaving: false
         };
 
         const els = {
@@ -332,6 +388,21 @@
           activeFilters: document.getElementById("activeFilters"),
           quickEditOverlay: document.getElementById("quickEditOverlay"),
           quickEditModal: document.getElementById("quickEditModal"),
+          quickEditTabQuickExit: document.getElementById("quickEditTabQuickExit"),
+          quickEditTabEdit: document.getElementById("quickEditTabEdit"),
+          quickExitPanel: document.getElementById("quickExitPanel"),
+          quickExitCurrentStock: document.getElementById("quickExitCurrentStock"),
+          quickExitPreviewWrap: document.getElementById("quickExitPreviewWrap"),
+          quickExitPreview: document.getElementById("quickExitPreview"),
+          quickExitModeBoxes: document.getElementById("quickExitModeBoxes"),
+          quickExitModeFraction: document.getElementById("quickExitModeFraction"),
+          quickExitModePacks: document.getElementById("quickExitModePacks"),
+          quickExitBoxesPanel: document.getElementById("quickExitBoxesPanel"),
+          quickExitFractionPanel: document.getElementById("quickExitFractionPanel"),
+          quickExitPacksPanel: document.getElementById("quickExitPacksPanel"),
+          quickExitBoxesValue: document.getElementById("quickExitBoxesValue"),
+          quickExitPacksValue: document.getElementById("quickExitPacksValue"),
+          quickExitPacksHint: document.getElementById("quickExitPacksHint"),
           quickEditForm: document.getElementById("quickEditForm"),
           quickEditReference: document.getElementById("quickEditReference"),
           quickEditStockDisplay: document.getElementById("quickEditStockDisplay"),
@@ -341,6 +412,7 @@
           quickEditSign: document.getElementById("quickEditSign"),
           quickEditFractionText: document.getElementById("quickEditFractionText"),
           quickEditFractionHint: document.getElementById("quickEditFractionHint"),
+          quickEditMessage: document.getElementById("quickEditMessage"),
           quickEditCancel: document.getElementById("quickEditCancel"),
           quickEditSave: document.getElementById("quickEditSave")
         };
@@ -593,6 +665,152 @@
           return !normalized || /^(\d+)\/(\d+)$/.test(normalized);
         }
 
+        function formatTailDisplay(value) {
+          const numeric = Math.max(0, Math.trunc(Number(value) || 0));
+          return numeric > 0 ? "(" + numeric + "p)" : "";
+        }
+
+        function formatUnitsPerBoxDisplay(value) {
+          const numeric = Math.max(0, Math.trunc(Number(value) || 0));
+          return numeric > 0 ? numeric + "p" : "";
+        }
+
+        function parseStyledIntegerInput(value, options) {
+          const text = String(value || "").trim();
+          if (!text) return { valid: true, value: 0 };
+
+          const normalized = text
+            .replace(/[()]/g, "")
+            .replace(/p/gi, "")
+            .replace(/\s+/g, "");
+          if (!/^\d+$/.test(normalized)) {
+            return { valid: false, value: 0 };
+          }
+
+          return {
+            valid: true,
+            value: Math.max(0, Math.trunc(Number(normalized) || 0))
+          };
+        }
+
+        function gcd(a, b) {
+          let left = Math.abs(Math.trunc(a || 0));
+          let right = Math.abs(Math.trunc(b || 0));
+          while (right) {
+            const next = right;
+            right = left % right;
+            left = next;
+          }
+          return left || 1;
+        }
+
+        function fractionToText(value) {
+          const numeric = Number(value || 0);
+          if (!Number.isFinite(numeric) || numeric <= 0) return "";
+          const candidates = [2, 3, 4, 6, 8, 12];
+          let best = null;
+          let bestErr = Infinity;
+
+          candidates.forEach(function(den) {
+            const num = Math.round(numeric * den);
+            const approx = num / den;
+            const err = Math.abs(numeric - approx);
+            if (err < bestErr) {
+              bestErr = err;
+              best = { num: num, den: den };
+            }
+          });
+
+          if (!best || !best.den || best.num <= 0) return "";
+          const divisor = gcd(best.num, best.den);
+          return (best.num / divisor) + "/" + (best.den / divisor);
+        }
+
+        function buildLocalStockDisplay(stateModel) {
+          const tail = Math.max(0, Math.trunc(Number(stateModel && stateModel.tail) || 0));
+          const unitsPerBox = Math.max(0, Math.trunc(Number(stateModel && stateModel.unitsPerBox) || 0));
+          const itemBoxes = Math.max(0, Math.trunc(Number(stateModel && stateModel.itemBoxes) || 0));
+          const sign = String(stateModel && stateModel.sign ? stateModel.sign : "").trim();
+          const fractionText = sanitizeFractionText(stateModel && stateModel.fractionText) || fractionToText(stateModel && stateModel.fractionValue);
+          let core = "";
+
+          if (unitsPerBox > 0) {
+            core = unitsPerBox + "p";
+            if (sign === "×" && fractionText) {
+              if (itemBoxes > 1) {
+                core += "×" + itemBoxes + "×" + fractionText;
+              } else {
+                core += "×" + fractionText;
+              }
+            } else if (sign === "+" && fractionText) {
+              core += "×" + itemBoxes + "+" + fractionText;
+            } else if (itemBoxes > 0) {
+              core += "×" + itemBoxes;
+            }
+          }
+
+          if (tail > 0) {
+            return "(" + tail + "p)" + (core ? "+" + core : "");
+          }
+
+          return core || "-";
+        }
+
+        function getQuickExitFractionValue() {
+          return parseFraction(state.quickExitForm && state.quickExitForm.fractionText);
+        }
+
+        function computeQuickExitPreview() {
+          const item = state.quickEditItem;
+          if (!item) return "";
+
+          const unitsPerBox = toPositiveNumber(item.unitsPerBox);
+          const totalPieces = toPositiveNumber(item.tail) + (unitsPerBox * toPositiveNumber(item.itemBoxes)) + (unitsPerBox * (toPositiveNumber(item.fractionValue) || parseFraction(item.fractionText)));
+          if (!(unitsPerBox > 0) || !(totalPieces >= 0)) return "";
+
+          let exitPieces = 0;
+          if (state.quickExitMode === "boxes") {
+            const boxes = Math.max(0, Math.trunc(Number(state.quickExitForm && state.quickExitForm.boxes) || 0));
+            exitPieces = unitsPerBox * boxes;
+          } else if (state.quickExitMode === "fraction") {
+            exitPieces = unitsPerBox * getQuickExitFractionValue();
+          } else if (state.quickExitMode === "packs") {
+            const colisage = toPositiveNumber(item.colisage);
+            const packs = Math.max(0, Math.trunc(Number(state.quickExitForm && state.quickExitForm.packs) || 0));
+            if (!(colisage > 0)) return "";
+            exitPieces = colisage * packs;
+          }
+
+          const newTotal = totalPieces - exitPieces;
+          if (!(exitPieces > 0) || newTotal < 0) return "";
+
+          const itemBoxes = Math.floor(newTotal / unitsPerBox);
+          const remainder = newTotal - (itemBoxes * unitsPerBox);
+          return buildLocalStockDisplay({
+            tail: 0,
+            unitsPerBox: unitsPerBox,
+            itemBoxes: itemBoxes,
+            sign: remainder > 0 ? (itemBoxes > 0 ? "+" : "×") : "",
+            fractionText: remainder > 0 ? fractionToText(remainder / unitsPerBox) : "",
+            fractionValue: remainder > 0 ? (remainder / unitsPerBox) : 0
+          });
+        }
+
+        function setQuickEditError(message) {
+          state.quickEditError = String(message || "").trim();
+        }
+
+        function replaceItemInState(updatedItem) {
+          const targetId = String(updatedItem && updatedItem.id ? updatedItem.id : "").trim();
+          if (!targetId) return false;
+          const index = state.items.findIndex(function(item) {
+            return String(item && item.id ? item.id : "") === targetId;
+          });
+          if (index === -1) return false;
+          state.items.splice(index, 1, updatedItem);
+          return true;
+        }
+
         function getItemById(itemId) {
           const normalizedId = String(itemId || "").trim();
           if (!normalizedId) return null;
@@ -609,10 +827,15 @@
 
           const item = state.quickEditItem || {};
           const form = state.quickEditForm || {};
+          const quickExitForm = state.quickExitForm || {};
+          const isQuickExit = state.quickEditTab === "quick-exit";
+          const preview = computeQuickExitPreview();
+          const packsEnabled = toPositiveNumber(item.colisage) > 0;
+
           els.quickEditReference.textContent = item.reference || "-";
           els.quickEditStockDisplay.textContent = item.stockDisplay || "-";
-          els.quickEditTail.value = form.tail;
-          els.quickEditUnitsPerBox.value = form.unitsPerBox;
+          els.quickEditTail.value = form.tailInput || "";
+          els.quickEditUnitsPerBox.value = form.unitsPerBoxInput || "";
           els.quickEditItemBoxes.value = form.itemBoxes;
           els.quickEditSign.value = sanitizeSign(form.sign);
           els.quickEditFractionText.value = form.fractionText;
@@ -620,23 +843,59 @@
             ? "Format attendu: 1/2, 2/3, 3/4"
             : "Format invalide. Exemple: 1/2";
           els.quickEditFractionHint.className = "mt-1 block text-[10px] " + (isFractionTextValid(form.fractionText) ? "text-on-surface-variant" : "text-error");
+          els.quickEditTabQuickExit.className = "border px-2 py-2 text-[10px] font-bold uppercase tracking-[0.18em] " + (isQuickExit ? "border-primary bg-primary text-on-primary" : "border-outline-variant/30 text-on-surface-variant");
+          els.quickEditTabEdit.className = "border px-2 py-2 text-[10px] font-bold uppercase tracking-[0.18em] " + (!isQuickExit ? "border-primary bg-primary text-on-primary" : "border-outline-variant/30 text-on-surface-variant");
+          els.quickExitPanel.classList.toggle("hidden", !isQuickExit);
+          els.quickEditForm.classList.toggle("hidden", isQuickExit);
+          els.quickExitCurrentStock.textContent = item.stockDisplay || "-";
+          els.quickExitPreviewWrap.classList.toggle("hidden", !preview);
+          els.quickExitPreview.textContent = preview || "-";
+          els.quickExitBoxesPanel.classList.toggle("hidden", state.quickExitMode !== "boxes");
+          els.quickExitFractionPanel.classList.toggle("hidden", state.quickExitMode !== "fraction");
+          els.quickExitPacksPanel.classList.toggle("hidden", state.quickExitMode !== "packs");
+          els.quickExitBoxesValue.value = quickExitForm.boxes || "";
+          els.quickExitPacksValue.value = quickExitForm.packs || "";
+          els.quickExitPacksHint.textContent = packsEnabled
+            ? ("Colisage: " + Math.trunc(Number(item.colisage) || 0))
+            : "Mode indisponible sans Colisage.";
+          els.quickExitModeBoxes.className = "border px-2 py-2 text-[10px] font-bold uppercase tracking-[0.18em] " + (state.quickExitMode === "boxes" ? "border-primary bg-primary text-on-primary" : "border-outline-variant/30 text-on-surface-variant");
+          els.quickExitModeFraction.className = "border px-2 py-2 text-[10px] font-bold uppercase tracking-[0.18em] " + (state.quickExitMode === "fraction" ? "border-primary bg-primary text-on-primary" : "border-outline-variant/30 text-on-surface-variant");
+          els.quickExitModePacks.className = "border px-2 py-2 text-[10px] font-bold uppercase tracking-[0.18em] " + (state.quickExitMode === "packs" ? "border-primary bg-primary text-on-primary" : "border-outline-variant/30 text-on-surface-variant");
+          els.quickExitModePacks.disabled = !packsEnabled;
+          Array.prototype.forEach.call(els.quickExitFractionPanel.querySelectorAll("[data-fraction-choice]"), function(button) {
+            const active = button.getAttribute("data-fraction-choice") === (quickExitForm.fractionText || "");
+            button.className = "border px-2 py-2 text-[11px] font-bold " + (active ? "border-primary bg-primary text-on-primary" : "border-outline-variant/30 text-on-surface-variant");
+          });
+          els.quickEditMessage.classList.toggle("hidden", !state.quickEditError);
+          els.quickEditMessage.textContent = state.quickEditError || "";
+          els.quickEditSave.textContent = isQuickExit ? "APPLIQUER LA SORTIE" : "ENREGISTRER";
+          els.quickEditSave.disabled = state.quickEditSaving;
+          els.quickEditCancel.disabled = state.quickEditSaving;
         }
 
         function openQuickEdit(item) {
           if (!item) return;
           state.quickEditItem = item;
           state.quickEditOpen = true;
+          state.quickEditTab = "quick-exit";
+          state.quickExitMode = "boxes";
+          state.quickEditSaving = false;
+          setQuickEditError("");
           state.quickEditForm = {
-            tail: sanitizeIntegerInput(item.tail),
-            unitsPerBox: sanitizeIntegerInput(item.unitsPerBox),
+            tailInput: formatTailDisplay(item.tail),
+            unitsPerBoxInput: formatUnitsPerBoxDisplay(item.unitsPerBox),
             itemBoxes: sanitizeIntegerInput(item.itemBoxes),
             sign: sanitizeSign(item.sign),
             fractionText: sanitizeFractionText(item.fractionText)
           };
+          state.quickExitForm = {
+            boxes: "",
+            packs: "",
+            fractionText: "1/2"
+          };
           renderQuickEdit();
           window.setTimeout(function() {
-            els.quickEditTail.focus();
-            els.quickEditTail.select();
+            els.quickExitBoxesValue.focus();
           }, 0);
         }
 
@@ -644,30 +903,182 @@
           state.quickEditOpen = false;
           state.quickEditItem = null;
           state.quickEditForm = null;
+          state.quickExitForm = null;
+          state.quickEditError = "";
+          state.quickEditSaving = false;
           renderQuickEdit();
         }
 
         function handleQuickEditFieldChange(field, value) {
           if (!state.quickEditForm) return;
-          if (field === "sign") {
+          if (field === "tailInput" || field === "unitsPerBoxInput") {
+            state.quickEditForm[field] = String(value || "");
+          } else if (field === "sign") {
             state.quickEditForm.sign = sanitizeSign(value);
           } else if (field === "fractionText") {
             state.quickEditForm.fractionText = sanitizeFractionText(value);
           } else {
             state.quickEditForm[field] = sanitizeIntegerInput(value);
           }
+          setQuickEditError("");
+          renderQuickEdit();
+        }
+
+        function handleQuickExitFieldChange(field, value) {
+          if (!state.quickExitForm) return;
+          if (field === "fractionText") {
+            state.quickExitForm.fractionText = sanitizeFractionText(value);
+          } else {
+            state.quickExitForm[field] = sanitizeIntegerInput(value);
+          }
+          setQuickEditError("");
+          renderQuickEdit();
+        }
+
+        function validateEditPayload() {
+          if (!state.quickEditItem || !state.quickEditForm) return null;
+          const tailResult = parseStyledIntegerInput(state.quickEditForm.tailInput);
+          const unitsResult = parseStyledIntegerInput(state.quickEditForm.unitsPerBoxInput);
+          const itemBoxes = Number(state.quickEditForm.itemBoxes || 0);
+          const fractionText = sanitizeFractionText(state.quickEditForm.fractionText);
+
+          if (!tailResult.valid) {
+            setQuickEditError("尾箱 invalide. Exemple attendu: (360p).");
+            return null;
+          }
+          if (!unitsResult.valid) {
+            setQuickEditError("件/箱 invalide. Exemple attendu: 336p.");
+            return null;
+          }
+          if (!isFractionTextValid(fractionText)) {
+            setQuickEditError("Fraction invalide. Exemple attendu: 1/2.");
+            return null;
+          }
+
+          return {
+            id: state.quickEditItem.id,
+            reference: state.quickEditItem.reference,
+            mode: "edit",
+            tail: tailResult.value,
+            unitsPerBox: unitsResult.value,
+            itemBoxes: Math.max(0, Math.trunc(Number.isFinite(itemBoxes) ? itemBoxes : 0)),
+            sign: sanitizeSign(state.quickEditForm.sign),
+            fractionText: fractionText
+          };
+        }
+
+        function validateQuickExitPayload() {
+          if (!state.quickEditItem || !state.quickExitForm) return null;
+          const item = state.quickEditItem;
+          const unitsPerBox = toPositiveNumber(item.unitsPerBox);
+
+          if (!(unitsPerBox > 0)) {
+            setQuickEditError("Sortie rapide impossible sans 件/箱.");
+            return null;
+          }
+
+          if (state.quickExitMode === "boxes") {
+            const boxes = Math.max(0, Math.trunc(Number(state.quickExitForm.boxes) || 0));
+            if (!(boxes > 0)) {
+              setQuickEditError("Indique un nombre de cartons positif.");
+              return null;
+            }
+            return {
+              id: item.id,
+              reference: item.reference,
+              mode: "quick-exit",
+              exitMode: "boxes",
+              exitValue: boxes
+            };
+          }
+
+          if (state.quickExitMode === "fraction") {
+            const fractionText = sanitizeFractionText(state.quickExitForm.fractionText);
+            if (!fractionText || !isFractionTextValid(fractionText)) {
+              setQuickEditError("Selectionne une fraction valide.");
+              return null;
+            }
+            return {
+              id: item.id,
+              reference: item.reference,
+              mode: "quick-exit",
+              exitMode: "fraction",
+              exitValue: 1,
+              exitFractionText: fractionText
+            };
+          }
+
+          if (state.quickExitMode === "packs") {
+            const colisage = toPositiveNumber(item.colisage);
+            const packs = Math.max(0, Math.trunc(Number(state.quickExitForm.packs) || 0));
+            if (!(colisage > 0)) {
+              setQuickEditError("Mode paquets indisponible sans Colisage.");
+              return null;
+            }
+            if (!(packs > 0)) {
+              setQuickEditError("Indique un nombre de paquets positif.");
+              return null;
+            }
+            return {
+              id: item.id,
+              reference: item.reference,
+              mode: "quick-exit",
+              exitMode: "packs",
+              exitValue: packs
+            };
+          }
+
+          setQuickEditError("Mode de sortie invalide.");
+          return null;
+        }
+
+        function handleQuickEditSaveSuccess(result) {
+          const updatedItem = result && result.item ? result.item : null;
+          if (!updatedItem || !replaceItemInState(updatedItem)) {
+            setQuickEditError("La reference n'est plus synchronisee. Merci de rafraichir.");
+            state.quickEditSaving = false;
+            renderQuickEdit();
+            return;
+          }
+
+          const successMessage = result && result.message ? result.message : "Enregistre";
+          state.lastError = "";
+          state.quickEditSaving = false;
+          renderGrid();
+          closeQuickEdit();
+          els.summaryStatus.textContent = successMessage;
+        }
+
+        function handleQuickEditSaveFailure(error) {
+          state.quickEditSaving = false;
+          setQuickEditError(error && error.message ? error.message : "Erreur de sauvegarde");
           renderQuickEdit();
         }
 
         function handleQuickEditSave() {
-          if (!state.quickEditForm) return;
-          if (!isFractionTextValid(state.quickEditForm.fractionText)) {
+          if (state.quickEditSaving) return;
+          if (typeof google === "undefined" || !google.script || !google.script.run) {
+            setQuickEditError("Sauvegarde indisponible dans ce contexte.");
             renderQuickEdit();
             return;
           }
-          state.lastError = "";
-          els.summaryStatus.textContent = "Quick edit bientot disponible";
-          closeQuickEdit();
+
+          const request = state.quickEditTab === "quick-exit"
+            ? validateQuickExitPayload()
+            : validateEditPayload();
+          if (!request) {
+            renderQuickEdit();
+            return;
+          }
+
+          state.quickEditSaving = true;
+          setQuickEditError("");
+          renderQuickEdit();
+
+          google.script.run
+            .withSuccessHandler(handleQuickEditSaveSuccess)
+            .withFailureHandler(handleQuickEditSaveFailure)
+            .StockWebApp_saveQuickEdit(request);
         }
 
         function handleOpenReferenceDetail(reference) {
@@ -833,12 +1244,57 @@
           renderGrid();
         });
 
+        els.quickEditTabQuickExit.addEventListener("click", function() {
+          state.quickEditTab = "quick-exit";
+          setQuickEditError("");
+          renderQuickEdit();
+        });
+
+        els.quickEditTabEdit.addEventListener("click", function() {
+          state.quickEditTab = "edit";
+          setQuickEditError("");
+          renderQuickEdit();
+        });
+
+        els.quickExitModeBoxes.addEventListener("click", function() {
+          state.quickExitMode = "boxes";
+          setQuickEditError("");
+          renderQuickEdit();
+        });
+
+        els.quickExitModeFraction.addEventListener("click", function() {
+          state.quickExitMode = "fraction";
+          setQuickEditError("");
+          renderQuickEdit();
+        });
+
+        els.quickExitModePacks.addEventListener("click", function() {
+          if (els.quickExitModePacks.disabled) return;
+          state.quickExitMode = "packs";
+          setQuickEditError("");
+          renderQuickEdit();
+        });
+
+        els.quickExitBoxesValue.addEventListener("input", function(event) {
+          handleQuickExitFieldChange("boxes", event.target.value);
+        });
+
+        els.quickExitPacksValue.addEventListener("input", function(event) {
+          handleQuickExitFieldChange("packs", event.target.value);
+        });
+
+        Array.prototype.forEach.call(els.quickExitFractionPanel.querySelectorAll("[data-fraction-choice]"), function(button) {
+          button.addEventListener("click", function() {
+            handleQuickExitFieldChange("fractionText", button.getAttribute("data-fraction-choice"));
+          });
+        });
+
         els.quickEditTail.addEventListener("input", function(event) {
-          handleQuickEditFieldChange("tail", event.target.value);
+          handleQuickEditFieldChange("tailInput", event.target.value);
         });
 
         els.quickEditUnitsPerBox.addEventListener("input", function(event) {
-          handleQuickEditFieldChange("unitsPerBox", event.target.value);
+          handleQuickEditFieldChange("unitsPerBoxInput", event.target.value);
         });
 
         els.quickEditItemBoxes.addEventListener("input", function(event) {

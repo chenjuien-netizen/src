@@ -44,6 +44,76 @@ function StockWebApp_getList() {
   return result.payload;
 }
 
+function StockWebApp_saveQuickEdit(input) {
+  const payload = input || {};
+  const mode = String(payload.mode || "").trim();
+  const itemId = String(payload.id || "").trim();
+  const inputReference = StockWebApp_normalizeReference_(payload.reference || "");
+  const rowIndex = StockWebApp_parseRowId_(itemId);
+
+  if (!rowIndex || rowIndex < 2) {
+    throw new Error("Ligne invalide. Merci de rafraichir la liste.");
+  }
+  if (!inputReference) {
+    throw new Error("Reference invalide. Merci de rafraichir la liste.");
+  }
+  if (mode !== "edit" && mode !== "quick-exit") {
+    throw new Error("Mode de sauvegarde invalide.");
+  }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName(SHEET_STOCK);
+  if (!sh) {
+    throw new Error("Feuille introuvable: " + SHEET_STOCK);
+  }
+
+  const lastCol = sh.getLastColumn();
+  if (lastCol < 1) {
+    throw new Error("La feuille STOCK ne contient aucun en-tete.");
+  }
+
+  const headers = sh.getRange(1, 1, 1, lastCol).getDisplayValues()[0];
+  const cols = StockWebApp_resolveColumns_(headers);
+  StockWebApp_assertQuickEditColumns_(cols);
+
+  const usedCols = StockWebApp_collectUsedColumns_(cols);
+  const minCol = usedCols.length ? Math.min.apply(null, usedCols) : 1;
+  const maxCol = usedCols.length ? Math.max.apply(null, usedCols) : 1;
+  const width = maxCol - minCol + 1;
+
+  const currentRow = sh.getRange(rowIndex, minCol, 1, width).getDisplayValues()[0];
+  const currentReference = StockWebApp_normalizeReference_(StockWebApp_getCellByAbsCol_(currentRow, cols.reference, minCol));
+  if (!currentReference) {
+    throw new Error("La ligne cible est introuvable. Merci de rafraichir la liste.");
+  }
+  if (currentReference !== inputReference) {
+    throw new Error("La ligne a change depuis l'ouverture. Merci de rafraichir la liste.");
+  }
+
+  const currentItem = StockWebApp_buildItem_(currentRow, cols, rowIndex, minCol);
+  if (!currentItem) {
+    throw new Error("Impossible de relire la reference cible.");
+  }
+
+  const nextState = mode === "edit"
+    ? StockWebApp_buildEditStateFromInput_(payload)
+    : StockWebApp_buildQuickExitStateFromInput_(payload, currentItem);
+
+  StockWebApp_writeQuickEditState_(sh, rowIndex, cols, nextState);
+
+  const refreshedRow = sh.getRange(rowIndex, minCol, 1, width).getDisplayValues()[0];
+  const refreshedItem = StockWebApp_buildItem_(refreshedRow, cols, rowIndex, minCol);
+  if (!refreshedItem) {
+    throw new Error("Impossible de relire la reference apres sauvegarde.");
+  }
+
+  return {
+    item: refreshedItem,
+    savedAt: new Date().toISOString(),
+    message: mode === "quick-exit" ? "Sortie appliquee" : "Modification enregistree"
+  };
+}
+
 function StockWebApp_collectPayload_(limit) {
   const totalStart = Date.now();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -299,6 +369,89 @@ function StockWebApp_normalizeStateModel_(stateInput) {
   return state;
 }
 
+function StockWebApp_buildEditStateFromInput_(payload) {
+  const tail = Math.max(0, StockWebApp_toInt_(payload.tail));
+  const unitsPerBox = Math.max(0, StockWebApp_toInt_(payload.unitsPerBox));
+  const itemBoxes = Math.max(0, StockWebApp_toInt_(payload.itemBoxes));
+  const sign = StockWebApp_normalizeSign_(payload.sign);
+  const fractionText = StockWebApp_normalizeFractionText_(payload.fractionText);
+
+  if (payload.fractionText && !fractionText) {
+    throw new Error("Fraction invalide. Utilise un format du type 1/2.");
+  }
+
+  return StockWebApp_normalizeStateModel_({
+    tail: tail,
+    unitsPerBox: unitsPerBox,
+    itemBoxes: itemBoxes,
+    sign: sign,
+    fractionText: fractionText,
+    fractionValue: StockWebApp_parseFractionValue_(fractionText)
+  });
+}
+
+function StockWebApp_buildQuickExitStateFromInput_(payload, currentItem) {
+  const currentState = StockWebApp_normalizeStateModel_({
+    tail: currentItem.tail,
+    unitsPerBox: currentItem.unitsPerBox,
+    itemBoxes: currentItem.itemBoxes,
+    sign: currentItem.sign,
+    fractionText: currentItem.fractionText,
+    fractionValue: currentItem.fractionValue,
+    colisage: currentItem.colisage
+  });
+
+  const unitsPerBox = currentState.unitsPerBox;
+  const totalPieces = currentState.tail + (unitsPerBox * currentState.itemBoxes) + (unitsPerBox * currentState.fractionValue);
+  const exitMode = String(payload.exitMode || "").trim();
+  const exitValue = Math.max(0, StockWebApp_toInt_(payload.exitValue));
+  const exitFractionText = StockWebApp_normalizeFractionText_(payload.exitFractionText);
+  let exitPieces = 0;
+
+  if (unitsPerBox <= 0) {
+    throw new Error("Sortie rapide impossible sans 件/箱.");
+  }
+
+  if (exitMode === "boxes") {
+    if (!(exitValue > 0)) throw new Error("Indique un nombre de cartons positif.");
+    exitPieces = unitsPerBox * exitValue;
+  } else if (exitMode === "fraction") {
+    const fractionValue = StockWebApp_parseFractionValue_(exitFractionText);
+    if (!(fractionValue > 0) || !exitFractionText) {
+      throw new Error("Selectionne une fraction valide.");
+    }
+    exitPieces = unitsPerBox * fractionValue;
+  } else if (exitMode === "packs") {
+    const colisage = StockWebApp_parsePositiveNumber_(currentItem.colisage);
+    if (!(colisage > 0)) {
+      throw new Error("Mode paquets indisponible pour cette reference.");
+    }
+    if (!(exitValue > 0)) throw new Error("Indique un nombre de paquets positif.");
+    exitPieces = colisage * exitValue;
+  } else {
+    throw new Error("Mode de sortie invalide.");
+  }
+
+  const newTotal = totalPieces - exitPieces;
+  if (newTotal < 0) {
+    throw new Error("La sortie depasse le stock disponible.");
+  }
+
+  const newItemBoxes = Math.floor(newTotal / unitsPerBox);
+  const remainder = newTotal - (newItemBoxes * unitsPerBox);
+  const hasRemainder = remainder > 0;
+
+  return StockWebApp_normalizeStateModel_({
+    tail: 0,
+    unitsPerBox: unitsPerBox,
+    itemBoxes: newItemBoxes,
+    sign: hasRemainder ? (newItemBoxes > 0 ? "+" : "×") : "",
+    fractionText: hasRemainder ? StockWebApp_fractionToText_(remainder / unitsPerBox) : "",
+    fractionValue: hasRemainder ? (remainder / unitsPerBox) : 0,
+    colisage: currentItem.colisage
+  });
+}
+
 function StockWebApp_computeStockStateFromModel_(stateInput) {
   const state = StockWebApp_normalizeStateModel_(stateInput || {});
   if (state.tail > 0) return "positive";
@@ -339,6 +492,38 @@ function StockWebApp_collectAvailableFilters_(items) {
       { value: "zero", label: "Zero" }
     ]
   };
+}
+
+function StockWebApp_assertQuickEditColumns_(cols) {
+  if (!cols.tailRaw || !cols.unitsPerBoxRaw || !cols.boxesRaw || !cols.signRaw || !cols.fractionRaw) {
+    throw new Error("Colonnes quick edit introuvables dans STOCK.");
+  }
+}
+
+function StockWebApp_parseRowId_(value) {
+  const match = String(value || "").match(/^row_(\d+)$/);
+  return match ? Number(match[1]) : 0;
+}
+
+function StockWebApp_writeQuickEditState_(sheet, rowIndex, cols, state) {
+  const normalized = StockWebApp_normalizeStateModel_(state || {});
+  sheet.getRange(rowIndex, cols.tailRaw).setValue(normalized.tail);
+  sheet.getRange(rowIndex, cols.unitsPerBoxRaw).setValue(normalized.unitsPerBox);
+  sheet.getRange(rowIndex, cols.boxesRaw).setValue(normalized.itemBoxes);
+  sheet.getRange(rowIndex, cols.signRaw).setValue(normalized.sign || "");
+
+  const fractionCell = sheet.getRange(rowIndex, cols.fractionRaw);
+  if (normalized.fractionValue > 0) {
+    fractionCell.setValue(normalized.fractionValue);
+    if (typeof StockMoves_applyFractionDisplayFormat_ === "function") {
+      StockMoves_applyFractionDisplayFormat_(fractionCell);
+    }
+  } else {
+    fractionCell.clearContent();
+    if (typeof StockMoves_applyFractionDisplayFormat_ === "function") {
+      StockMoves_applyFractionDisplayFormat_(fractionCell);
+    }
+  }
 }
 
 function StockWebApp_sortItems_(items, sortMode) {

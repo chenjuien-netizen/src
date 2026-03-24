@@ -554,14 +554,18 @@ function StockWebApp_renderItemHtml_(item) {
     : "text-on-surface-variant";
 
   return '' +
-    '<article class="inventory-card bg-surface-container-lowest relative border-l-4 ' + accentClass + ' flex min-h-[4.25rem] flex-col justify-between px-2.5 py-2 transition-colors duration-150 hover:bg-surface-container" data-reference="' + StockWebApp_escapeHtml_(reference) + '" data-stock-display="' + StockWebApp_escapeHtml_(stockDisplay) + '" data-stock-state="' + StockWebApp_escapeHtml_(item && item.stockState ? item.stockState : "zero") + '">' +
-      '<div class="flex items-start justify-between gap-2">' +
-        '<span class="truncate pr-2 text-[12px] font-bold tracking-tight text-on-surface">' + StockWebApp_escapeHtml_(reference) + '</span>' +
-        '<span class="material-symbols-outlined shrink-0 text-outline-variant !text-[14px]">inventory_2</span>' +
+    '<article class="inventory-card bg-surface-container-lowest relative border-l-4 ' + accentClass + ' flex min-h-[4.1rem] items-stretch transition-colors duration-150 hover:bg-surface-container select-none" data-reference="' + StockWebApp_escapeHtml_(reference) + '" data-stock-display="' + StockWebApp_escapeHtml_(stockDisplay) + '" data-stock-state="' + StockWebApp_escapeHtml_(item && item.stockState ? item.stockState : "zero") + '">' +
+      '<div class="flex min-w-0 flex-1 flex-col justify-between px-2.5 py-2">' +
+        '<div class="flex items-start gap-2">' +
+          '<span class="truncate pr-2 text-[12px] font-bold tracking-tight text-on-surface">' + StockWebApp_escapeHtml_(reference) + '</span>' +
+        '</div>' +
+        '<div class="mt-1.5">' +
+          '<span class="block truncate text-[13px] font-medium ' + stockClass + '">' + StockWebApp_escapeHtml_(stockDisplay) + '</span>' +
+        '</div>' +
       '</div>' +
-      '<div class="mt-2">' +
-        '<span class="block truncate text-[13px] font-medium ' + stockClass + '">' + StockWebApp_escapeHtml_(stockDisplay) + '</span>' +
-      '</div>' +
+      '<button class="reference-detail-trigger flex w-10 shrink-0 touch-manipulation select-none items-center justify-center border-l border-outline-variant/20 text-outline-variant transition-colors duration-150 hover:bg-surface-container-highest hover:text-on-surface-variant active:bg-surface-container-high" type="button" aria-label="Ouvrir la fiche de ' + StockWebApp_escapeHtml_(reference) + '" data-action="open-detail" data-reference="' + StockWebApp_escapeHtml_(reference) + '">' +
+        '<span class="material-symbols-outlined !text-[16px]">chevron_right</span>' +
+      '</button>' +
     '</article>';
 }
 

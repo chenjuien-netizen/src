@@ -99,99 +99,106 @@
         font-family: "Inter", sans-serif;
         background-color: #f7f9fb;
       }
+
+      .inventory-scroll {
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+      }
     </style>
   </head>
-  <body class="bg-background text-on-surface antialiased">
+  <body class="overflow-hidden bg-background text-on-surface antialiased">
     <script id="inventory-boot" type="application/json"><?!= initialBootJson ?></script>
 
-    <header class="fixed inset-x-0 top-0 z-50 flex h-14 items-center justify-between border-b border-slate-200 bg-slate-50 px-4">
-      <div class="flex items-center gap-3">
-        <button aria-label="Menu" class="rounded-full p-1 text-slate-700 transition-colors duration-150 hover:bg-slate-100">
-          <span class="material-symbols-outlined">menu</span>
-        </button>
-        <div>
-          <h1 class="text-lg font-extrabold uppercase tracking-tight text-slate-900">SZFASHION</h1>
-        </div>
-      </div>
-      <div class="flex items-center gap-1">
-        <button aria-label="Rafraîchir" class="rounded-full p-1 text-slate-700 transition-colors duration-150 hover:bg-slate-100" id="refreshButton" type="button">
-          <span class="material-symbols-outlined">refresh</span>
-        </button>
-      </div>
-    </header>
-
-    <main class="min-h-screen pb-20 pt-14">
-      <section class="border-b border-outline-variant/20 bg-surface-container-low px-3 py-2 shadow-ledger">
-        <div class="flex items-center gap-2">
-          <span class="material-symbols-outlined text-on-surface-variant">search</span>
-          <input autocomplete="off" class="w-full border-none bg-transparent p-0 text-[11px] font-medium tracking-tight text-on-surface placeholder:text-outline focus:ring-0" id="searchInput" placeholder="RECHERCHE RÉFÉRENCE / STOCK..." type="search" />
-          <span class="hidden rounded-full border border-outline-variant/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.2em] text-on-surface-variant sm:inline-flex" id="sortBadge">REF ASC</span>
-        </div>
-      </section>
-
-      <section class="border-b border-outline-variant/30 bg-surface-container-high">
-        <div class="flex divide-x divide-outline-variant/30">
-          <button class="flex flex-1 items-center justify-center gap-2 py-2 transition-colors duration-150 hover:bg-surface-container-highest" id="toggleFilterButton" type="button">
-            <span class="material-symbols-outlined !text-[16px] text-on-surface-variant">filter_list</span>
-            <span class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Filtrer</span>
-          </button>
-          <button class="flex flex-1 items-center justify-center gap-2 py-2 transition-colors duration-150 hover:bg-surface-container-highest" id="toggleSortButton" type="button">
-            <span class="material-symbols-outlined !text-[16px] text-on-surface-variant">sort</span>
-            <span class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Trier</span>
-          </button>
-        </div>
-
-        <div class="hidden border-t border-outline-variant/20 px-3 py-3" id="utilityPanel">
-          <div class="grid gap-3 sm:grid-cols-2">
-            <label class="block">
-              <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant">Etat stock</span>
-              <select class="w-full border-outline-variant/30 bg-surface-container-lowest text-[12px] font-medium text-on-surface" id="stockStateFilter">
-                <option value="all">Tous</option>
-                <option value="positive">En stock</option>
-                <option value="zero">En rupture</option>
-              </select>
-            </label>
-            <label class="block">
-              <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant">Tri</span>
-              <select class="w-full border-outline-variant/30 bg-surface-container-lowest text-[12px] font-medium text-on-surface" id="sortSelect">
-                <option value="ref_asc">Ref asc</option>
-                <option value="ref_desc">Ref desc</option>
-                <option value="stock_first">Stock d'abord</option>
-              </select>
-            </label>
-            <label class="block sm:col-span-2" id="warehouseFilterWrap">
-              <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant">Entrepot</span>
-              <select class="w-full border-outline-variant/30 bg-surface-container-lowest text-[12px] font-medium text-on-surface" id="warehouseFilter">
-                <option value="">Tous</option>
-              </select>
-            </label>
-          </div>
-        </div>
-      </section>
-
-      <section class="border-b border-outline-variant/30 bg-surface-container-high px-3 py-2">
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          <div class="flex min-w-0 flex-wrap items-center gap-2">
-            <div class="flex items-center gap-1 border border-outline-variant/20 bg-surface-container-lowest px-2 py-0.5">
-              <span class="material-symbols-outlined !text-[12px] text-primary">calendar_today</span>
-              <span class="text-[9px] font-bold tracking-tight text-primary" id="summaryDate">--/--/----</span>
-            </div>
-            <div class="flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">
-              <span id="summaryRefs">0 refs</span>
-              <span class="text-outline-variant/40">//</span>
-              <span id="summaryPositive">0 en stock</span>
-              <span class="text-outline-variant/40">//</span>
-              <span id="summaryZero">0 en rupture</span>
-              <span class="text-outline-variant/40">//</span>
-              <span id="summaryTotals">0 箱 0 件</span>
+    <main class="flex h-[100dvh] flex-col overflow-hidden pb-16">
+      <div class="z-40 shrink-0 bg-background">
+        <header class="flex h-14 items-center justify-between border-b border-slate-200 bg-slate-50 px-4">
+          <div class="flex items-center gap-3">
+            <button aria-label="Menu" class="rounded-full p-1 text-slate-700 transition-colors duration-150 hover:bg-slate-100">
+              <span class="material-symbols-outlined">menu</span>
+            </button>
+            <div>
+              <h1 class="text-lg font-extrabold uppercase tracking-tight text-slate-900">SZFASHION</h1>
             </div>
           </div>
-          <div class="text-right text-[9px] font-bold uppercase tracking-[0.2em] text-on-surface-variant" id="summaryStatus">Pret</div>
-        </div>
-        <div class="mt-2 flex flex-wrap gap-1" id="activeFilters"></div>
-      </section>
+          <div class="flex items-center gap-1">
+            <button aria-label="Rafraîchir" class="rounded-full p-1 text-slate-700 transition-colors duration-150 hover:bg-slate-100" id="refreshButton" type="button">
+              <span class="material-symbols-outlined">refresh</span>
+            </button>
+          </div>
+        </header>
 
-      <section class="bg-outline-variant/20">
+        <section class="border-b border-outline-variant/20 bg-surface-container-low px-3 py-1.5 shadow-ledger">
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-on-surface-variant !text-[16px]">search</span>
+            <input autocomplete="off" class="w-full border-none bg-transparent p-0 text-[10px] font-medium tracking-tight text-on-surface placeholder:text-outline focus:ring-0" id="searchInput" placeholder="RECHERCHE RÉFÉRENCE / STOCK..." type="search" />
+            <span class="hidden whitespace-nowrap rounded-full border border-outline-variant/30 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-[0.18em] text-on-surface-variant sm:inline-flex" id="sortBadge">REF ASC</span>
+          </div>
+        </section>
+
+        <section class="border-b border-outline-variant/30 bg-surface-container-high">
+          <div class="flex divide-x divide-outline-variant/30">
+            <button class="flex flex-1 items-center justify-center gap-1.5 py-1.5 transition-colors duration-150 hover:bg-surface-container-highest" id="toggleFilterButton" type="button">
+              <span class="material-symbols-outlined !text-[15px] text-on-surface-variant">filter_list</span>
+              <span class="text-[9px] font-bold uppercase tracking-widest text-on-surface-variant">Filtrer</span>
+            </button>
+            <button class="flex flex-1 items-center justify-center gap-1.5 py-1.5 transition-colors duration-150 hover:bg-surface-container-highest" id="toggleSortButton" type="button">
+              <span class="material-symbols-outlined !text-[15px] text-on-surface-variant">sort</span>
+              <span class="text-[9px] font-bold uppercase tracking-widest text-on-surface-variant">Trier</span>
+            </button>
+          </div>
+
+          <div class="hidden border-t border-outline-variant/20 px-3 py-2" id="utilityPanel">
+            <div class="grid gap-2 sm:grid-cols-2">
+              <label class="block">
+                <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant">Etat stock</span>
+                <select class="w-full border-outline-variant/30 bg-surface-container-lowest text-[12px] font-medium text-on-surface" id="stockStateFilter">
+                  <option value="all">Tous</option>
+                  <option value="positive">En stock</option>
+                  <option value="zero">En rupture</option>
+                </select>
+              </label>
+              <label class="block">
+                <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant">Tri</span>
+                <select class="w-full border-outline-variant/30 bg-surface-container-lowest text-[12px] font-medium text-on-surface" id="sortSelect">
+                  <option value="ref_asc">Ref asc</option>
+                  <option value="ref_desc">Ref desc</option>
+                  <option value="stock_first">Stock d'abord</option>
+                </select>
+              </label>
+              <label class="block sm:col-span-2" id="warehouseFilterWrap">
+                <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant">Entrepot</span>
+                <select class="w-full border-outline-variant/30 bg-surface-container-lowest text-[12px] font-medium text-on-surface" id="warehouseFilter">
+                  <option value="">Tous</option>
+                </select>
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <section class="border-b border-outline-variant/30 bg-surface-container-high px-3 py-1.5">
+          <div class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+            <div class="flex min-w-0 flex-wrap items-center gap-1.5">
+              <div class="flex items-center gap-1 border border-outline-variant/20 bg-surface-container-lowest px-1.5 py-0.5">
+                <span class="material-symbols-outlined !text-[11px] text-primary">calendar_today</span>
+                <span class="text-[8px] font-bold tracking-tight text-primary" id="summaryDate">--/--/----</span>
+              </div>
+              <div class="flex min-w-0 flex-wrap items-center gap-1 text-[8px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">
+                <span id="summaryRefs">0 refs</span>
+                <span class="text-outline-variant/40">//</span>
+                <span id="summaryPositive">0 en stock</span>
+                <span class="text-outline-variant/40">//</span>
+                <span id="summaryZero">0 en rupture</span>
+                <span class="text-outline-variant/40">//</span>
+                <span id="summaryTotals">0 箱 0 件</span>
+              </div>
+            </div>
+            <div class="text-right text-[8px] font-bold uppercase tracking-[0.18em] text-on-surface-variant" id="summaryStatus">Pret</div>
+          </div>
+          <div class="mt-1 flex flex-wrap gap-1" id="activeFilters"></div>
+        </section>
+      </div>
+
+      <section class="inventory-scroll min-h-0 flex-1 overflow-y-auto bg-outline-variant/20" id="inventoryScroll">
         <div class="bg-outline-variant/20" id="inventoryGrid">
           <?!= initialListMarkup ?>
         </div>
@@ -240,6 +247,7 @@
 
         const els = {
           grid: document.getElementById("inventoryGrid"),
+          inventoryScroll: document.getElementById("inventoryScroll"),
           emptyState: document.getElementById("emptyState"),
           searchInput: document.getElementById("searchInput"),
           refreshButton: document.getElementById("refreshButton"),
@@ -276,14 +284,18 @@
           const stockClass = item && item.stockState === "positive" ? "text-primary" : "text-on-surface-variant";
 
           return '' +
-            '<article class="inventory-card bg-surface-container-lowest relative border-l-4 ' + accentClass + ' flex min-h-[4.25rem] flex-col justify-between px-2.5 py-2 transition-colors duration-150 hover:bg-surface-container" data-reference="' + escapeHtml(reference) + '" data-stock-display="' + escapeHtml(stockDisplay) + '" data-stock-state="' + escapeHtml(item && item.stockState ? item.stockState : "zero") + '">' +
-              '<div class="flex items-start justify-between gap-2">' +
-                '<span class="truncate pr-2 text-[12px] font-bold tracking-tight text-on-surface">' + escapeHtml(reference) + '</span>' +
-                '<span class="material-symbols-outlined shrink-0 text-outline-variant !text-[14px]">inventory_2</span>' +
+            '<article class="inventory-card bg-surface-container-lowest relative border-l-4 ' + accentClass + ' flex min-h-[4.1rem] items-stretch transition-colors duration-150 hover:bg-surface-container select-none" data-reference="' + escapeHtml(reference) + '" data-stock-display="' + escapeHtml(stockDisplay) + '" data-stock-state="' + escapeHtml(item && item.stockState ? item.stockState : "zero") + '">' +
+              '<div class="flex min-w-0 flex-1 flex-col justify-between px-2.5 py-2">' +
+                '<div class="flex items-start gap-2">' +
+                  '<span class="truncate pr-2 text-[12px] font-bold tracking-tight text-on-surface">' + escapeHtml(reference) + '</span>' +
+                '</div>' +
+                '<div class="mt-1.5">' +
+                  '<span class="block truncate text-[13px] font-medium ' + stockClass + '">' + escapeHtml(stockDisplay) + '</span>' +
+                '</div>' +
               '</div>' +
-              '<div class="mt-2">' +
-                '<span class="block truncate text-[13px] font-medium ' + stockClass + '">' + escapeHtml(stockDisplay) + '</span>' +
-              '</div>' +
+              '<button class="reference-detail-trigger flex w-10 shrink-0 touch-manipulation select-none items-center justify-center border-l border-outline-variant/20 text-outline-variant transition-colors duration-150 hover:bg-surface-container-highest hover:text-on-surface-variant active:bg-surface-container-high" type="button" aria-label="Ouvrir la fiche de ' + escapeHtml(reference) + '" data-action="open-detail" data-reference="' + escapeHtml(reference) + '">' +
+                '<span class="material-symbols-outlined !text-[16px]">chevron_right</span>' +
+              '</button>' +
             '</article>';
         }
 
@@ -479,6 +491,13 @@
           }).join("");
         }
 
+        function handleOpenReferenceDetail(reference) {
+          const normalizedReference = String(reference || "").trim();
+          if (!normalizedReference) return;
+          state.lastError = "";
+          els.summaryStatus.textContent = "Fiche " + normalizedReference + " bientot";
+        }
+
         function renderSummary(visibleItems) {
           const positiveCount = visibleItems.filter(function(item) {
             return item && item.stockState === "positive";
@@ -590,6 +609,14 @@
 
         els.refreshButton.addEventListener("click", function() {
           runRefresh(false);
+        });
+
+        els.grid.addEventListener("click", function(event) {
+          const trigger = event.target.closest('[data-action="open-detail"]');
+          if (!trigger) return;
+          event.preventDefault();
+          event.stopPropagation();
+          handleOpenReferenceDetail(trigger.getAttribute("data-reference"));
         });
 
         els.toggleFilterButton.addEventListener("click", function() {

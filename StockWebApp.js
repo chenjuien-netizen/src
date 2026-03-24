@@ -208,6 +208,7 @@ function StockWebApp_buildItem_(row, cols, rowIndex, baseCol) {
     tail: stateModel.tail,
     unitsPerBox: stateModel.unitsPerBox,
     itemBoxes: stateModel.itemBoxes,
+    sign: stateModel.sign,
     fractionText: stateModel.fractionText,
     fractionValue: stateModel.fractionValue,
     colisage: stateModel.colisage,

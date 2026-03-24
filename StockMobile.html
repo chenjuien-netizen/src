@@ -110,7 +110,6 @@
           <span class="material-symbols-outlined">menu</span>
         </button>
         <div>
-          <p class="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-500">Stock Ledger</p>
           <h1 class="text-lg font-extrabold uppercase tracking-tight text-slate-900">SZFASHION</h1>
         </div>
       </div>
@@ -180,9 +179,9 @@
             <div class="flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">
               <span id="summaryRefs">0 refs</span>
               <span class="text-outline-variant/40">//</span>
-              <span id="summaryPositive">0 stock</span>
+              <span id="summaryPositive">0 en stock</span>
               <span class="text-outline-variant/40">//</span>
-              <span id="summaryZero">0 zero</span>
+              <span id="summaryZero">0 en rupture</span>
               <span class="text-outline-variant/40">//</span>
               <span id="summaryTotals">0 箱 0 件</span>
             </div>
@@ -323,8 +322,7 @@
         function formatMetricNumber(value) {
           const numeric = Number(value || 0);
           if (!Number.isFinite(numeric) || numeric <= 0) return "0";
-          const rounded = Math.round(numeric * 100) / 100;
-          return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2).replace(/\.?0+$/, "");
+          return String(Math.max(0, Math.floor(numeric)));
         }
 
         function computeInventoryTotals_(items) {
@@ -332,19 +330,41 @@
             const tail = toPositiveNumber(item && item.tail);
             const unitsPerBox = toPositiveNumber(item && item.unitsPerBox);
             const itemBoxes = toPositiveNumber(item && item.itemBoxes);
+            const sign = String(item && item.sign ? item.sign : "").trim();
             const fractionValue = toPositiveNumber(item && item.fractionValue) || parseFraction(item && item.fractionText);
             const colisage = toPositiveNumber(item && item.colisage);
-            const itemPieces = tail + ((unitsPerBox > 0) ? ((unitsPerBox * itemBoxes) + (unitsPerBox * fractionValue)) : 0);
-
-            acc.totalPieces += itemPieces;
-            if (tail > 0) acc.totalBoxes += 1;
+            let itemPieces = tail;
+            let cartonCount = tail > 0 ? 1 : 0;
 
             if (unitsPerBox > 0) {
-              acc.totalBoxes += itemBoxes + fractionValue;
+              if (sign === "+") {
+                itemPieces += (unitsPerBox * itemBoxes) + (unitsPerBox * fractionValue);
+                cartonCount += itemBoxes + (fractionValue > 0 ? 1 : 0);
+              } else if (sign === "×") {
+                if (itemBoxes > 1) {
+                  itemPieces += unitsPerBox * itemBoxes * fractionValue;
+                  cartonCount += itemBoxes;
+                } else if (itemBoxes > 0) {
+                  itemPieces += unitsPerBox * fractionValue;
+                  cartonCount += itemBoxes;
+                } else if (fractionValue > 0) {
+                  itemPieces += unitsPerBox * fractionValue;
+                  cartonCount += 1;
+                }
+              } else {
+                itemPieces += unitsPerBox * itemBoxes;
+                cartonCount += itemBoxes;
+                if (fractionValue > 0) cartonCount += 1;
+              }
+            } else if (fractionValue > 0 && itemBoxes <= 0) {
+              cartonCount += 1;
             }
 
+            acc.totalPieces += itemPieces;
+            acc.totalBoxes += cartonCount;
+
             if (colisage > 0) {
-              acc.totalPacks += itemPieces / colisage;
+              acc.totalPacks += Math.floor(itemPieces / colisage);
               acc.hasPackData = true;
             } else {
               acc.allItemsHaveColisage = false;
@@ -364,7 +384,7 @@
           const labels = [];
           if (state.query) labels.push("Recherche: " + state.query);
           if (state.stockState === "positive") labels.push("En stock");
-          if (state.stockState === "zero") labels.push("Zero");
+          if (state.stockState === "zero") labels.push("En rupture");
           if (state.warehouse) labels.push(state.warehouse);
           return labels;
         }
@@ -436,8 +456,8 @@
 
           els.summaryDate.textContent = formatDateLabel(state.generatedAt || (state.summary && state.summary.generatedAt) || "");
           els.summaryRefs.textContent = refsText;
-          els.summaryPositive.textContent = positiveCount + " stock";
-          els.summaryZero.textContent = Math.max(0, visibleItems.length - positiveCount) + " zero";
+          els.summaryPositive.textContent = positiveCount + " en stock";
+          els.summaryZero.textContent = Math.max(0, visibleItems.length - positiveCount) + " en rupture";
           els.summaryTotals.textContent = summarySegments.join(" ");
 
           if (state.isRefreshing) {

@@ -92,7 +92,10 @@
       html,
       body {
         height: 100%;
+        min-height: 100dvh;
+        max-height: 100dvh;
         overflow: hidden;
+        overscroll-behavior: none;
       }
 
       body {
@@ -111,12 +114,12 @@
       }
     </style>
   </head>
-  <body class="h-[100dvh] overflow-hidden bg-background text-on-surface antialiased">
+  <body class="h-[100dvh] max-h-[100dvh] overflow-hidden bg-background text-on-surface antialiased">
     <script id="inventory-boot" type="application/json"><?!= initialBootJson ?></script>
 
-    <main class="fixed inset-x-0 top-0 bottom-16 flex overflow-hidden bg-background">
-      <div class="flex min-h-0 w-full flex-col overflow-hidden">
-      <div class="z-40 shrink-0 bg-background">
+    <div class="fixed inset-x-0 top-0 bottom-16 overflow-hidden bg-background" id="inventoryAppShell">
+      <main class="flex h-full min-h-0 flex-col overflow-hidden">
+      <div class="sticky top-0 z-40 shrink-0 bg-background">
         <header class="flex h-14 items-center justify-between border-b border-slate-200 bg-slate-50 px-4">
           <div class="flex items-center gap-3">
             <button aria-label="Menu" class="rounded-full p-1 text-slate-700 transition-colors duration-150 hover:bg-slate-100">
@@ -213,8 +216,8 @@
           <p class="mt-1 text-[12px] text-on-surface-variant">Ajuste la recherche ou les filtres pour afficher des references.</p>
         </div>
       </section>
-      </div>
-    </main>
+      </main>
+    </div>
 
     <div class="quick-edit-overlay fixed inset-0 z-[60] hidden items-center justify-center bg-on-background/35 px-3 py-6" id="quickEditOverlay" role="presentation">
       <div aria-modal="true" class="max-h-[calc(100dvh-4rem)] w-full max-w-md overflow-hidden border border-outline-variant/20 bg-surface-container-lowest shadow-[0_18px_48px_rgba(11,15,16,0.18)]" id="quickEditModal" role="dialog" aria-labelledby="quickEditReference">
@@ -602,7 +605,6 @@
           const isOpen = !!state.quickEditOpen && !!state.quickEditItem;
           els.quickEditOverlay.classList.toggle("hidden", !isOpen);
           els.quickEditOverlay.classList.toggle("flex", isOpen);
-          document.body.classList.toggle("overflow-hidden", isOpen);
           if (!isOpen) return;
 
           const item = state.quickEditItem || {};

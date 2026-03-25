@@ -362,7 +362,14 @@
           quickExitMode: "boxes",
           quickExitForm: null,
           quickEditError: "",
-          quickEditSaving: false
+          quickEditSaving: false,
+          pendingSaveById: {},
+          lastSyncFeedback: {
+            kind: "",
+            message: "",
+            expiresAt: 0
+          },
+          syncFeedbackTimer: 0
         };
 
         const els = {
@@ -432,12 +439,14 @@
           const itemId = item && item.id ? item.id : reference;
           const accentClass = item && item.stockState === "positive" ? "border-emerald-400/50" : "border-rose-400/50";
           const stockClass = item && item.stockState === "positive" ? "text-primary" : "text-on-surface-variant";
+          const pendingClass = isItemPending(itemId) ? " opacity-80" : "";
 
           return '' +
-            '<article class="inventory-card bg-surface-container-lowest relative border-l-4 ' + accentClass + ' flex min-h-[4.1rem] items-stretch transition-colors duration-150 hover:bg-surface-container select-none" data-item-id="' + escapeHtml(itemId) + '" data-reference="' + escapeHtml(reference) + '" data-stock-display="' + escapeHtml(stockDisplay) + '" data-stock-state="' + escapeHtml(item && item.stockState ? item.stockState : "zero") + '">' +
+            '<article class="inventory-card bg-surface-container-lowest relative border-l-4 ' + accentClass + pendingClass + ' flex min-h-[4.1rem] items-stretch transition-colors duration-150 hover:bg-surface-container select-none" data-item-id="' + escapeHtml(itemId) + '" data-reference="' + escapeHtml(reference) + '" data-stock-display="' + escapeHtml(stockDisplay) + '" data-stock-state="' + escapeHtml(item && item.stockState ? item.stockState : "zero") + '">' +
               '<button class="inventory-card-main flex min-w-0 flex-1 flex-col justify-between px-2.5 py-2 text-left" type="button" data-action="open-quick-edit" data-item-id="' + escapeHtml(itemId) + '">' +
                 '<div class="flex items-start gap-2">' +
                   '<span class="truncate pr-2 text-[12px] font-bold tracking-tight text-on-surface">' + escapeHtml(reference) + '</span>' +
+                  (isItemPending(itemId) ? '<span class="shrink-0 rounded border border-outline-variant/30 px-1 py-0.5 text-[8px] font-bold uppercase tracking-[0.14em] text-on-surface-variant">Sync</span>' : '') +
                 '</div>' +
                 '<div class="mt-1.5">' +
                   '<span class="block truncate text-[13px] font-medium ' + stockClass + '">' + escapeHtml(stockDisplay) + '</span>' +
@@ -800,6 +809,51 @@
           state.quickEditError = String(message || "").trim();
         }
 
+        function setLastSyncFeedback(kind, message, durationMs) {
+          state.lastSyncFeedback = {
+            kind: String(kind || ""),
+            message: String(message || ""),
+            expiresAt: durationMs ? (Date.now() + durationMs) : 0
+          };
+
+          window.clearTimeout(state.syncFeedbackTimer || 0);
+          if (state.lastSyncFeedback.expiresAt > 0) {
+            state.syncFeedbackTimer = window.setTimeout(function() {
+              if (Object.keys(state.pendingSaveById || {}).length > 0) return;
+              state.lastSyncFeedback = { kind: "", message: "", expiresAt: 0 };
+              renderSummary(getVisibleItems());
+            }, durationMs);
+          }
+        }
+
+        function updateSyncStatus_() {
+          const pendingIds = Object.keys(state.pendingSaveById || {});
+          if (pendingIds.length > 0) {
+            els.summaryStatus.textContent = "Synchronisation...";
+            return;
+          }
+
+          const feedback = state.lastSyncFeedback || {};
+          if (feedback.message && feedback.expiresAt && feedback.expiresAt > Date.now()) {
+            els.summaryStatus.textContent = feedback.message;
+            return;
+          }
+
+          state.lastSyncFeedback = { kind: "", message: "", expiresAt: 0 };
+
+          if (state.isRefreshing) {
+            els.summaryStatus.textContent = "Refresh...";
+          } else if (state.lastError) {
+            els.summaryStatus.textContent = state.lastError;
+          } else if (getActiveFilterLabels().length) {
+            els.summaryStatus.textContent = "Filtres actifs";
+          } else if (state.summary && state.summary.isPartial) {
+            els.summaryStatus.textContent = "Lot initial";
+          } else {
+            els.summaryStatus.textContent = "Pret";
+          }
+        }
+
         function replaceItemInState(updatedItem) {
           const targetId = String(updatedItem && updatedItem.id ? updatedItem.id : "").trim();
           if (!targetId) return false;
@@ -817,6 +871,66 @@
           return state.items.find(function(item) {
             return String(item && item.id ? item.id : "") === normalizedId;
           }) || null;
+        }
+
+        function isItemPending(itemId) {
+          const normalizedId = String(itemId || "").trim();
+          return !!(normalizedId && state.pendingSaveById && state.pendingSaveById[normalizedId]);
+        }
+
+        function buildOptimisticItemFromRequest(baseItem, request) {
+          if (!baseItem || !request) return null;
+
+          if (request.mode === "edit") {
+            const nextFractionText = sanitizeFractionText(request.fractionText);
+            const nextFractionValue = parseFraction(nextFractionText);
+            const nextItem = Object.assign({}, baseItem, {
+              tail: Math.max(0, Math.trunc(Number(request.tail) || 0)),
+              unitsPerBox: Math.max(0, Math.trunc(Number(request.unitsPerBox) || 0)),
+              itemBoxes: Math.max(0, Math.trunc(Number(request.itemBoxes) || 0)),
+              sign: sanitizeSign(request.sign),
+              fractionText: nextFractionText,
+              fractionValue: nextFractionValue
+            });
+            nextItem.stockDisplay = buildLocalStockDisplay(nextItem);
+            nextItem.stockState = (nextItem.tail > 0 || (nextItem.unitsPerBox > 0 && (nextItem.itemBoxes > 0 || nextItem.fractionValue > 0))) ? "positive" : "zero";
+            return nextItem;
+          }
+
+          if (request.mode === "quick-exit") {
+            const unitsPerBox = toPositiveNumber(baseItem.unitsPerBox);
+            const totalPieces = toPositiveNumber(baseItem.tail) + (unitsPerBox * toPositiveNumber(baseItem.itemBoxes)) + (unitsPerBox * (toPositiveNumber(baseItem.fractionValue) || parseFraction(baseItem.fractionText)));
+            let exitPieces = 0;
+
+            if (request.exitMode === "boxes") {
+              exitPieces = unitsPerBox * Math.max(0, Math.trunc(Number(request.exitValue) || 0));
+            } else if (request.exitMode === "fraction") {
+              exitPieces = unitsPerBox * parseFraction(request.exitFractionText);
+            } else if (request.exitMode === "packs") {
+              exitPieces = toPositiveNumber(baseItem.colisage) * Math.max(0, Math.trunc(Number(request.exitValue) || 0));
+            }
+
+            const newTotal = totalPieces - exitPieces;
+            if (newTotal < 0 || !(unitsPerBox > 0)) return null;
+
+            const nextBoxes = Math.floor(newTotal / unitsPerBox);
+            const remainder = newTotal - (nextBoxes * unitsPerBox);
+            const nextFractionValue = remainder > 0 ? (remainder / unitsPerBox) : 0;
+            const nextFractionText = nextFractionValue > 0 ? fractionToText(nextFractionValue) : "";
+            const nextItem = Object.assign({}, baseItem, {
+              tail: 0,
+              unitsPerBox: unitsPerBox,
+              itemBoxes: nextBoxes,
+              sign: nextFractionValue > 0 ? (nextBoxes > 0 ? "+" : "×") : "",
+              fractionText: nextFractionText,
+              fractionValue: nextFractionValue
+            });
+            nextItem.stockDisplay = buildLocalStockDisplay(nextItem);
+            nextItem.stockState = (nextItem.tail > 0 || (nextItem.unitsPerBox > 0 && (nextItem.itemBoxes > 0 || nextItem.fractionValue > 0))) ? "positive" : "zero";
+            return nextItem;
+          }
+
+          return null;
         }
 
         function renderQuickEdit() {
@@ -875,6 +989,12 @@
 
         function openQuickEdit(item) {
           if (!item) return;
+          if (isItemPending(item.id)) {
+            state.lastError = "";
+            setLastSyncFeedback("pending", "Synchronisation...", 0);
+            renderSummary(getVisibleItems());
+            return;
+          }
           state.quickEditItem = item;
           state.quickEditOpen = true;
           state.quickEditTab = "quick-exit";
@@ -1034,25 +1154,34 @@
 
         function handleQuickEditSaveSuccess(result) {
           const updatedItem = result && result.item ? result.item : null;
+          const itemId = String(updatedItem && updatedItem.id ? updatedItem.id : result && result.id ? result.id : "").trim();
+          if (itemId && state.pendingSaveById[itemId]) {
+            delete state.pendingSaveById[itemId];
+          }
+
           if (!updatedItem || !replaceItemInState(updatedItem)) {
-            setQuickEditError("La reference n'est plus synchronisee. Merci de rafraichir.");
-            state.quickEditSaving = false;
-            renderQuickEdit();
+            setLastSyncFeedback("error", "Échec enregistrement", 3200);
+            renderGrid();
             return;
           }
 
-          const successMessage = result && result.message ? result.message : "Enregistre";
           state.lastError = "";
-          state.quickEditSaving = false;
+          setLastSyncFeedback("success", "Enregistré", 2800);
           renderGrid();
-          closeQuickEdit();
-          els.summaryStatus.textContent = successMessage;
         }
 
-        function handleQuickEditSaveFailure(error) {
-          state.quickEditSaving = false;
-          setQuickEditError(error && error.message ? error.message : "Erreur de sauvegarde");
-          renderQuickEdit();
+        function handleQuickEditSaveFailure(itemId, error) {
+          const normalizedId = String(itemId || "").trim();
+          const pendingEntry = normalizedId ? state.pendingSaveById[normalizedId] : null;
+          if (pendingEntry && pendingEntry.previousItem) {
+            replaceItemInState(pendingEntry.previousItem);
+          }
+          if (normalizedId && state.pendingSaveById[normalizedId]) {
+            delete state.pendingSaveById[normalizedId];
+          }
+          state.lastError = "";
+          setLastSyncFeedback("error", "Échec enregistrement", 3200);
+          renderGrid();
         }
 
         function handleQuickEditSave() {
@@ -1071,13 +1200,49 @@
             return;
           }
 
+          const currentItem = getItemById(request.id);
+          if (!currentItem) {
+            setQuickEditError("Reference introuvable. Merci de rafraichir.");
+            renderQuickEdit();
+            return;
+          }
+          if (isItemPending(currentItem.id)) {
+            setQuickEditError("Synchronisation en cours sur cette reference.");
+            renderQuickEdit();
+            return;
+          }
+
+          const optimisticItem = buildOptimisticItemFromRequest(currentItem, request);
+          if (!optimisticItem) {
+            setQuickEditError("Impossible de calculer la mise a jour locale.");
+            renderQuickEdit();
+            return;
+          }
+
+          const itemId = String(currentItem.id || "").trim();
           state.quickEditSaving = true;
           setQuickEditError("");
-          renderQuickEdit();
+          state.pendingSaveById[itemId] = {
+            previousItem: Object.assign({}, currentItem),
+            optimisticItem: Object.assign({}, optimisticItem),
+            request: Object.assign({}, request),
+            startedAt: Date.now(),
+            status: "pending"
+          };
+          replaceItemInState(optimisticItem);
+          closeQuickEdit();
+          renderGrid();
+          state.lastError = "";
+          setLastSyncFeedback("pending", "Synchronisation...", 0);
+          renderSummary(getVisibleItems());
 
           google.script.run
-            .withSuccessHandler(handleQuickEditSaveSuccess)
-            .withFailureHandler(handleQuickEditSaveFailure)
+            .withSuccessHandler(function(result) {
+              handleQuickEditSaveSuccess(result);
+            })
+            .withFailureHandler(function(error) {
+              handleQuickEditSaveFailure(itemId, error);
+            })
             .StockWebApp_saveQuickEdit(request);
         }
 
@@ -1112,17 +1277,7 @@
           els.summaryZero.textContent = Math.max(0, visibleItems.length - positiveCount) + " en rupture";
           els.summaryTotals.textContent = summarySegments.join(" ");
 
-          if (state.isRefreshing) {
-            els.summaryStatus.textContent = "Refresh...";
-          } else if (state.lastError) {
-            els.summaryStatus.textContent = state.lastError;
-          } else if (getActiveFilterLabels().length) {
-            els.summaryStatus.textContent = "Filtres actifs";
-          } else if (state.summary && state.summary.isPartial) {
-            els.summaryStatus.textContent = "Lot initial";
-          } else {
-            els.summaryStatus.textContent = "Pret";
-          }
+          updateSyncStatus_();
         }
 
         function renderGrid() {

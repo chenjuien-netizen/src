@@ -1292,13 +1292,13 @@
             ? visibleItems.length + " / " + totalLoaded + " " + (visibleItems.length === 1 ? "ref" : "refs")
             : visibleItems.length + " " + (visibleItems.length === 1 ? "ref" : "refs");
           const summarySegments = [
-            formatMetricNumber(totals.totalBoxes) + " 箱"
+            formatMetricNumber(totals.totalBoxes) + "箱"
           ];
 
           if (totals.hasPackData && totals.totalPacks > 0) {
-            summarySegments.push(formatMetricNumber(totals.totalPacks) + " 包");
+            summarySegments.push(formatMetricNumber(totals.totalPacks) + "包");
           }
-          summarySegments.push(formatMetricNumber(totals.totalPieces) + " 件");
+          summarySegments.push(formatMetricNumber(totals.totalPieces) + "件");
 
           els.summaryDate.textContent = formatDateLabel(state.generatedAt || (state.summary && state.summary.generatedAt) || "");
           els.summaryRefs.textContent = refsText;

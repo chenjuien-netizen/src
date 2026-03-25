@@ -227,7 +227,7 @@
               <div class="truncate text-lg font-black tracking-tight text-on-surface" id="quickEditReference">-</div>
             </div>
             <div class="text-right">
-              <div class="text-[0.625rem] font-bold uppercase tracking-[0.2em] text-on-surface-variant">STOCK_ACTUEL</div>
+              <div class="text-[0.625rem] font-bold uppercase tracking-[0.2em] text-on-surface-variant">STOCK ACTUEL</div>
               <div class="text-sm font-bold text-primary" id="quickEditStockDisplay">-</div>
             </div>
           </div>
@@ -297,14 +297,14 @@
               </div>
               <div class="grid grid-cols-[6rem,1fr] gap-3">
                 <label class="block">
-                  <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">当前signe</span>
+                  <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">符号</span>
                   <select class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-semibold text-on-surface" id="quickEditSign">
                     <option value="+">+</option>
                     <option value="×">×</option>
                   </select>
                 </label>
                 <label class="block">
-                  <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">当前箱数分数</span>
+                  <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">分数</span>
                   <input class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-semibold text-on-surface" id="quickEditFractionText" inputmode="text" maxlength="10" placeholder="1/2" type="text" />
                   <span class="mt-1 block text-[10px] text-on-surface-variant" id="quickEditFractionHint">Format attendu: 1/2, 2/3, 3/4</span>
                 </label>
@@ -826,6 +826,15 @@
           }
         }
 
+        function clearPendingSaveEntry(itemId) {
+          const normalizedId = String(itemId || "").trim();
+          const pending = normalizedId ? state.pendingSaveById[normalizedId] : null;
+          if (!pending) return null;
+          window.clearTimeout(pending.timeoutId || 0);
+          delete state.pendingSaveById[normalizedId];
+          return pending;
+        }
+
         function updateSyncStatus_() {
           const pendingIds = Object.keys(state.pendingSaveById || {});
           if (pendingIds.length > 0) {
@@ -1152,12 +1161,14 @@
           return null;
         }
 
-        function handleQuickEditSaveSuccess(result) {
+        function handleQuickEditSaveSuccess(itemId, startedAt, result) {
+          const normalizedId = String(itemId || "").trim();
+          const pending = normalizedId ? state.pendingSaveById[normalizedId] : null;
+          if (!pending) return;
+          if (pending.startedAt !== startedAt) return;
+
           const updatedItem = result && result.item ? result.item : null;
-          const itemId = String(updatedItem && updatedItem.id ? updatedItem.id : result && result.id ? result.id : "").trim();
-          if (itemId && state.pendingSaveById[itemId]) {
-            delete state.pendingSaveById[itemId];
-          }
+          clearPendingSaveEntry(normalizedId);
 
           if (!updatedItem || !replaceItemInState(updatedItem)) {
             setLastSyncFeedback("error", "Échec enregistrement", 3200);
@@ -1170,15 +1181,16 @@
           renderGrid();
         }
 
-        function handleQuickEditSaveFailure(itemId, error) {
+        function handleQuickEditSaveFailure(itemId, startedAt, error) {
           const normalizedId = String(itemId || "").trim();
           const pendingEntry = normalizedId ? state.pendingSaveById[normalizedId] : null;
+          if (!pendingEntry) return;
+          if (pendingEntry.startedAt !== startedAt) return;
+
           if (pendingEntry && pendingEntry.previousItem) {
             replaceItemInState(pendingEntry.previousItem);
           }
-          if (normalizedId && state.pendingSaveById[normalizedId]) {
-            delete state.pendingSaveById[normalizedId];
-          }
+          clearPendingSaveEntry(normalizedId);
           state.lastError = "";
           setLastSyncFeedback("error", "Échec enregistrement", 3200);
           renderGrid();
@@ -1206,7 +1218,8 @@
             renderQuickEdit();
             return;
           }
-          if (isItemPending(currentItem.id)) {
+          const itemId = String(currentItem.id || "").trim();
+          if (isItemPending(itemId)) {
             setQuickEditError("Synchronisation en cours sur cette reference.");
             renderQuickEdit();
             return;
@@ -1219,17 +1232,33 @@
             return;
           }
 
-          const itemId = String(currentItem.id || "").trim();
+          const startedAt = Date.now();
+          const timeoutId = window.setTimeout(function() {
+            if (state.pendingSaveById[itemId]?.startedAt !== startedAt) return;
+            const timeoutEntry = state.pendingSaveById[itemId];
+            if (!timeoutEntry) return;
+            if (timeoutEntry.previousItem) {
+              replaceItemInState(timeoutEntry.previousItem);
+            }
+            clearPendingSaveEntry(itemId);
+            state.lastError = "";
+            setLastSyncFeedback("error", "Timeout", 3000);
+            renderGrid();
+          }, 10000);
+
           state.quickEditSaving = true;
           setQuickEditError("");
           state.pendingSaveById[itemId] = {
             previousItem: Object.assign({}, currentItem),
             optimisticItem: Object.assign({}, optimisticItem),
             request: Object.assign({}, request),
-            startedAt: Date.now(),
-            status: "pending"
+            startedAt: startedAt,
+            status: "pending",
+            timeoutId: timeoutId
           };
-          replaceItemInState(optimisticItem);
+          if (optimisticItem) {
+            replaceItemInState(optimisticItem);
+          }
           closeQuickEdit();
           renderGrid();
           state.lastError = "";
@@ -1238,10 +1267,10 @@
 
           google.script.run
             .withSuccessHandler(function(result) {
-              handleQuickEditSaveSuccess(result);
+              handleQuickEditSaveSuccess(itemId, startedAt, result);
             })
             .withFailureHandler(function(error) {
-              handleQuickEditSaveFailure(itemId, error);
+              handleQuickEditSaveFailure(itemId, startedAt, error);
             })
             .StockWebApp_saveQuickEdit(request);
         }

@@ -241,7 +241,7 @@
         <div class="max-h-[calc(100dvh-15rem)] overflow-y-auto px-4 py-4">
           <div class="space-y-4">
             <div class="hidden rounded border border-outline-variant/20 bg-surface-container-low px-3 py-2 text-[11px] text-on-surface-variant" id="quickEditPackInfoWrap">
-              <div class="font-semibold text-on-surface" id="quickEditPacksPerBoxText">1 carton = 0包</div>
+              <div class="font-semibold text-on-surface" id="quickEditPacksPerBoxText">1箱 = 0包</div>
               <div class="mt-1 hidden" id="quickEditPackCounterWrap">
                 <span class="font-semibold text-on-surface">包/箱 ≃ </span>
                 <span id="quickEditPackCounterText">0/0</span>
@@ -257,19 +257,19 @@
                 </div>
               </div>
               <div class="grid grid-cols-3 gap-2">
-                <button class="border border-outline-variant/30 px-2 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant" data-quick-exit-mode="boxes" id="quickExitModeBoxes" type="button">Cartons</button>
-                <button class="border border-outline-variant/30 px-2 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant" data-quick-exit-mode="fraction" id="quickExitModeFraction" type="button">Fraction</button>
-                <button class="border border-outline-variant/30 px-2 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant" data-quick-exit-mode="packs" id="quickExitModePacks" type="button">Paquets</button>
+                <button class="border border-outline-variant/30 px-2 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant" data-quick-exit-mode="boxes" id="quickExitModeBoxes" type="button">箱</button>
+                <button class="border border-outline-variant/30 px-2 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant" data-quick-exit-mode="fraction" id="quickExitModeFraction" type="button">分数</button>
+                <button class="border border-outline-variant/30 px-2 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant" data-quick-exit-mode="packs" id="quickExitModePacks" type="button">包</button>
               </div>
               <div class="space-y-3" id="quickExitBoxesPanel">
                 <label class="block">
-                  <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Cartons</span>
+                  <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">箱</span>
                   <input class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-semibold text-on-surface" id="quickExitBoxesValue" inputmode="numeric" min="0" step="1" type="number" />
                 </label>
               </div>
               <div class="hidden space-y-3" id="quickExitFractionPanel">
                 <div>
-                  <span class="mb-2 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Fraction</span>
+                  <span class="mb-2 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">分数</span>
                   <div class="grid grid-cols-4 gap-2">
                     <button class="border border-outline-variant/30 px-2 py-2 text-[11px] font-bold text-on-surface-variant" data-fraction-choice="1/2" type="button">1/2</button>
                     <button class="border border-outline-variant/30 px-2 py-2 text-[11px] font-bold text-on-surface-variant" data-fraction-choice="1/3" type="button">1/3</button>
@@ -278,18 +278,18 @@
                   </div>
                 </div>
                 <label class="hidden block" id="quickExitDynamicFractionWrap">
-                  <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Fractions dynamiques</span>
+                  <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">动态分数</span>
                   <select class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-semibold text-on-surface" id="quickExitDynamicFractionSelect">
-                    <option value="">Choisir...</option>
+                    <option value="">选择...</option>
                   </select>
                 </label>
               </div>
               <div class="hidden space-y-3" id="quickExitPacksPanel">
                 <label class="block">
-                  <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Paquets</span>
+                  <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">包</span>
                   <input class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-semibold text-on-surface" id="quickExitPacksValue" inputmode="numeric" min="0" step="1" type="number" />
                 </label>
-                <p class="text-[10px] text-on-surface-variant" id="quickExitPacksHint">Mode disponible si Colisage est renseigne.</p>
+                <p class="text-[10px] text-on-surface-variant" id="quickExitPacksHint">1箱 = 0包</p>
               </div>
             </section>
 
@@ -322,15 +322,24 @@
                   <span class="mt-1 block text-[10px] text-on-surface-variant" id="quickEditFractionHint">Format attendu: 1/2, 2/3, 3/4</span>
                 </label>
               </div>
-              <label class="block">
-                <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Notation paquets</span>
-                <input class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-semibold text-on-surface" id="quickEditPackNotation" inputmode="text" maxlength="16" placeholder="+4包 / -2包" type="text" />
-              </label>
+              <div class="grid grid-cols-[6rem,1fr] gap-3">
+                <label class="block">
+                  <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">符号</span>
+                  <select class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-semibold text-on-surface" id="quickEditPackNotationSign">
+                    <option value="+">+</option>
+                    <option value="-">-</option>
+                  </select>
+                </label>
+                <label class="block">
+                  <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">包</span>
+                  <input class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-semibold text-on-surface" id="quickEditPackNotationCount" inputmode="numeric" min="0" step="1" type="number" />
+                </label>
+              </div>
             </form>
 
             <label class="block">
-              <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Remarque</span>
-              <textarea class="min-h-[4.5rem] w-full border-outline-variant/30 bg-surface-container-low text-sm text-on-surface" id="quickEditRemark" maxlength="240" placeholder="Remarque libre"></textarea>
+              <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">放位/提醒</span>
+              <textarea class="min-h-[4.5rem] w-full border-outline-variant/30 bg-surface-container-low text-sm text-on-surface" id="quickEditRemark" maxlength="240" placeholder="放位/提醒"></textarea>
             </label>
 
             <p class="hidden rounded border border-error/20 bg-error-container/20 px-3 py-2 text-[11px] font-medium text-on-error-container" id="quickEditMessage"></p>
@@ -446,7 +455,8 @@
           quickEditItemBoxes: document.getElementById("quickEditItemBoxes"),
           quickEditSign: document.getElementById("quickEditSign"),
           quickEditFractionText: document.getElementById("quickEditFractionText"),
-          quickEditPackNotation: document.getElementById("quickEditPackNotation"),
+          quickEditPackNotationSign: document.getElementById("quickEditPackNotationSign"),
+          quickEditPackNotationCount: document.getElementById("quickEditPackNotationCount"),
           quickEditRemark: document.getElementById("quickEditRemark"),
           quickEditFractionHint: document.getElementById("quickEditFractionHint"),
           quickEditMessage: document.getElementById("quickEditMessage"),
@@ -731,6 +741,14 @@
           };
         }
 
+        function splitPackNotation(value) {
+          const parsed = parsePackNotation(value);
+          return {
+            sign: parsed.sign === "-" ? "-" : "+",
+            count: parsed.count > 0 ? String(parsed.count) : ""
+          };
+        }
+
         function isPackNotationValid(value) {
           const normalized = String(value || "").trim();
           return !normalized || /^([+-])\s*(\d+)\s*包$/i.test(normalized);
@@ -1002,9 +1020,15 @@
             fractionText: fractionText,
             fractionValue: parseFraction(fractionText),
             colisage: toPositiveNumber(state.quickEditItem.colisage),
-            packNotation: normalizePackNotation(state.quickEditForm.packNotation, false),
+            packNotation: buildPackNotationValue(state.quickEditForm.packNotationSign, state.quickEditForm.packNotationCount),
             remark: String(state.quickEditForm.remark || "").trim()
           };
+        }
+
+        function buildPackNotationValue(signValue, countValue) {
+          const sign = String(signValue || "").trim() === "-" ? "-" : "+";
+          const count = Math.max(0, Math.trunc(Number(countValue) || 0));
+          return count > 0 ? (sign + count + "包") : "";
         }
 
         function getQuickExitFractionValue() {
@@ -1206,7 +1230,8 @@
           els.quickEditItemBoxes.value = form.itemBoxes;
           els.quickEditSign.value = sanitizeSign(form.sign);
           els.quickEditFractionText.value = form.fractionText;
-          els.quickEditPackNotation.value = form.packNotation || "";
+          els.quickEditPackNotationSign.value = form.packNotationSign || "+";
+          els.quickEditPackNotationCount.value = form.packNotationCount || "";
           els.quickEditRemark.value = form.remark || "";
           els.quickEditFractionHint.textContent = isFractionTextValid(form.fractionText)
             ? "Format attendu: 1/2, 2/3, 3/4"
@@ -1223,20 +1248,20 @@
           els.quickExitFractionPanel.classList.toggle("hidden", state.quickExitMode !== "fraction");
           els.quickExitPacksPanel.classList.toggle("hidden", state.quickExitMode !== "packs");
           els.quickEditPackInfoWrap.classList.toggle("hidden", !(packMeta.packsPerBox > 0));
-          els.quickEditPacksPerBoxText.textContent = packMeta.packsPerBox > 0 ? ("1 carton = " + packMeta.packsPerBox + "包") : "";
+          els.quickEditPacksPerBoxText.textContent = packMeta.packsPerBox > 0 ? ("1箱 = " + packMeta.packsPerBox + "包") : "";
           els.quickEditPackCounterWrap.classList.toggle("hidden", !packMeta.packCounterText);
           els.quickEditPackCounterText.textContent = packMeta.packCounterText || "";
           els.quickExitBoxesValue.value = quickExitForm.boxes || "";
           els.quickExitPacksValue.value = quickExitForm.packs || "";
           els.quickExitPacksHint.textContent = packsEnabled
-            ? ("Colisage: " + Math.trunc(Number(item.colisage) || 0))
-            : "Mode indisponible sans Colisage.";
+            ? ("1箱 = " + packMeta.packsPerBox + "包")
+            : "包模式需要 Colisage。";
           els.quickExitModeBoxes.className = "border px-2 py-2 text-[10px] font-bold uppercase tracking-[0.18em] " + (state.quickExitMode === "boxes" ? "border-primary bg-primary text-on-primary" : "border-outline-variant/30 text-on-surface-variant");
           els.quickExitModeFraction.className = "border px-2 py-2 text-[10px] font-bold uppercase tracking-[0.18em] " + (state.quickExitMode === "fraction" ? "border-primary bg-primary text-on-primary" : "border-outline-variant/30 text-on-surface-variant");
           els.quickExitModePacks.className = "border px-2 py-2 text-[10px] font-bold uppercase tracking-[0.18em] " + (state.quickExitMode === "packs" ? "border-primary bg-primary text-on-primary" : "border-outline-variant/30 text-on-surface-variant");
           els.quickExitModePacks.disabled = !packsEnabled;
           els.quickExitDynamicFractionWrap.classList.toggle("hidden", !(packMeta.dynamicFractions && packMeta.dynamicFractions.length));
-          els.quickExitDynamicFractionSelect.innerHTML = '<option value="">Choisir...</option>' + (packMeta.dynamicFractions || []).map(function(value) {
+          els.quickExitDynamicFractionSelect.innerHTML = '<option value="">选择...</option>' + (packMeta.dynamicFractions || []).map(function(value) {
             return '<option value="' + escapeHtml(value) + '">' + escapeHtml(value) + '</option>';
           }).join("");
           els.quickExitDynamicFractionSelect.value = packMeta.dynamicFractions && packMeta.dynamicFractions.indexOf(quickExitForm.fractionText || "") !== -1
@@ -1267,13 +1292,15 @@
           state.quickExitMode = "boxes";
           state.quickEditSaving = false;
           setQuickEditError("");
+          const packNotationParts = splitPackNotation(item.packNotation);
           state.quickEditForm = {
             tailInput: formatTailDisplay(item.tail),
             unitsPerBoxInput: formatUnitsPerBoxDisplay(item.unitsPerBox),
             itemBoxes: sanitizeIntegerInput(item.itemBoxes),
             sign: sanitizeSign(item.sign),
             fractionText: sanitizeFractionText(item.fractionText),
-            packNotation: normalizePackNotation(item.packNotation, false),
+            packNotationSign: packNotationParts.sign,
+            packNotationCount: packNotationParts.count,
             remark: String(item.remark || "").trim()
           };
           state.quickExitForm = {
@@ -1301,8 +1328,10 @@
           if (!state.quickEditForm) return;
           if (field === "tailInput" || field === "unitsPerBoxInput") {
             state.quickEditForm[field] = String(value || "");
-          } else if (field === "packNotation") {
-            state.quickEditForm.packNotation = String(value || "");
+          } else if (field === "packNotationSign") {
+            state.quickEditForm.packNotationSign = String(value || "") === "-" ? "-" : "+";
+          } else if (field === "packNotationCount") {
+            state.quickEditForm.packNotationCount = sanitizeIntegerInput(value);
           } else if (field === "remark") {
             state.quickEditForm.remark = String(value || "");
           } else if (field === "sign") {
@@ -1333,7 +1362,7 @@
           const unitsResult = parseStyledIntegerInput(state.quickEditForm.unitsPerBoxInput);
           const itemBoxes = Number(state.quickEditForm.itemBoxes || 0);
           const fractionText = sanitizeFractionText(state.quickEditForm.fractionText);
-          const packNotation = normalizePackNotation(state.quickEditForm.packNotation, false);
+          const packNotation = buildPackNotationValue(state.quickEditForm.packNotationSign, state.quickEditForm.packNotationCount);
           const remark = String(state.quickEditForm.remark || "").trim();
 
           if (!tailResult.valid) {
@@ -1348,11 +1377,6 @@
             setQuickEditError("Fraction invalide. Exemple attendu: 1/2.");
             return null;
           }
-          if (!isPackNotationValid(state.quickEditForm.packNotation)) {
-            setQuickEditError("Notation paquets invalide. Utilise +N包 ou -N包.");
-            return null;
-          }
-
           return {
             id: state.quickEditItem.id,
             reference: state.quickEditItem.reference,
@@ -1362,6 +1386,8 @@
             itemBoxes: Math.max(0, Math.trunc(Number.isFinite(itemBoxes) ? itemBoxes : 0)),
             sign: sanitizeSign(state.quickEditForm.sign),
             fractionText: fractionText,
+            packNotationSign: state.quickEditForm.packNotationSign,
+            packNotationCount: Math.max(0, Math.trunc(Number(state.quickEditForm.packNotationCount) || 0)),
             packNotation: packNotation,
             remark: remark
           };
@@ -1380,7 +1406,7 @@
           if (state.quickExitMode === "boxes") {
             const boxes = Math.max(0, Math.trunc(Number(state.quickExitForm.boxes) || 0));
             if (!(boxes > 0)) {
-              setQuickEditError("Indique un nombre de cartons positif.");
+              setQuickEditError("Indique un nombre de 箱 positif.");
               return null;
             }
             return {
@@ -1396,7 +1422,7 @@
           if (state.quickExitMode === "fraction") {
             const fractionText = sanitizeFractionText(state.quickExitForm.fractionText);
             if (!fractionText || !isFractionTextValid(fractionText)) {
-              setQuickEditError("Selectionne une fraction valide.");
+              setQuickEditError("Selectionne une 分数 valide.");
               return null;
             }
             return {
@@ -1414,11 +1440,11 @@
             const colisage = toPositiveNumber(item.colisage);
             const packs = Math.max(0, Math.trunc(Number(state.quickExitForm.packs) || 0));
             if (!(colisage > 0)) {
-              setQuickEditError("Mode paquets indisponible sans Colisage.");
+              setQuickEditError("Mode 包 indisponible sans Colisage.");
               return null;
             }
             if (!(packs > 0)) {
-              setQuickEditError("Indique un nombre de paquets positif.");
+              setQuickEditError("Indique un nombre de 包 positif.");
               return null;
             }
             return {
@@ -1772,8 +1798,12 @@
           handleQuickEditFieldChange("fractionText", event.target.value);
         });
 
-        els.quickEditPackNotation.addEventListener("input", function(event) {
-          handleQuickEditFieldChange("packNotation", event.target.value);
+        els.quickEditPackNotationSign.addEventListener("change", function(event) {
+          handleQuickEditFieldChange("packNotationSign", event.target.value);
+        });
+
+        els.quickEditPackNotationCount.addEventListener("input", function(event) {
+          handleQuickEditFieldChange("packNotationCount", event.target.value);
         });
 
         els.quickEditRemark.addEventListener("input", function(event) {

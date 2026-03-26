@@ -1,6 +1,6 @@
 const INITIAL_SERVER_RENDER_COUNT = 120;
 const STOCK_WEBAPP_HISTORY_SHEET = "STOCK_HISTORY";
-const STOCK_WEBAPP_STOCK_EXTRA_COLUMNS = ["Notation paquets", "Remarque"];
+const STOCK_WEBAPP_STOCK_EXTRA_COLUMNS = ["Notation paquets"];
 
 function doGet() {
   const initialResult = StockWebApp_collectPayload_(INITIAL_SERVER_RENDER_COUNT);
@@ -268,7 +268,7 @@ function StockWebApp_resolveColumns_(headers) {
     fractionRaw: findCol(["当前箱数分数"]),
     colisage: findCol(["Colisage"]),
     packNotation: findCol(["Notation paquets"]),
-    remark: findCol(["Remarque"]),
+    remark: findCol(["放位/提醒"]),
     warehouse: findCol(["仓库", "entrepot", "entrepôt"]),
     createdAt: findCol(["date de création", "修改日期", "进货"])
   };
@@ -420,7 +420,7 @@ function StockWebApp_buildEditStateFromInput_(payload) {
     sign: sign,
     fractionText: fractionText,
     fractionValue: StockWebApp_parseFractionValue_(fractionText),
-    packNotation: StockWebApp_normalizePackNotation_(payload.packNotation, true),
+    packNotation: StockWebApp_buildPackNotationFromParts_(payload.packNotationSign, payload.packNotationCount, payload.packNotation),
     remark: String(payload.remark || "").trim()
   });
 }
@@ -648,6 +648,15 @@ function StockWebApp_normalizePackNotation_(value, strict) {
   const count = Math.max(0, Math.trunc(Number(match[2]) || 0));
   if (!(count > 0)) return "";
   return match[1] + count + "包";
+}
+
+function StockWebApp_buildPackNotationFromParts_(signValue, countValue, fallbackValue) {
+  const sign = String(signValue || "").trim();
+  const count = Math.max(0, StockWebApp_toInt_(countValue));
+  if ((sign === "+" || sign === "-") && count > 0) {
+    return sign + count + "包";
+  }
+  return StockWebApp_normalizePackNotation_(fallbackValue, true);
 }
 
 function StockWebApp_parsePackNotation_(value) {

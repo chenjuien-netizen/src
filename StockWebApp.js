@@ -407,10 +407,19 @@ function StockWebApp_buildEditStateFromInput_(payload) {
   const unitsPerBox = Math.max(0, StockWebApp_toInt_(payload.unitsPerBox));
   const itemBoxes = Math.max(0, StockWebApp_toInt_(payload.itemBoxes));
   const sign = StockWebApp_normalizeSign_(payload.sign);
-  const fractionText = StockWebApp_normalizeFractionText_(payload.fractionText);
+  const rawFractionText = String(payload.fractionText || "").trim().replace(/\s+/g, "");
+  const fractionText = rawFractionText ? StockWebApp_normalizeFractionText_(rawFractionText) : "";
 
-  if (payload.fractionText && !fractionText) {
+  if (rawFractionText && !/^\d+\/\d+$/.test(rawFractionText)) {
     throw new Error("Fraction invalide. Utilise un format du type 1/2.");
+  }
+  if (fractionText) {
+    const parts = fractionText.split("/");
+    const numerator = Number(parts[0]);
+    const denominator = Number(parts[1]);
+    if (!(numerator > 0) || !(denominator > 0)) {
+      throw new Error("Fraction invalide. Utilise un format du type 1/2.");
+    }
   }
 
   return StockWebApp_normalizeStateModel_({
@@ -544,16 +553,12 @@ function StockWebApp_writeQuickEditState_(sheet, rowIndex, cols, state) {
   }
 
   const fractionCell = sheet.getRange(rowIndex, cols.fractionRaw);
-  if (normalized.fractionValue > 0) {
-    fractionCell.setValue(normalized.fractionValue);
-    if (typeof StockMoves_applyFractionDisplayFormat_ === "function") {
-      StockMoves_applyFractionDisplayFormat_(fractionCell);
-    }
+  if (normalized.fractionText) {
+    fractionCell.setNumberFormat("@");
+    fractionCell.setValue(normalized.fractionText);
   } else {
     fractionCell.clearContent();
-    if (typeof StockMoves_applyFractionDisplayFormat_ === "function") {
-      StockMoves_applyFractionDisplayFormat_(fractionCell);
-    }
+    fractionCell.setNumberFormat("@");
   }
 }
 
@@ -842,11 +847,7 @@ function StockWebApp_ensureStockColumns_(sheet) {
 }
 
 function StockWebApp_getOrCreateHistorySheet_(spreadsheet) {
-  let sheet = spreadsheet.getSheetByName(STOCK_WEBAPP_HISTORY_SHEET);
-  if (sheet) return sheet;
-
-  sheet = spreadsheet.insertSheet(STOCK_WEBAPP_HISTORY_SHEET);
-  sheet.getRange(1, 1, 1, 20).setValues([[
+  const expectedHeaders = [[
     "timestamp",
     "action_type",
     "reference",
@@ -866,8 +867,24 @@ function StockWebApp_getOrCreateHistorySheet_(spreadsheet) {
     "after_fraction",
     "after_pack_notation",
     "remark",
-    "source"
-  ]]);
+    "source",
+    "before_total_pieces",
+    "after_total_pieces"
+  ]];
+  let sheet = spreadsheet.getSheetByName(STOCK_WEBAPP_HISTORY_SHEET);
+  if (sheet) {
+    const lastCol = Math.max(1, sheet.getLastColumn());
+    const existingHeaders = sheet.getRange(1, 1, 1, lastCol).getDisplayValues()[0];
+    if (existingHeaders.length < expectedHeaders[0].length) {
+      sheet.insertColumnsAfter(lastCol, expectedHeaders[0].length - existingHeaders.length);
+    }
+    sheet.getRange(1, 1, 1, expectedHeaders[0].length).setValues(expectedHeaders);
+    sheet.setFrozenRows(1);
+    return sheet;
+  }
+
+  sheet = spreadsheet.insertSheet(STOCK_WEBAPP_HISTORY_SHEET);
+  sheet.getRange(1, 1, 1, expectedHeaders[0].length).setValues(expectedHeaders);
   sheet.setFrozenRows(1);
   return sheet;
 }
@@ -876,6 +893,8 @@ function StockWebApp_appendHistoryEntry_(spreadsheet, payload) {
   const sheet = StockWebApp_getOrCreateHistorySheet_(spreadsheet);
   const beforeItem = payload.beforeItem || {};
   const afterItem = payload.afterItem || {};
+  const beforeTotalPieces = StockWebApp_stateModelToPieces_(beforeItem);
+  const afterTotalPieces = StockWebApp_stateModelToPieces_(afterItem);
   sheet.appendRow([
     new Date(),
     String(payload.actionType || ""),
@@ -896,7 +915,9 @@ function StockWebApp_appendHistoryEntry_(spreadsheet, payload) {
     String(afterItem.fractionText || ""),
     String(afterItem.packNotation || ""),
     String(payload.remark || ""),
-    String(payload.source || "")
+    String(payload.source || ""),
+    Number(beforeTotalPieces || 0),
+    Number(afterTotalPieces || 0)
   ]);
 }
 
@@ -911,7 +932,7 @@ function StockWebApp_parseFractionValue_(value) {
   if (fractionMatch) {
     const numerator = Number(fractionMatch[1]);
     const denominator = Number(fractionMatch[2]);
-    if (!denominator) return 0;
+    if (!(numerator > 0) || !(denominator > 0)) return 0;
     return numerator > 0 ? numerator / denominator : 0;
   }
 

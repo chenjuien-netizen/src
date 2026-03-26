@@ -240,13 +240,6 @@
         </div>
         <div class="max-h-[calc(100dvh-15rem)] overflow-y-auto px-4 py-4">
           <div class="space-y-4">
-            <div class="hidden rounded border border-outline-variant/20 bg-surface-container-low px-3 py-2 text-[11px] text-on-surface-variant" id="quickEditPackInfoWrap">
-              <div class="font-semibold text-on-surface" id="quickEditPacksPerBoxText">1箱 = 0包</div>
-              <div class="mt-1 hidden" id="quickEditPackCounterWrap">
-                <span class="font-semibold text-on-surface">包/箱 ≃ </span>
-                <span id="quickEditPackCounterText">0/0</span>
-              </div>
-            </div>
             <section id="quickExitPanel">
               <div class="rounded border border-outline-variant/20 bg-surface-container-low px-3 py-2">
                 <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Stock actuel</div>
@@ -289,7 +282,7 @@
                   <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">包</span>
                   <input class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-semibold text-on-surface" id="quickExitPacksValue" inputmode="numeric" min="0" step="1" type="number" />
                 </label>
-                <p class="text-[10px] text-on-surface-variant" id="quickExitPacksHint">1箱 = 0包</p>
+                <p class="hidden text-[10px] text-on-surface-variant" id="quickExitPacksHint">Colisage: 0 · 1箱 = 0包</p>
               </div>
             </section>
 
@@ -428,10 +421,6 @@
           quickEditModal: document.getElementById("quickEditModal"),
           quickEditTabQuickExit: document.getElementById("quickEditTabQuickExit"),
           quickEditTabEdit: document.getElementById("quickEditTabEdit"),
-          quickEditPackInfoWrap: document.getElementById("quickEditPackInfoWrap"),
-          quickEditPacksPerBoxText: document.getElementById("quickEditPacksPerBoxText"),
-          quickEditPackCounterWrap: document.getElementById("quickEditPackCounterWrap"),
-          quickEditPackCounterText: document.getElementById("quickEditPackCounterText"),
           quickExitPanel: document.getElementById("quickExitPanel"),
           quickExitCurrentStock: document.getElementById("quickExitCurrentStock"),
           quickExitPreviewWrap: document.getElementById("quickExitPreviewWrap"),
@@ -534,7 +523,7 @@
           if (fractionMatch) {
             const numerator = Number(fractionMatch[1]);
             const denominator = Number(fractionMatch[2]);
-            return denominator > 0 ? numerator / denominator : 0;
+            return numerator > 0 && denominator > 0 ? numerator / denominator : 0;
           }
           const numeric = Number(normalized.replace(",", "."));
           return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
@@ -755,8 +744,13 @@
         }
 
         function isFractionTextValid(value) {
-          const normalized = String(value || "").trim();
-          return !normalized || /^(\d+)\/(\d+)$/.test(normalized);
+          const normalized = String(value || "").trim().replace(/\s+/g, "");
+          if (!normalized) return true;
+          const match = normalized.match(/^(\d+)\/(\d+)$/);
+          if (!match) return false;
+          const numerator = Number(match[1]);
+          const denominator = Number(match[2]);
+          return numerator > 0 && denominator > 0;
         }
 
         function formatTailDisplay(value) {
@@ -1247,15 +1241,12 @@
           els.quickExitBoxesPanel.classList.toggle("hidden", state.quickExitMode !== "boxes");
           els.quickExitFractionPanel.classList.toggle("hidden", state.quickExitMode !== "fraction");
           els.quickExitPacksPanel.classList.toggle("hidden", state.quickExitMode !== "packs");
-          els.quickEditPackInfoWrap.classList.toggle("hidden", !(packMeta.packsPerBox > 0));
-          els.quickEditPacksPerBoxText.textContent = packMeta.packsPerBox > 0 ? ("1箱 = " + packMeta.packsPerBox + "包") : "";
-          els.quickEditPackCounterWrap.classList.toggle("hidden", !packMeta.packCounterText);
-          els.quickEditPackCounterText.textContent = packMeta.packCounterText || "";
           els.quickExitBoxesValue.value = quickExitForm.boxes || "";
           els.quickExitPacksValue.value = quickExitForm.packs || "";
+          els.quickExitPacksHint.classList.toggle("hidden", !packsEnabled);
           els.quickExitPacksHint.textContent = packsEnabled
-            ? ("1箱 = " + packMeta.packsPerBox + "包")
-            : "包模式需要 Colisage。";
+            ? ("Colisage: " + Math.trunc(Number(item.colisage) || 0) + " · 1箱 = " + packMeta.packsPerBox + "包")
+            : "";
           els.quickExitModeBoxes.className = "border px-2 py-2 text-[10px] font-bold uppercase tracking-[0.18em] " + (state.quickExitMode === "boxes" ? "border-primary bg-primary text-on-primary" : "border-outline-variant/30 text-on-surface-variant");
           els.quickExitModeFraction.className = "border px-2 py-2 text-[10px] font-bold uppercase tracking-[0.18em] " + (state.quickExitMode === "fraction" ? "border-primary bg-primary text-on-primary" : "border-outline-variant/30 text-on-surface-variant");
           els.quickExitModePacks.className = "border px-2 py-2 text-[10px] font-bold uppercase tracking-[0.18em] " + (state.quickExitMode === "packs" ? "border-primary bg-primary text-on-primary" : "border-outline-variant/30 text-on-surface-variant");

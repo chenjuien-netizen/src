@@ -899,6 +899,13 @@ function StockMoves_toNumber_(v) {
   if (typeof v === "number") return Number.isFinite(v) ? v : 0;
   const s = String(v).trim().replace(",", ".");
   if (!s) return 0;
+  const fractionMatch = s.match(/^(\d+)\s*\/\s*(\d+)$/);
+  if (fractionMatch) {
+    const numerator = Number(fractionMatch[1]);
+    const denominator = Number(fractionMatch[2]);
+    if (!(numerator > 0) || !(denominator > 0)) return 0;
+    return numerator / denominator;
+  }
   const m = s.match(/-?\d+(\.\d+)?/);
   if (!m) return 0;
   const n = Number(m[0]);

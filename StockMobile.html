@@ -287,46 +287,55 @@
             </section>
 
             <form class="hidden space-y-3" id="quickEditForm" novalidate>
-              <label class="block">
-                <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">尾箱</span>
-                <input class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-semibold text-on-surface" id="quickEditTail" inputmode="text" maxlength="16" placeholder="(360p)" type="text" />
-              </label>
-              <div class="grid grid-cols-2 gap-3">
-                <label class="block">
-                  <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">件/箱</span>
-                  <input class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-semibold text-on-surface" id="quickEditUnitsPerBox" inputmode="text" maxlength="16" placeholder="336p" type="text" />
-                </label>
-                <label class="block">
-                  <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">箱数</span>
-                  <input class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-semibold text-on-surface" id="quickEditItemBoxes" inputmode="numeric" min="0" step="1" type="number" />
-                </label>
-              </div>
-              <div class="grid grid-cols-[6rem,1fr] gap-3">
-                <label class="block">
-                  <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">符号</span>
-                  <select class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-semibold text-on-surface" id="quickEditSign">
-                    <option value="+">+</option>
-                    <option value="×">×</option>
-                  </select>
-                </label>
-                <label class="block">
-                  <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">分数</span>
-                  <input class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-semibold text-on-surface" id="quickEditFractionText" inputmode="text" maxlength="10" placeholder="1/2" type="text" />
-                  <span class="mt-1 block text-[10px] text-on-surface-variant" id="quickEditFractionHint">Format attendu: 1/2, 2/3, 3/4</span>
-                </label>
-              </div>
-              <div class="grid grid-cols-[6rem,1fr] gap-3">
-                <label class="block">
-                  <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">符号</span>
-                  <select class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-semibold text-on-surface" id="quickEditPackNotationSign">
-                    <option value="+">+</option>
-                    <option value="-">-</option>
-                  </select>
-                </label>
-                <label class="block">
-                  <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">包</span>
-                  <input class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-semibold text-on-surface" id="quickEditPackNotationCount" inputmode="numeric" min="0" step="1" type="number" />
-                </label>
+              <div class="space-y-2">
+                <div class="flex flex-wrap items-end gap-x-2 gap-y-2" id="quickEditExpressionLine">
+                  <label class="hidden min-w-[5.5rem] flex-none" id="quickEditTailSegment">
+                    <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">尾箱</span>
+                    <input class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-medium text-on-surface" id="quickEditTail" inputmode="text" maxlength="16" placeholder="(360p)" type="text" />
+                  </label>
+                  <span class="hidden self-end pb-2 text-sm font-semibold text-on-surface-variant" id="quickEditTailJoin">+</span>
+
+                  <label class="min-w-[10rem] flex-[1_1_11rem]">
+                    <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">件/箱</span>
+                    <input class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-semibold text-on-surface" id="quickEditUnitsPerBox" inputmode="text" maxlength="16" placeholder="336p" type="text" />
+                  </label>
+
+                  <span class="self-end pb-2 text-sm font-semibold text-on-surface-variant">×</span>
+
+                  <label class="min-w-[6rem] flex-[0_1_6.5rem]">
+                    <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">箱数</span>
+                    <input class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-semibold text-on-surface" id="quickEditItemBoxes" inputmode="numeric" min="0" step="1" type="number" />
+                  </label>
+
+                  <div class="hidden flex flex-wrap items-end gap-x-2 gap-y-2" id="quickEditFractionSegment">
+                    <select class="min-w-[3.75rem] flex-none border-outline-variant/30 bg-surface-container-low text-sm font-medium text-on-surface" id="quickEditSign">
+                      <option value="+">+</option>
+                      <option value="×">×</option>
+                    </select>
+                    <label class="min-w-[6.5rem] flex-[0_1_7rem]">
+                      <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">分数</span>
+                      <input class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-medium text-on-surface" id="quickEditFractionText" inputmode="text" maxlength="10" placeholder="1/2" type="text" />
+                    </label>
+                  </div>
+
+                  <div class="hidden flex flex-wrap items-end gap-x-2 gap-y-2" id="quickEditPackSegment">
+                    <select class="min-w-[3.75rem] flex-none border-outline-variant/30 bg-surface-container-low text-sm font-medium text-on-surface" id="quickEditPackNotationSign">
+                      <option value="+">+</option>
+                      <option value="-">-</option>
+                    </select>
+                    <label class="min-w-[5.5rem] flex-[0_1_6rem]">
+                      <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">包</span>
+                      <input class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-medium text-on-surface" id="quickEditPackNotationCount" inputmode="numeric" min="0" step="1" type="number" />
+                    </label>
+                  </div>
+                </div>
+
+                <button class="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant" id="quickEditAdvancedToggle" type="button">
+                  <span class="material-symbols-outlined !text-[16px]" id="quickEditAdvancedToggleIcon">expand_more</span>
+                  <span id="quickEditAdvancedToggleText">Options avancees</span>
+                </button>
+
+                <span class="hidden block text-[10px] text-on-surface-variant" id="quickEditFractionHint">Format attendu: 1/2, 2/3, 3/4</span>
               </div>
             </form>
 
@@ -382,6 +391,7 @@
           quickEditOpen: false,
           quickEditItem: null,
           quickEditForm: null,
+          quickEditAdvancedOpen: false,
           quickEditTab: "quick-exit",
           quickExitMode: "boxes",
           quickExitForm: null,
@@ -439,13 +449,20 @@
           quickEditForm: document.getElementById("quickEditForm"),
           quickEditReference: document.getElementById("quickEditReference"),
           quickEditStockDisplay: document.getElementById("quickEditStockDisplay"),
+          quickEditTailSegment: document.getElementById("quickEditTailSegment"),
+          quickEditTailJoin: document.getElementById("quickEditTailJoin"),
           quickEditTail: document.getElementById("quickEditTail"),
           quickEditUnitsPerBox: document.getElementById("quickEditUnitsPerBox"),
           quickEditItemBoxes: document.getElementById("quickEditItemBoxes"),
+          quickEditFractionSegment: document.getElementById("quickEditFractionSegment"),
           quickEditSign: document.getElementById("quickEditSign"),
           quickEditFractionText: document.getElementById("quickEditFractionText"),
+          quickEditPackSegment: document.getElementById("quickEditPackSegment"),
           quickEditPackNotationSign: document.getElementById("quickEditPackNotationSign"),
           quickEditPackNotationCount: document.getElementById("quickEditPackNotationCount"),
+          quickEditAdvancedToggle: document.getElementById("quickEditAdvancedToggle"),
+          quickEditAdvancedToggleIcon: document.getElementById("quickEditAdvancedToggleIcon"),
+          quickEditAdvancedToggleText: document.getElementById("quickEditAdvancedToggleText"),
           quickEditRemark: document.getElementById("quickEditRemark"),
           quickEditFractionHint: document.getElementById("quickEditFractionHint"),
           quickEditMessage: document.getElementById("quickEditMessage"),
@@ -749,6 +766,15 @@
             sign: parsed.sign === "-" ? "-" : "+",
             count: parsed.count > 0 ? String(parsed.count) : ""
           };
+        }
+
+        function hasQuickEditAdvancedValues(form) {
+          const nextForm = form || {};
+          return !!(
+            String(nextForm.tailInput || "").trim() ||
+            sanitizeFractionText(nextForm.fractionText) ||
+            buildPackNotationValue(nextForm.packNotationSign, nextForm.packNotationCount)
+          );
         }
 
         function isPackNotationValid(value) {
@@ -1229,6 +1255,9 @@
           const infoState = isQuickExit ? item : (buildCurrentEditStateModel() || item);
           const packMeta = buildPackMeta(infoState || item);
           const packsEnabled = packMeta.packsPerBox > 0;
+          const advancedOpen = !!state.quickEditAdvancedOpen;
+          const hasPackValue = !!buildPackNotationValue(form.packNotationSign, form.packNotationCount);
+          const showPackSegment = advancedOpen && (packsEnabled || hasPackValue);
 
           els.quickEditReference.textContent = item.reference || "-";
           els.quickEditStockDisplay.textContent = item.stockDisplay || "-";
@@ -1248,6 +1277,16 @@
           els.quickEditTabEdit.className = "border px-2 py-2 text-[10px] font-bold uppercase tracking-[0.18em] " + (!isQuickExit ? "border-primary bg-primary text-on-primary" : "border-outline-variant/30 text-on-surface-variant");
           els.quickExitPanel.classList.toggle("hidden", !isQuickExit);
           els.quickEditForm.classList.toggle("hidden", isQuickExit);
+          els.quickEditTailSegment.classList.toggle("hidden", !advancedOpen);
+          els.quickEditTailJoin.classList.toggle("hidden", !advancedOpen);
+          els.quickEditFractionSegment.classList.toggle("hidden", !advancedOpen);
+          els.quickEditPackSegment.classList.toggle("hidden", !showPackSegment);
+          els.quickEditPackNotationSign.disabled = !packsEnabled;
+          els.quickEditPackNotationCount.disabled = !packsEnabled;
+          els.quickEditPackSegment.classList.toggle("opacity-60", !packsEnabled);
+          els.quickEditFractionHint.classList.toggle("hidden", !advancedOpen);
+          els.quickEditAdvancedToggleText.textContent = advancedOpen ? "Masquer options avancees" : "Options avancees";
+          els.quickEditAdvancedToggleIcon.textContent = advancedOpen ? "expand_less" : "expand_more";
           els.quickExitCurrentStock.textContent = item.stockDisplay || "-";
           els.quickExitPreviewWrap.classList.toggle("hidden", !preview);
           els.quickExitPreview.textContent = preview || "-";
@@ -1307,6 +1346,7 @@
             packNotationCount: packNotationParts.count,
             remark: String(item.remark || "").trim()
           };
+          state.quickEditAdvancedOpen = hasQuickEditAdvancedValues(state.quickEditForm);
           state.quickExitForm = {
             boxes: "",
             packs: "",
@@ -1322,9 +1362,20 @@
           state.quickEditOpen = false;
           state.quickEditItem = null;
           state.quickEditForm = null;
+          state.quickEditAdvancedOpen = false;
           state.quickExitForm = null;
           state.quickEditError = "";
           state.quickEditSaving = false;
+          renderQuickEdit();
+        }
+
+        function toggleQuickEditAdvanced(forceValue) {
+          if (!state.quickEditForm) return;
+          if (typeof forceValue === "boolean") {
+            state.quickEditAdvancedOpen = forceValue;
+          } else {
+            state.quickEditAdvancedOpen = !state.quickEditAdvancedOpen;
+          }
           renderQuickEdit();
         }
 
@@ -1808,6 +1859,10 @@
 
         els.quickEditPackNotationCount.addEventListener("input", function(event) {
           handleQuickEditFieldChange("packNotationCount", event.target.value);
+        });
+
+        els.quickEditAdvancedToggle.addEventListener("click", function() {
+          toggleQuickEditAdvanced();
         });
 
         els.quickEditRemark.addEventListener("input", function(event) {

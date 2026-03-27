@@ -266,7 +266,7 @@
                 <div class="w-full" id="quickEditExpressionCenterWrap">
                   <div class="overflow-x-auto" id="quickEditExpressionScroll">
                     <div class="w-max min-w-0" id="quickEditExpressionMeasure">
-                      <div class="flex items-end gap-x-2 gap-y-2 whitespace-nowrap pb-1" id="quickEditExpressionLine">
+                      <div class="relative flex items-end gap-x-2 gap-y-2 whitespace-nowrap pb-1" id="quickEditExpressionLine">
                         <div class="flex-none" id="quickEditTailSlot">
                           <button aria-label="Ajouter 尾箱" class="inline-flex h-8 w-8 items-center justify-center rounded border border-outline-variant/30 text-on-surface-variant transition-colors duration-150 hover:bg-surface-container" id="quickEditTailToggle" type="button">
                             <span class="material-symbols-outlined !text-[15px]" id="quickEditTailToggleIcon">add</span>
@@ -278,11 +278,12 @@
                             </label>
                           </div>
                         </div>
-                        <div class="hidden flex-none w-4 self-stretch" id="quickEditTailJoinSlot">
+                        <div class="pointer-events-none hidden flex-none w-4 self-stretch" id="quickEditTailJoinSlot">
                           <div class="grid h-full grid-rows-[auto_minmax(2.25rem,1fr)]">
                             <span aria-hidden="true" class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] opacity-0">.</span>
-                            <span aria-hidden="true" class="flex items-center justify-center text-sm font-medium text-on-surface-variant/80" id="quickEditTailJoin">+</span>
+                            <span aria-hidden="true" class="block text-sm font-medium opacity-0">+</span>
                           </div>
+                          <span aria-hidden="true" class="pointer-events-none absolute text-sm font-medium text-on-surface-variant/80" id="quickEditTailJoin">+</span>
                         </div>
 
                         <div class="flex-none" id="quickEditUnitsPerBoxSlot">
@@ -292,11 +293,12 @@
                           </label>
                         </div>
 
-                        <div class="flex-none w-4 self-stretch" id="quickEditMultiplyJoinSlot">
+                        <div class="pointer-events-none flex-none w-4 self-stretch" id="quickEditMultiplyJoinSlot">
                           <div class="grid h-full grid-rows-[auto_minmax(2.25rem,1fr)]">
                             <span aria-hidden="true" class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] opacity-0">.</span>
-                            <span aria-hidden="true" class="flex items-center justify-center text-sm font-medium text-on-surface-variant/80" id="quickEditMultiplyJoin">×</span>
+                            <span aria-hidden="true" class="block text-sm font-medium opacity-0">×</span>
                           </div>
+                          <span aria-hidden="true" class="pointer-events-none absolute text-sm font-medium text-on-surface-variant/80" id="quickEditMultiplyJoin">×</span>
                         </div>
 
                         <div class="flex-none" id="quickEditItemBoxesSlot">
@@ -575,6 +577,44 @@
           inputEl.style.width = widthInCh + "ch";
         }
 
+        function isVisibleQuickEditAnchor_(element) {
+          if (!element || element.classList.contains("hidden")) return false;
+          const rect = element.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0;
+        }
+
+        function getQuickEditAnchor_(inputEl, fallbackEl) {
+          if (isVisibleQuickEditAnchor_(inputEl)) return inputEl;
+          if (isVisibleQuickEditAnchor_(fallbackEl)) return fallbackEl;
+          return null;
+        }
+
+        function clearQuickEditOperatorPosition_(operatorEl) {
+          if (!operatorEl) return;
+          operatorEl.style.left = "";
+          operatorEl.style.top = "";
+          operatorEl.style.transform = "";
+        }
+
+        function positionQuickEditOperatorBetween_(operatorEl, leftAnchorEl, rightAnchorEl) {
+          if (!operatorEl || !leftAnchorEl || !rightAnchorEl || !els.quickEditExpressionLine) {
+            clearQuickEditOperatorPosition_(operatorEl);
+            return;
+          }
+          const lineRect = els.quickEditExpressionLine.getBoundingClientRect();
+          const leftRect = leftAnchorEl.getBoundingClientRect();
+          const rightRect = rightAnchorEl.getBoundingClientRect();
+          if (!(lineRect.width > 0 && lineRect.height > 0 && leftRect.width > 0 && rightRect.width > 0)) {
+            clearQuickEditOperatorPosition_(operatorEl);
+            return;
+          }
+          const centerX = ((leftRect.left + (leftRect.width / 2)) + (rightRect.left + (rightRect.width / 2))) / 2;
+          const centerY = ((leftRect.top + (leftRect.height / 2)) + (rightRect.top + (rightRect.height / 2))) / 2;
+          operatorEl.style.left = (centerX - lineRect.left) + "px";
+          operatorEl.style.top = (centerY - lineRect.top) + "px";
+          operatorEl.style.transform = "translate(-50%, -50%)";
+        }
+
         function syncWidthPair_(sourceEl, targetEl) {
           if (!sourceEl || !targetEl) return;
           targetEl.style.width = "";
@@ -605,6 +645,14 @@
         function syncQuickEditOperatorSlots_() {
           syncWidthPair_(els.quickEditTailJoinSlot, els.quickEditTailRemoveJoinSlot);
           syncWidthPair_(els.quickEditMultiplyJoinSlot, els.quickEditMultiplyRemoveSpacerSlot);
+        }
+
+        function syncQuickEditOperatorPositions_() {
+          const tailAnchor = getQuickEditAnchor_(els.quickEditTail, els.quickEditTailToggle);
+          const unitsAnchor = getQuickEditAnchor_(els.quickEditUnitsPerBox, null);
+          const boxesAnchor = getQuickEditAnchor_(els.quickEditItemBoxes, null);
+          positionQuickEditOperatorBetween_(els.quickEditTailJoin, tailAnchor, unitsAnchor);
+          positionQuickEditOperatorBetween_(els.quickEditMultiplyJoin, unitsAnchor, boxesAnchor);
         }
 
         function hasVisibleQuickEditRemove_() {
@@ -650,6 +698,7 @@
           }
 
           quickEditLayoutRetry_ = 0;
+          syncQuickEditOperatorPositions_();
           centerQuickEditMeasuredBlock_(els.quickEditExpressionScroll, els.quickEditExpressionMeasure, measuredWidth);
           if (!els.quickEditRemoveCenterWrap.classList.contains("hidden") && hasVisibleQuickEditRemove_()) {
             els.quickEditRemoveMeasure.style.width = measuredWidth + "px";

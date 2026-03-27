@@ -571,19 +571,27 @@
           targetEl.style.width = width + "px";
         }
 
+        function syncQuickEditRowAlignment_() {
+          const expressionFits = els.quickEditExpressionLine.scrollWidth <= els.quickEditExpressionLine.clientWidth + 1;
+          const removeFits = els.quickEditRemoveLine.scrollWidth <= els.quickEditRemoveLine.clientWidth + 1;
+          els.quickEditExpressionLine.classList.toggle("justify-center", expressionFits);
+          els.quickEditRemoveLine.classList.toggle("justify-center", removeFits);
+        }
+
         function syncQuickEditFieldWidths_() {
           const form = state.quickEditForm || {};
           setFieldWidth_(els.quickEditTailSegment, els.quickEditTail, form.tailInput, els.quickEditTail.placeholder, 8, 14, 1);
           setFieldWidth_(els.quickEditUnitsPerBoxField, els.quickEditUnitsPerBox, form.unitsPerBoxInput, els.quickEditUnitsPerBox.placeholder, 8, 14, 1);
-          setFieldWidth_(els.quickEditItemBoxesField, els.quickEditItemBoxes, form.itemBoxes, "1", 5, 8, 1);
+          setFieldWidth_(els.quickEditItemBoxesField, els.quickEditItemBoxes, form.itemBoxes, "1", 6, 8, 1);
           setFieldWidth_(els.quickEditSignField, els.quickEditSign, els.quickEditSign.value, "+", 7, 8, 0);
           setFieldWidth_(els.quickEditFractionTextField, els.quickEditFractionText, form.fractionText, els.quickEditFractionText.placeholder, 6, 10, 1);
           setFieldWidth_(els.quickEditPackSignField, els.quickEditPackNotationSign, els.quickEditPackNotationSign.value, "+", 7, 8, 0);
-          setFieldWidth_(els.quickEditPackCountField, els.quickEditPackNotationCount, form.packNotationCount, "0", 5, 8, 1);
+          setFieldWidth_(els.quickEditPackCountField, els.quickEditPackNotationCount, form.packNotationCount, "0", 6, 8, 1);
           syncWidthPair_(els.quickEditTailSlot, els.quickEditTailRemoveSlot);
           syncWidthPair_(els.quickEditUnitsPerBoxSlot, els.quickEditUnitsPerBoxRemoveSpacer);
           syncWidthPair_(els.quickEditItemBoxesSlot, els.quickEditItemBoxesRemoveSpacer);
           syncWidthPair_(els.quickEditPartialSlot, els.quickEditPartialRemoveSlot);
+          syncQuickEditRowAlignment_();
         }
 
         function renderItemMarkup(item) {
@@ -2026,6 +2034,7 @@
           window.clearTimeout(resizeTimer);
           resizeTimer = window.setTimeout(function() {
             syncColumnLayout(false);
+            if (state.quickEditOpen) renderQuickEdit();
           }, 100);
         });
 

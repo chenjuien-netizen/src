@@ -303,7 +303,7 @@
                             </label>
                           </div>
                         </div>
-                        <div class="hidden flex-none" id="quickEditTailJoinSlot">
+                        <div class="hidden flex-none w-4" id="quickEditTailJoinSlot">
                           <div class="grid h-full grid-rows-[auto_minmax(2.25rem,1fr)]">
                             <span aria-hidden="true" class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] opacity-0">.</span>
                             <span class="flex items-center justify-center text-sm font-medium text-on-surface-variant/80" id="quickEditTailJoin">+</span>
@@ -317,7 +317,7 @@
                           </label>
                         </div>
 
-                        <div class="flex-none" id="quickEditMultiplyJoinSlot">
+                        <div class="flex-none w-4" id="quickEditMultiplyJoinSlot">
                           <div class="grid h-full grid-rows-[auto_minmax(2.25rem,1fr)]">
                             <span aria-hidden="true" class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] opacity-0">.</span>
                             <span class="flex items-center justify-center text-sm font-medium text-on-surface-variant/80" id="quickEditMultiplyJoin">×</span>
@@ -375,14 +375,14 @@
                             <span class="material-symbols-outlined !text-[15px]">remove</span>
                           </button>
                         </div>
-                        <div aria-hidden="true" class="hidden flex-none" id="quickEditTailRemoveJoinSlot">
+                        <div aria-hidden="true" class="hidden flex-none w-4" id="quickEditTailRemoveJoinSlot">
                           <div class="grid h-full grid-rows-[auto_minmax(2.25rem,1fr)]">
                             <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] opacity-0">.</span>
                             <span class="flex items-center justify-center text-sm font-medium opacity-0" id="quickEditTailRemoveJoin">+</span>
                           </div>
                         </div>
                         <span aria-hidden="true" class="flex-none opacity-0" id="quickEditUnitsPerBoxRemoveSpacer"></span>
-                        <div aria-hidden="true" class="flex-none" id="quickEditMultiplyRemoveSpacerSlot">
+                        <div aria-hidden="true" class="flex-none w-4" id="quickEditMultiplyRemoveSpacerSlot">
                           <div class="grid h-full grid-rows-[auto_minmax(2.25rem,1fr)]">
                             <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] opacity-0">.</span>
                             <span class="flex items-center justify-center text-sm font-medium opacity-0" id="quickEditMultiplyRemoveSpacer">×</span>
@@ -611,6 +611,9 @@
         function syncWidthPair_(sourceEl, targetEl) {
           if (!sourceEl || !targetEl) return;
           targetEl.style.width = "";
+          if (targetEl.classList.contains("hidden") || sourceEl.classList.contains("hidden")) {
+            return;
+          }
           const width = sourceEl.offsetWidth;
           if (!width) {
             return;
@@ -676,9 +679,16 @@
           }
 
           quickEditLayoutRetry_ = 0;
-          els.quickEditRemoveMeasure.style.width = measuredWidth + "px";
           centerQuickEditMeasuredBlock_(els.quickEditExpressionScroll, els.quickEditExpressionMeasure, measuredWidth);
-          centerQuickEditMeasuredBlock_(els.quickEditRemoveScroll, els.quickEditRemoveMeasure, measuredWidth);
+          if (!els.quickEditRemoveCenterWrap.classList.contains("hidden")) {
+            els.quickEditRemoveMeasure.style.width = measuredWidth + "px";
+            centerQuickEditMeasuredBlock_(els.quickEditRemoveScroll, els.quickEditRemoveMeasure, measuredWidth);
+          } else {
+            els.quickEditRemoveMeasure.style.width = "";
+            els.quickEditRemoveMeasure.style.marginLeft = "";
+            els.quickEditRemoveMeasure.style.marginRight = "";
+            els.quickEditRemoveScroll.scrollLeft = 0;
+          }
         }
 
         function scheduleQuickEditMeasuredLayout_() {

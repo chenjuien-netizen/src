@@ -220,7 +220,7 @@
     </div>
 
     <div class="quick-edit-overlay fixed inset-0 z-[60] hidden items-center justify-center bg-on-background/35 px-3 py-6" id="quickEditOverlay" role="presentation">
-      <div aria-modal="true" class="max-h-[calc(100dvh-4rem)] w-full max-w-5xl overflow-hidden border border-outline-variant/20 bg-surface-container-lowest shadow-[0_18px_48px_rgba(11,15,16,0.18)]" id="quickEditModal" role="dialog" aria-labelledby="quickEditReference">
+      <div aria-modal="true" class="max-h-[calc(100dvh-4rem)] w-full max-w-4xl overflow-hidden border border-outline-variant/20 bg-surface-container-lowest shadow-[0_18px_48px_rgba(11,15,16,0.18)]" id="quickEditModal" role="dialog" aria-labelledby="quickEditReference">
         <div class="border-b border-outline-variant/20 px-4 py-3">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
@@ -288,37 +288,43 @@
 
             <form class="hidden space-y-3" id="quickEditForm" novalidate>
               <div class="space-y-2">
-                <div class="flex items-end gap-x-2 gap-y-2 overflow-x-auto whitespace-nowrap pb-1" id="quickEditExpressionLine">
+                <div class="flex items-start gap-x-2 gap-y-2 overflow-x-auto whitespace-nowrap pb-1" id="quickEditExpressionLine">
                   <button aria-label="Ajouter 尾箱" class="inline-flex h-8 w-8 flex-none items-center justify-center self-end rounded border border-outline-variant/30 text-on-surface-variant transition-colors duration-150 hover:bg-surface-container" id="quickEditTailToggle" type="button">
                     <span class="material-symbols-outlined !text-[15px]" id="quickEditTailToggleIcon">add</span>
                   </button>
-                  <div class="hidden flex-none flex-col items-center justify-end gap-1 self-end" id="quickEditTailGroup">
+                  <div class="hidden flex-none grid grid-rows-[auto_2rem] items-start justify-items-center gap-1 self-start" id="quickEditTailGroup">
                     <label class="flex-none" id="quickEditTailSegment">
                     <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">尾箱</span>
                     <input class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-medium text-on-surface" id="quickEditTail" inputmode="text" maxlength="16" placeholder="(360p)" type="text" />
                   </label>
-                  <button aria-label="Retirer 尾箱" class="inline-flex h-6 w-6 items-center justify-center rounded text-on-surface-variant transition-colors duration-150 hover:bg-surface-container" id="quickEditTailRemove" type="button">
+                  <button aria-label="Retirer 尾箱" class="inline-flex h-8 w-8 items-center justify-center rounded border border-outline-variant/30 text-on-surface-variant transition-colors duration-150 hover:bg-surface-container" id="quickEditTailRemove" type="button">
                     <span class="material-symbols-outlined !text-[15px]">remove</span>
                   </button>
                   </div>
-                  <span class="hidden self-end pb-2 text-sm font-semibold text-on-surface-variant" id="quickEditTailJoin">+</span>
+                  <span class="hidden self-end pb-2 text-sm font-medium text-on-surface-variant/80" id="quickEditTailJoin">+</span>
 
+                  <div class="grid grid-rows-[auto_2rem] items-start justify-items-start gap-1 self-start">
                   <label class="flex-none" id="quickEditUnitsPerBoxField">
                     <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">件/箱</span>
                     <input class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-semibold text-on-surface" id="quickEditUnitsPerBox" inputmode="text" maxlength="16" placeholder="336p" type="text" />
                   </label>
+                  <span aria-hidden="true" class="h-8 w-8 opacity-0"></span>
+                  </div>
 
                   <span class="self-end pb-2 text-sm font-medium text-on-surface-variant/80">×</span>
 
+                  <div class="grid grid-rows-[auto_2rem] items-start justify-items-start gap-1 self-start">
                   <label class="flex-none" id="quickEditItemBoxesField">
                     <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">箱数</span>
                     <input class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-semibold text-on-surface" id="quickEditItemBoxes" inputmode="numeric" min="0" step="1" type="number" />
                   </label>
+                  <span aria-hidden="true" class="h-8 w-8 opacity-0"></span>
+                  </div>
 
                   <button aria-label="Ajouter 分数" class="inline-flex h-8 w-8 flex-none items-center justify-center self-end rounded border border-outline-variant/30 text-on-surface-variant transition-colors duration-150 hover:bg-surface-container" id="quickEditFractionToggle" type="button">
                     <span class="material-symbols-outlined !text-[15px]" id="quickEditFractionToggleIcon">add</span>
                   </button>
-                  <div class="hidden flex-none flex-col items-center justify-end gap-1 self-end" id="quickEditFractionGroup">
+                  <div class="hidden flex-none grid grid-rows-[auto_2rem] items-start justify-items-center gap-1 self-start" id="quickEditFractionGroup">
                     <div class="flex items-end gap-x-2 gap-y-2" id="quickEditFractionSegment">
                     <label class="flex-none" id="quickEditSignField">
                       <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">符号</span>
@@ -332,7 +338,7 @@
                       <input class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-medium text-on-surface" id="quickEditFractionText" inputmode="text" maxlength="10" placeholder="1/2" type="text" />
                     </label>
                     </div>
-                    <button aria-label="Retirer 分数" class="inline-flex h-6 w-6 items-center justify-center rounded text-on-surface-variant transition-colors duration-150 hover:bg-surface-container" id="quickEditFractionRemove" type="button">
+                    <button aria-label="Retirer 分数" class="inline-flex h-8 w-8 items-center justify-center rounded border border-outline-variant/30 text-on-surface-variant transition-colors duration-150 hover:bg-surface-container" id="quickEditFractionRemove" type="button">
                       <span class="material-symbols-outlined !text-[15px]">remove</span>
                     </button>
                   </div>
@@ -340,7 +346,7 @@
                   <button aria-label="Ajouter 包" class="inline-flex h-8 w-8 flex-none items-center justify-center self-end rounded border border-outline-variant/30 text-on-surface-variant transition-colors duration-150 hover:bg-surface-container" id="quickEditPackToggle" type="button">
                     <span class="material-symbols-outlined !text-[15px]" id="quickEditPackToggleIcon">add</span>
                   </button>
-                  <div class="hidden flex-none flex-col items-center justify-end gap-1 self-end" id="quickEditPackGroup">
+                  <div class="hidden flex-none grid grid-rows-[auto_2rem] items-start justify-items-center gap-1 self-start" id="quickEditPackGroup">
                     <div class="flex items-end gap-x-2 gap-y-2" id="quickEditPackSegment">
                     <label class="flex-none" id="quickEditPackSignField">
                       <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">符号</span>
@@ -354,7 +360,7 @@
                       <input class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-medium text-on-surface" id="quickEditPackNotationCount" inputmode="numeric" min="0" step="1" type="number" />
                     </label>
                     </div>
-                    <button aria-label="Retirer 包" class="inline-flex h-6 w-6 items-center justify-center rounded text-on-surface-variant transition-colors duration-150 hover:bg-surface-container" id="quickEditPackRemove" type="button">
+                    <button aria-label="Retirer 包" class="inline-flex h-8 w-8 items-center justify-center rounded border border-outline-variant/30 text-on-surface-variant transition-colors duration-150 hover:bg-surface-container" id="quickEditPackRemove" type="button">
                       <span class="material-symbols-outlined !text-[15px]">remove</span>
                     </button>
                   </div>
@@ -553,9 +559,9 @@
           setFieldWidth_(els.quickEditTailSegment, els.quickEditTail, form.tailInput, els.quickEditTail.placeholder, 8, 14, 1);
           setFieldWidth_(els.quickEditUnitsPerBoxField, els.quickEditUnitsPerBox, form.unitsPerBoxInput, els.quickEditUnitsPerBox.placeholder, 8, 14, 1);
           setFieldWidth_(els.quickEditItemBoxesField, els.quickEditItemBoxes, form.itemBoxes, "1", 5, 8, 1);
-          setFieldWidth_(els.quickEditSignField, els.quickEditSign, els.quickEditSign.value, "+", 4, 5, 0);
+          setFieldWidth_(els.quickEditSignField, els.quickEditSign, els.quickEditSign.value, "+", 6, 7, 0);
           setFieldWidth_(els.quickEditFractionTextField, els.quickEditFractionText, form.fractionText, els.quickEditFractionText.placeholder, 6, 10, 1);
-          setFieldWidth_(els.quickEditPackSignField, els.quickEditPackNotationSign, els.quickEditPackNotationSign.value, "+", 4, 5, 0);
+          setFieldWidth_(els.quickEditPackSignField, els.quickEditPackNotationSign, els.quickEditPackNotationSign.value, "+", 6, 7, 0);
           setFieldWidth_(els.quickEditPackCountField, els.quickEditPackNotationCount, form.packNotationCount, "0", 5, 8, 1);
         }
 

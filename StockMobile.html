@@ -303,11 +303,8 @@
                             </label>
                           </div>
                         </div>
-                        <div class="hidden flex-none w-4" id="quickEditTailJoinSlot">
-                          <div class="grid h-full grid-rows-[auto_minmax(2.25rem,1fr)]">
-                            <span aria-hidden="true" class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] opacity-0">.</span>
-                            <span class="flex items-center justify-center text-sm font-medium text-on-surface-variant/80" id="quickEditTailJoin">+</span>
-                          </div>
+                        <div class="hidden relative flex-none w-4 self-stretch" id="quickEditTailJoinSlot">
+                          <span aria-hidden="true" class="pointer-events-none absolute left-1/2 top-1/2 text-sm font-medium text-on-surface-variant/80" id="quickEditTailJoin" style="transform:translate(-50%, -50%)">+</span>
                         </div>
 
                         <div class="flex-none" id="quickEditUnitsPerBoxSlot">
@@ -317,11 +314,8 @@
                           </label>
                         </div>
 
-                        <div class="flex-none w-4" id="quickEditMultiplyJoinSlot">
-                          <div class="grid h-full grid-rows-[auto_minmax(2.25rem,1fr)]">
-                            <span aria-hidden="true" class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] opacity-0">.</span>
-                            <span class="flex items-center justify-center text-sm font-medium text-on-surface-variant/80" id="quickEditMultiplyJoin">×</span>
-                          </div>
+                        <div class="relative flex-none w-4 self-stretch" id="quickEditMultiplyJoinSlot">
+                          <span aria-hidden="true" class="pointer-events-none absolute left-1/2 top-1/2 text-sm font-medium text-on-surface-variant/80" id="quickEditMultiplyJoin" style="transform:translate(-50%, -50%)">×</span>
                         </div>
 
                         <div class="flex-none" id="quickEditItemBoxesSlot">
@@ -640,6 +634,53 @@
           syncWidthPair_(els.quickEditMultiplyJoinSlot, els.quickEditMultiplyRemoveSpacerSlot);
         }
 
+        function getHorizontalCenter_(element) {
+          if (!element || element.classList.contains("hidden")) return 0;
+          const rect = element.getBoundingClientRect();
+          return rect.width > 0 ? rect.left + (rect.width / 2) : 0;
+        }
+
+        function getVerticalCenter_(element) {
+          if (!element || element.classList.contains("hidden")) return 0;
+          const rect = element.getBoundingClientRect();
+          return rect.height > 0 ? rect.top + (rect.height / 2) : 0;
+        }
+
+        function positionQuickEditOperator_(slotEl, operatorEl, leftEl, rightEl) {
+          if (!slotEl || !operatorEl || !leftEl || !rightEl || slotEl.classList.contains("hidden")) {
+            if (operatorEl) operatorEl.style.transform = "translate(-50%, -50%)";
+            return;
+          }
+          const slotRect = slotEl.getBoundingClientRect();
+          if (!(slotRect.width > 0 && slotRect.height > 0)) {
+            operatorEl.style.transform = "translate(-50%, -50%)";
+            return;
+          }
+          const leftCenterX = getHorizontalCenter_(leftEl);
+          const rightCenterX = getHorizontalCenter_(rightEl);
+          const leftCenterY = getVerticalCenter_(leftEl);
+          const rightCenterY = getVerticalCenter_(rightEl);
+          if (!(leftCenterX > 0 && rightCenterX > 0 && leftCenterY > 0 && rightCenterY > 0)) {
+            operatorEl.style.transform = "translate(-50%, -50%)";
+            return;
+          }
+          const midpointX = (leftCenterX + rightCenterX) / 2;
+          const midpointY = (leftCenterY + rightCenterY) / 2;
+          const offsetX = midpointX - (slotRect.left + (slotRect.width / 2));
+          const offsetY = midpointY - (slotRect.top + (slotRect.height / 2));
+          operatorEl.style.transform = "translate(calc(-50% + " + offsetX.toFixed(2) + "px), calc(-50% + " + offsetY.toFixed(2) + "px))";
+        }
+
+        function syncQuickEditOperatorPositions_() {
+          const tailSource = !els.quickEditTailGroup.classList.contains("hidden") ? els.quickEditTail : els.quickEditTailToggle;
+          positionQuickEditOperator_(els.quickEditTailJoinSlot, els.quickEditTailJoin, tailSource, els.quickEditUnitsPerBox);
+          positionQuickEditOperator_(els.quickEditMultiplyJoinSlot, els.quickEditMultiplyJoin, els.quickEditUnitsPerBox, els.quickEditItemBoxes);
+        }
+
+        function hasVisibleQuickEditRemove_() {
+          return !els.quickEditTailRemoveSlot.classList.contains("hidden") || !els.quickEditPartialRemoveSlot.classList.contains("hidden");
+        }
+
         function centerQuickEditMeasuredBlock_(scrollEl, measureEl, measuredWidth) {
           if (!scrollEl || !measureEl) return;
           const viewportWidth = scrollEl.clientWidth;
@@ -666,6 +707,7 @@
           syncWidthPair_(els.quickEditItemBoxesSlot, els.quickEditItemBoxesRemoveSpacer);
           syncWidthPair_(els.quickEditPartialSlot, els.quickEditPartialRemoveSlot);
           syncQuickEditOperatorSlots_();
+          syncQuickEditOperatorPositions_();
 
           const measuredWidth = Math.round(els.quickEditExpressionMeasure.getBoundingClientRect().width || 0);
           if (!(measuredWidth > 0)) {
@@ -680,7 +722,7 @@
 
           quickEditLayoutRetry_ = 0;
           centerQuickEditMeasuredBlock_(els.quickEditExpressionScroll, els.quickEditExpressionMeasure, measuredWidth);
-          if (!els.quickEditRemoveCenterWrap.classList.contains("hidden")) {
+          if (!els.quickEditRemoveCenterWrap.classList.contains("hidden") && hasVisibleQuickEditRemove_()) {
             els.quickEditRemoveMeasure.style.width = measuredWidth + "px";
             centerQuickEditMeasuredBlock_(els.quickEditRemoveScroll, els.quickEditRemoveMeasure, measuredWidth);
           } else {

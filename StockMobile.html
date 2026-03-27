@@ -244,13 +244,21 @@
             <section id="quickExitPanel">
               <div class="rounded border border-outline-variant/20 bg-surface-container-low px-3 py-2">
                 <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Stock actuel</div>
-                <div class="mt-2 flex flex-wrap gap-2 text-sm font-semibold text-primary" id="quickExitCurrentStock">-</div>
+                <div class="mt-2 w-full overflow-x-auto" id="quickExitCurrentStockScroll">
+                  <div class="flex justify-center">
+                    <div class="inline-flex min-w-fit flex-nowrap gap-2 text-sm font-semibold text-primary" id="quickExitCurrentStock">-</div>
+                  </div>
+                </div>
                 <div class="mt-2 hidden text-[11px] text-on-surface-variant" id="quickExitPreviewWrap">
                   <span class="font-bold uppercase tracking-[0.16em] text-on-surface-variant">Apres sortie</span>
                   <span class="ml-2 font-semibold text-on-surface" id="quickExitPreview">-</span>
                 </div>
               </div>
-              <div class="space-y-3" id="quickExitSegmentForms"></div>
+              <div class="mt-3 w-full overflow-x-auto" id="quickExitSegmentFormsScroll">
+                <div class="flex justify-center">
+                  <div class="inline-flex min-w-fit flex-nowrap items-end gap-6" id="quickExitSegmentForms"></div>
+                </div>
+              </div>
             </section>
 
             <form class="hidden space-y-3" id="quickEditForm" novalidate>
@@ -455,9 +463,11 @@
           quickEditTabQuickExit: document.getElementById("quickEditTabQuickExit"),
           quickEditTabEdit: document.getElementById("quickEditTabEdit"),
           quickExitPanel: document.getElementById("quickExitPanel"),
+          quickExitCurrentStockScroll: document.getElementById("quickExitCurrentStockScroll"),
           quickExitCurrentStock: document.getElementById("quickExitCurrentStock"),
           quickExitPreviewWrap: document.getElementById("quickExitPreviewWrap"),
           quickExitPreview: document.getElementById("quickExitPreview"),
+          quickExitSegmentFormsScroll: document.getElementById("quickExitSegmentFormsScroll"),
           quickExitSegmentForms: document.getElementById("quickExitSegmentForms"),
           quickExitPacksHint: document.getElementById("quickExitPacksHint"),
           quickEditForm: document.getElementById("quickEditForm"),
@@ -1414,6 +1424,13 @@
           renderQuickEdit();
         }
 
+        function syncQuickExitScrollableRow_(scrollEl, innerEl) {
+          if (!scrollEl || !innerEl) return;
+          if (innerEl.scrollWidth <= scrollEl.clientWidth + 1) {
+            scrollEl.scrollLeft = 0;
+          }
+        }
+
         function buildQuickExitSegmentsMarkup_(item) {
           const segments = getQuickExitSegments_(item);
           if (!segments.length) {
@@ -1421,7 +1438,7 @@
           }
           return segments.map(function(segment) {
             const selected = !!getQuickExitSelectionConfig_(segment.id);
-            return '<button class="inline-flex items-center rounded border px-2 py-1 text-sm font-semibold transition-colors duration-150 '
+            return '<button class="inline-flex cursor-pointer items-center rounded border px-2 py-1 text-sm font-semibold transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-primary/30 '
               + (selected ? 'border-primary bg-primary text-on-primary' : 'border-outline-variant/30 text-primary hover:bg-surface-container')
               + '" data-quick-exit-segment="' + escapeHtml(segment.id) + '" type="button">'
               + escapeHtml(segment.label || segment.id)
@@ -1437,7 +1454,7 @@
             els.quickExitSegmentForms.innerHTML = "";
             return;
           }
-          els.quickExitSegmentForms.innerHTML = segments.map(function(segment) {
+          els.quickExitSegmentForms.innerHTML = segments.map(function(segment, index) {
             const config = getQuickExitSelectionConfig_(segment.id) || getDefaultQuickExitConfig_(segment);
             const actionOptions = segment.actions.map(function(action) {
               return '<option value="' + escapeHtml(action.value) + '"' + (config.action === action.value ? ' selected' : '') + '>' + escapeHtml(action.label) + '</option>';
@@ -1445,12 +1462,14 @@
             const quantityControl = config.action === "fraction"
               ? '<label class="block min-w-0"><span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">fraction</span><input class="w-[5.5rem] border-outline-variant/30 bg-surface-container-low px-2 text-sm font-semibold text-on-surface" data-quick-exit-field="fractionText" data-segment-id="' + escapeHtml(segment.id) + '" placeholder="1/2" type="text" value="' + escapeHtml(config.fractionText || "") + '" /></label>'
               : '<label class="block min-w-0"><span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">quantite</span><input class="w-[5.5rem] border-outline-variant/30 bg-surface-container-low px-2 text-sm font-semibold text-on-surface" data-quick-exit-field="quantity" data-segment-id="' + escapeHtml(segment.id) + '" inputmode="numeric" min="0" step="1" type="number" value="' + escapeHtml(config.quantity || "") + '" /></label>';
-            return '<div class="rounded border border-outline-variant/20 bg-surface-container-low px-3 py-2">'
+            return '<div class="min-w-fit' + (index > 0 ? ' border-l border-outline-variant/20 pl-6' : '') + '">'
+              + '<div class="flex min-w-fit flex-col items-start justify-end">'
               + '<div class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">' + escapeHtml(segment.id === "tail" ? "尾箱" : "箱") + '</div>'
               + '<div class="mt-1 text-sm font-semibold text-on-surface">' + escapeHtml(segment.label) + '</div>'
-              + '<div class="mt-2 flex flex-wrap items-end gap-2">'
+              + '<div class="mt-2 flex min-h-[4.5rem] items-end gap-2">'
               + quantityControl
               + '<label class="block min-w-0"><span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">action</span><select class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-semibold text-on-surface" data-quick-exit-field="action" data-segment-id="' + escapeHtml(segment.id) + '">' + actionOptions + '</select></label>'
+              + '</div>'
               + '</div>'
               + '</div>';
           }).join("");
@@ -1726,6 +1745,8 @@
           els.quickEditPartialToggle.classList.toggle("opacity-60", !packsEnabled && !partialHasValue);
           els.quickExitCurrentStock.innerHTML = buildQuickExitSegmentsMarkup_(item);
           renderQuickExitSegmentForms_(item);
+          syncQuickExitScrollableRow_(els.quickExitCurrentStockScroll, els.quickExitCurrentStock);
+          syncQuickExitScrollableRow_(els.quickExitSegmentFormsScroll, els.quickExitSegmentForms);
           els.quickExitPreviewWrap.classList.toggle("hidden", !preview);
           els.quickExitPreview.textContent = preview || "-";
           els.quickExitPacksHint.classList.toggle("hidden", !packsEnabled);

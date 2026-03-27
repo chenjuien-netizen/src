@@ -1436,9 +1436,12 @@
           if (!segments.length) {
             return '<span class="text-on-surface-variant">-</span>';
           }
-          return segments.map(function(segment) {
+          return segments.map(function(segment, index) {
             const selected = !!getQuickExitSelectionConfig_(segment.id);
-            return '<button class="inline-flex cursor-pointer items-center rounded border px-2 py-1 text-sm font-semibold transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-primary/30 '
+            const joinMarkup = index > 0
+              ? '<span aria-hidden="true" class="pointer-events-none inline-flex items-center text-sm font-medium text-on-surface-variant/80">+</span>'
+              : '';
+            return joinMarkup + '<button class="inline-flex cursor-pointer items-center rounded border px-2 py-1 text-sm font-semibold transition-colors duration-150 focus:outline-none '
               + (selected ? 'border-primary bg-primary text-on-primary' : 'border-outline-variant/30 text-primary hover:bg-surface-container')
               + '" data-quick-exit-segment="' + escapeHtml(segment.id) + '" type="button">'
               + escapeHtml(segment.label || segment.id)
@@ -1792,10 +1795,6 @@
             segments: {}
           };
           renderQuickEdit();
-          window.setTimeout(function() {
-            const firstSegment = els.quickExitCurrentStock.querySelector("[data-quick-exit-segment]");
-            if (firstSegment) firstSegment.focus();
-          }, 0);
         }
 
         function closeQuickEdit() {

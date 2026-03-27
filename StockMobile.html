@@ -288,82 +288,114 @@
 
             <form class="hidden space-y-3" id="quickEditForm" novalidate>
               <div class="space-y-2">
-                <div class="flex items-end gap-x-2 gap-y-2 overflow-x-auto whitespace-nowrap pb-1" id="quickEditExpressionLine">
-                  <div class="flex-none" id="quickEditTailSlot">
-                    <button aria-label="Ajouter 尾箱" class="inline-flex h-8 w-8 items-center justify-center rounded border border-outline-variant/30 text-on-surface-variant transition-colors duration-150 hover:bg-surface-container" id="quickEditTailToggle" type="button">
-                      <span class="material-symbols-outlined !text-[15px]" id="quickEditTailToggleIcon">add</span>
-                    </button>
-                    <div class="hidden" id="quickEditTailGroup">
-                      <label class="block" id="quickEditTailSegment">
-                        <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">尾箱</span>
-                        <input class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-medium text-on-surface" id="quickEditTail" inputmode="text" maxlength="16" placeholder="(360p)" type="text" />
-                      </label>
-                    </div>
-                  </div>
-                  <span class="hidden self-end pb-2 text-sm font-medium text-on-surface-variant/80" id="quickEditTailJoin">+</span>
+                <div class="w-full" id="quickEditExpressionCenterWrap">
+                  <div class="overflow-x-auto" id="quickEditExpressionScroll">
+                    <div class="w-max min-w-0" id="quickEditExpressionMeasure">
+                      <div class="flex items-end gap-x-2 gap-y-2 whitespace-nowrap pb-1" id="quickEditExpressionLine">
+                        <div class="flex-none" id="quickEditTailSlot">
+                          <button aria-label="Ajouter 尾箱" class="inline-flex h-8 w-8 items-center justify-center rounded border border-outline-variant/30 text-on-surface-variant transition-colors duration-150 hover:bg-surface-container" id="quickEditTailToggle" type="button">
+                            <span class="material-symbols-outlined !text-[15px]" id="quickEditTailToggleIcon">add</span>
+                          </button>
+                          <div class="hidden" id="quickEditTailGroup">
+                            <label class="block" id="quickEditTailSegment">
+                              <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">尾箱</span>
+                              <input class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-medium text-on-surface" id="quickEditTail" inputmode="text" maxlength="16" placeholder="(360p)" type="text" />
+                            </label>
+                          </div>
+                        </div>
+                        <div class="hidden flex-none" id="quickEditTailJoinSlot">
+                          <div class="grid h-full grid-rows-[auto_minmax(2.25rem,1fr)]">
+                            <span aria-hidden="true" class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] opacity-0">.</span>
+                            <span class="flex items-center justify-center text-sm font-medium text-on-surface-variant/80" id="quickEditTailJoin">+</span>
+                          </div>
+                        </div>
 
-                  <div class="flex-none" id="quickEditUnitsPerBoxSlot">
-                    <label class="block" id="quickEditUnitsPerBoxField">
-                      <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">件/箱</span>
-                      <input class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-semibold text-on-surface" id="quickEditUnitsPerBox" inputmode="text" maxlength="16" placeholder="336p" type="text" />
-                    </label>
-                  </div>
+                        <div class="flex-none" id="quickEditUnitsPerBoxSlot">
+                          <label class="block" id="quickEditUnitsPerBoxField">
+                            <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">件/箱</span>
+                            <input class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-semibold text-on-surface" id="quickEditUnitsPerBox" inputmode="text" maxlength="16" placeholder="336p" type="text" />
+                          </label>
+                        </div>
 
-                  <span class="self-end pb-2 text-sm font-medium text-on-surface-variant/80" id="quickEditMultiplyJoin">×</span>
+                        <div class="flex-none" id="quickEditMultiplyJoinSlot">
+                          <div class="grid h-full grid-rows-[auto_minmax(2.25rem,1fr)]">
+                            <span aria-hidden="true" class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] opacity-0">.</span>
+                            <span class="flex items-center justify-center text-sm font-medium text-on-surface-variant/80" id="quickEditMultiplyJoin">×</span>
+                          </div>
+                        </div>
 
-                  <div class="flex-none" id="quickEditItemBoxesSlot">
-                    <label class="block" id="quickEditItemBoxesField">
-                      <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">箱数</span>
-                      <input class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-semibold text-on-surface" id="quickEditItemBoxes" inputmode="numeric" min="0" step="1" type="number" />
-                    </label>
-                  </div>
+                        <div class="flex-none" id="quickEditItemBoxesSlot">
+                          <label class="block" id="quickEditItemBoxesField">
+                            <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">箱数</span>
+                            <input class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-semibold text-on-surface" id="quickEditItemBoxes" inputmode="numeric" min="0" step="1" type="number" />
+                          </label>
+                        </div>
 
-                  <div class="flex-none" id="quickEditPartialSlot">
-                    <button aria-label="Ajouter bloc partiel" class="inline-flex h-8 w-8 items-center justify-center rounded border border-outline-variant/30 text-on-surface-variant transition-colors duration-150 hover:bg-surface-container" id="quickEditPartialToggle" type="button">
-                      <span class="material-symbols-outlined !text-[15px]" id="quickEditPartialToggleIcon">add</span>
-                    </button>
-                    <div class="hidden" id="quickEditPartialGroup">
-                      <div class="flex items-end gap-x-2 gap-y-2" id="quickEditPartialSegment">
-                        <label class="block" id="quickEditSignField">
-                          <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">符号</span>
-                          <select class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-medium text-on-surface" id="quickEditSign">
-                            <option value="+">+</option>
-                            <option value="×">×</option>
-                          </select>
-                        </label>
-                        <label class="block" id="quickEditFractionTextField">
-                          <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">分数</span>
-                          <input class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-medium text-on-surface" id="quickEditFractionText" inputmode="text" maxlength="10" placeholder="1/2" type="text" />
-                        </label>
-                        <label class="block" id="quickEditPackSignField">
-                          <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">符号</span>
-                          <select class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-medium text-on-surface" id="quickEditPackNotationSign">
-                            <option value="+">+</option>
-                            <option value="-">-</option>
-                          </select>
-                        </label>
-                        <label class="block" id="quickEditPackCountField">
-                          <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">包</span>
-                          <input class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-medium text-on-surface" id="quickEditPackNotationCount" inputmode="numeric" min="0" step="1" type="number" />
-                        </label>
+                        <div class="flex-none" id="quickEditPartialSlot">
+                          <button aria-label="Ajouter bloc partiel" class="inline-flex h-8 w-8 items-center justify-center rounded border border-outline-variant/30 text-on-surface-variant transition-colors duration-150 hover:bg-surface-container" id="quickEditPartialToggle" type="button">
+                            <span class="material-symbols-outlined !text-[15px]" id="quickEditPartialToggleIcon">add</span>
+                          </button>
+                          <div class="hidden" id="quickEditPartialGroup">
+                            <div class="flex items-end gap-x-2 gap-y-2" id="quickEditPartialSegment">
+                              <label class="block" id="quickEditSignField">
+                                <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">符号</span>
+                                <select class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-medium text-on-surface" id="quickEditSign">
+                                  <option value="+">+</option>
+                                  <option value="×">×</option>
+                                </select>
+                              </label>
+                              <label class="block" id="quickEditFractionTextField">
+                                <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">分数</span>
+                                <input class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-medium text-on-surface" id="quickEditFractionText" inputmode="text" maxlength="10" placeholder="1/2" type="text" />
+                              </label>
+                              <label class="block" id="quickEditPackSignField">
+                                <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">符号</span>
+                                <select class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-medium text-on-surface" id="quickEditPackNotationSign">
+                                  <option value="+">+</option>
+                                  <option value="-">-</option>
+                                </select>
+                              </label>
+                              <label class="block" id="quickEditPackCountField">
+                                <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">包</span>
+                                <input class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-medium text-on-surface" id="quickEditPackNotationCount" inputmode="numeric" min="0" step="1" type="number" />
+                              </label>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-                <div class="flex items-start gap-x-2 gap-y-1 overflow-x-auto whitespace-nowrap" id="quickEditRemoveLine">
-                  <div class="flex-none hidden" id="quickEditTailRemoveSlot">
-                    <button aria-label="Retirer 尾箱" class="inline-flex h-8 w-8 items-center justify-center rounded border border-outline-variant/30 text-on-surface-variant transition-colors duration-150 hover:bg-surface-container" id="quickEditTailRemove" type="button">
-                      <span class="material-symbols-outlined !text-[15px]">remove</span>
-                    </button>
-                  </div>
-                  <span aria-hidden="true" class="hidden self-start pb-2 text-sm font-medium opacity-0" id="quickEditTailRemoveJoin">+</span>
-                  <span aria-hidden="true" class="flex-none opacity-0" id="quickEditUnitsPerBoxRemoveSpacer"></span>
-                  <span aria-hidden="true" class="self-start pb-2 text-sm font-medium opacity-0" id="quickEditMultiplyRemoveSpacer">×</span>
-                  <span aria-hidden="true" class="flex-none opacity-0" id="quickEditItemBoxesRemoveSpacer"></span>
-                  <div class="flex-none hidden" id="quickEditPartialRemoveSlot">
-                    <button aria-label="Retirer bloc partiel" class="inline-flex h-8 w-8 items-center justify-center rounded border border-outline-variant/30 text-on-surface-variant transition-colors duration-150 hover:bg-surface-container" id="quickEditPartialRemove" type="button">
-                      <span class="material-symbols-outlined !text-[15px]">remove</span>
-                    </button>
+                <div class="hidden w-full" id="quickEditRemoveCenterWrap">
+                  <div class="overflow-x-auto" id="quickEditRemoveScroll">
+                    <div class="w-max min-w-0" id="quickEditRemoveMeasure">
+                      <div class="flex items-start gap-x-2 gap-y-1 whitespace-nowrap" id="quickEditRemoveLine">
+                        <div class="flex-none hidden" id="quickEditTailRemoveSlot">
+                          <button aria-label="Retirer 尾箱" class="inline-flex h-8 w-8 items-center justify-center rounded border border-outline-variant/30 text-on-surface-variant transition-colors duration-150 hover:bg-surface-container" id="quickEditTailRemove" type="button">
+                            <span class="material-symbols-outlined !text-[15px]">remove</span>
+                          </button>
+                        </div>
+                        <div aria-hidden="true" class="hidden flex-none" id="quickEditTailRemoveJoinSlot">
+                          <div class="grid h-full grid-rows-[auto_minmax(2.25rem,1fr)]">
+                            <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] opacity-0">.</span>
+                            <span class="flex items-center justify-center text-sm font-medium opacity-0" id="quickEditTailRemoveJoin">+</span>
+                          </div>
+                        </div>
+                        <span aria-hidden="true" class="flex-none opacity-0" id="quickEditUnitsPerBoxRemoveSpacer"></span>
+                        <div aria-hidden="true" class="flex-none" id="quickEditMultiplyRemoveSpacerSlot">
+                          <div class="grid h-full grid-rows-[auto_minmax(2.25rem,1fr)]">
+                            <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] opacity-0">.</span>
+                            <span class="flex items-center justify-center text-sm font-medium opacity-0" id="quickEditMultiplyRemoveSpacer">×</span>
+                          </div>
+                        </div>
+                        <span aria-hidden="true" class="flex-none opacity-0" id="quickEditItemBoxesRemoveSpacer"></span>
+                        <div class="flex-none hidden" id="quickEditPartialRemoveSlot">
+                          <button aria-label="Retirer bloc partiel" class="inline-flex h-8 w-8 items-center justify-center rounded border border-outline-variant/30 text-on-surface-variant transition-colors duration-150 hover:bg-surface-container" id="quickEditPartialRemove" type="button">
+                            <span class="material-symbols-outlined !text-[15px]">remove</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -480,6 +512,10 @@
           quickEditForm: document.getElementById("quickEditForm"),
           quickEditReference: document.getElementById("quickEditReference"),
           quickEditStockDisplay: document.getElementById("quickEditStockDisplay"),
+          quickEditExpressionCenterWrap: document.getElementById("quickEditExpressionCenterWrap"),
+          quickEditExpressionScroll: document.getElementById("quickEditExpressionScroll"),
+          quickEditExpressionMeasure: document.getElementById("quickEditExpressionMeasure"),
+          quickEditExpressionLine: document.getElementById("quickEditExpressionLine"),
           quickEditTailSlot: document.getElementById("quickEditTailSlot"),
           quickEditTailToggle: document.getElementById("quickEditTailToggle"),
           quickEditTailToggleIcon: document.getElementById("quickEditTailToggleIcon"),
@@ -487,14 +523,18 @@
           quickEditTailRemove: document.getElementById("quickEditTailRemove"),
           quickEditTailRemoveSlot: document.getElementById("quickEditTailRemoveSlot"),
           quickEditTailSegment: document.getElementById("quickEditTailSegment"),
+          quickEditTailJoinSlot: document.getElementById("quickEditTailJoinSlot"),
           quickEditTailJoin: document.getElementById("quickEditTailJoin"),
+          quickEditTailRemoveJoinSlot: document.getElementById("quickEditTailRemoveJoinSlot"),
           quickEditTailRemoveJoin: document.getElementById("quickEditTailRemoveJoin"),
           quickEditTail: document.getElementById("quickEditTail"),
           quickEditUnitsPerBoxSlot: document.getElementById("quickEditUnitsPerBoxSlot"),
           quickEditUnitsPerBoxField: document.getElementById("quickEditUnitsPerBoxField"),
           quickEditUnitsPerBoxRemoveSpacer: document.getElementById("quickEditUnitsPerBoxRemoveSpacer"),
           quickEditUnitsPerBox: document.getElementById("quickEditUnitsPerBox"),
+          quickEditMultiplyJoinSlot: document.getElementById("quickEditMultiplyJoinSlot"),
           quickEditMultiplyJoin: document.getElementById("quickEditMultiplyJoin"),
+          quickEditMultiplyRemoveSpacerSlot: document.getElementById("quickEditMultiplyRemoveSpacerSlot"),
           quickEditMultiplyRemoveSpacer: document.getElementById("quickEditMultiplyRemoveSpacer"),
           quickEditItemBoxesSlot: document.getElementById("quickEditItemBoxesSlot"),
           quickEditItemBoxesField: document.getElementById("quickEditItemBoxesField"),
@@ -515,12 +555,19 @@
           quickEditPackNotationSign: document.getElementById("quickEditPackNotationSign"),
           quickEditPackCountField: document.getElementById("quickEditPackCountField"),
           quickEditPackNotationCount: document.getElementById("quickEditPackNotationCount"),
+          quickEditRemoveCenterWrap: document.getElementById("quickEditRemoveCenterWrap"),
+          quickEditRemoveScroll: document.getElementById("quickEditRemoveScroll"),
+          quickEditRemoveMeasure: document.getElementById("quickEditRemoveMeasure"),
           quickEditRemoveLine: document.getElementById("quickEditRemoveLine"),
           quickEditRemark: document.getElementById("quickEditRemark"),
           quickEditMessage: document.getElementById("quickEditMessage"),
           quickEditCancel: document.getElementById("quickEditCancel"),
           quickEditSave: document.getElementById("quickEditSave")
         };
+
+        let quickEditLayoutFrame_ = 0;
+        let quickEditLayoutRetry_ = 0;
+        let quickEditLayoutObserver_ = null;
 
         function escapeHtml(value) {
           return String(value == null ? "" : value)
@@ -563,19 +610,87 @@
 
         function syncWidthPair_(sourceEl, targetEl) {
           if (!sourceEl || !targetEl) return;
+          targetEl.style.width = "";
           const width = sourceEl.offsetWidth;
           if (!width) {
-            targetEl.style.width = "";
             return;
           }
           targetEl.style.width = width + "px";
         }
 
-        function syncQuickEditRowAlignment_() {
-          const expressionFits = els.quickEditExpressionLine.scrollWidth <= els.quickEditExpressionLine.clientWidth + 1;
-          const removeFits = els.quickEditRemoveLine.scrollWidth <= els.quickEditRemoveLine.clientWidth + 1;
-          els.quickEditExpressionLine.classList.toggle("justify-center", expressionFits);
-          els.quickEditRemoveLine.classList.toggle("justify-center", removeFits);
+        function resetQuickEditInlineWidths_() {
+          [
+            els.quickEditTailRemoveSlot,
+            els.quickEditTailRemoveJoinSlot,
+            els.quickEditUnitsPerBoxRemoveSpacer,
+            els.quickEditMultiplyRemoveSpacerSlot,
+            els.quickEditItemBoxesRemoveSpacer,
+            els.quickEditPartialRemoveSlot,
+            els.quickEditRemoveMeasure
+          ].forEach(function(element) {
+            if (element) element.style.width = "";
+          });
+        }
+
+        function syncQuickEditOperatorSlots_() {
+          syncWidthPair_(els.quickEditTailJoinSlot, els.quickEditTailRemoveJoinSlot);
+          syncWidthPair_(els.quickEditMultiplyJoinSlot, els.quickEditMultiplyRemoveSpacerSlot);
+        }
+
+        function centerQuickEditMeasuredBlock_(scrollEl, measureEl, measuredWidth) {
+          if (!scrollEl || !measureEl) return;
+          const viewportWidth = scrollEl.clientWidth;
+          const contentWidth = measuredWidth || 0;
+          measureEl.style.marginLeft = "";
+          measureEl.style.marginRight = "";
+          if (viewportWidth > 0 && contentWidth > 0 && contentWidth <= viewportWidth + 1) {
+            measureEl.style.marginLeft = "auto";
+            measureEl.style.marginRight = "auto";
+            if (scrollEl.scrollLeft !== 0) scrollEl.scrollLeft = 0;
+            return;
+          }
+          if (scrollEl.scrollWidth <= scrollEl.clientWidth + 1 && scrollEl.scrollLeft !== 0) {
+            scrollEl.scrollLeft = 0;
+          }
+        }
+
+        function syncQuickEditMeasuredLayout_(retryCount) {
+          quickEditLayoutFrame_ = 0;
+          const currentRetry = retryCount || 0;
+          resetQuickEditInlineWidths_();
+          syncWidthPair_(els.quickEditTailSlot, els.quickEditTailRemoveSlot);
+          syncWidthPair_(els.quickEditUnitsPerBoxSlot, els.quickEditUnitsPerBoxRemoveSpacer);
+          syncWidthPair_(els.quickEditItemBoxesSlot, els.quickEditItemBoxesRemoveSpacer);
+          syncWidthPair_(els.quickEditPartialSlot, els.quickEditPartialRemoveSlot);
+          syncQuickEditOperatorSlots_();
+
+          const measuredWidth = Math.round(els.quickEditExpressionMeasure.getBoundingClientRect().width || 0);
+          if (!(measuredWidth > 0)) {
+            if (currentRetry < 2 && state.quickEditOpen) {
+              quickEditLayoutRetry_ = currentRetry + 1;
+              quickEditLayoutFrame_ = window.requestAnimationFrame(function() {
+                syncQuickEditMeasuredLayout_(quickEditLayoutRetry_);
+              });
+            }
+            return;
+          }
+
+          quickEditLayoutRetry_ = 0;
+          els.quickEditRemoveMeasure.style.width = measuredWidth + "px";
+          centerQuickEditMeasuredBlock_(els.quickEditExpressionScroll, els.quickEditExpressionMeasure, measuredWidth);
+          centerQuickEditMeasuredBlock_(els.quickEditRemoveScroll, els.quickEditRemoveMeasure, measuredWidth);
+        }
+
+        function scheduleQuickEditMeasuredLayout_() {
+          if (quickEditLayoutFrame_) {
+            window.cancelAnimationFrame(quickEditLayoutFrame_);
+          }
+          quickEditLayoutRetry_ = 0;
+          quickEditLayoutFrame_ = window.requestAnimationFrame(function() {
+            quickEditLayoutFrame_ = window.requestAnimationFrame(function() {
+              syncQuickEditMeasuredLayout_(0);
+            });
+          });
         }
 
         function syncQuickEditFieldWidths_() {
@@ -587,11 +702,7 @@
           setFieldWidth_(els.quickEditFractionTextField, els.quickEditFractionText, form.fractionText, els.quickEditFractionText.placeholder, 6, 10, 1);
           setFieldWidth_(els.quickEditPackSignField, els.quickEditPackNotationSign, els.quickEditPackNotationSign.value, "+", 7, 8, 0);
           setFieldWidth_(els.quickEditPackCountField, els.quickEditPackNotationCount, form.packNotationCount, "0", 6, 8, 1);
-          syncWidthPair_(els.quickEditTailSlot, els.quickEditTailRemoveSlot);
-          syncWidthPair_(els.quickEditUnitsPerBoxSlot, els.quickEditUnitsPerBoxRemoveSpacer);
-          syncWidthPair_(els.quickEditItemBoxesSlot, els.quickEditItemBoxesRemoveSpacer);
-          syncWidthPair_(els.quickEditPartialSlot, els.quickEditPartialRemoveSlot);
-          syncQuickEditRowAlignment_();
+          scheduleQuickEditMeasuredLayout_();
         }
 
         function renderItemMarkup(item) {
@@ -1398,9 +1509,9 @@
           els.quickEditForm.classList.toggle("hidden", isQuickExit);
           els.quickEditTailToggle.classList.toggle("hidden", tailOpen);
           els.quickEditTailGroup.classList.toggle("hidden", !tailOpen);
-          els.quickEditTailJoin.classList.toggle("hidden", !tailOpen);
+          els.quickEditTailJoinSlot.classList.toggle("hidden", !tailOpen);
           els.quickEditTailRemoveSlot.classList.toggle("hidden", !tailOpen);
-          els.quickEditTailRemoveJoin.classList.toggle("hidden", !tailOpen);
+          els.quickEditTailRemoveJoinSlot.classList.toggle("hidden", !tailOpen);
           els.quickEditPartialToggle.classList.toggle("hidden", !showPartialToggle);
           els.quickEditPartialGroup.classList.toggle("hidden", !showPartialGroup);
           els.quickEditPartialRemoveSlot.classList.toggle("hidden", !showPartialGroup);
@@ -1442,7 +1553,7 @@
           els.quickEditSave.textContent = isQuickExit ? "APPLIQUER LA SORTIE" : "ENREGISTRER";
           els.quickEditSave.disabled = state.quickEditSaving;
           els.quickEditCancel.disabled = state.quickEditSaving;
-          els.quickEditRemoveLine.classList.toggle("hidden", !(tailOpen || showPartialGroup));
+          els.quickEditRemoveCenterWrap.classList.toggle("hidden", !(tailOpen || showPartialGroup));
           syncQuickEditFieldWidths_();
         }
 
@@ -1485,6 +1596,17 @@
         }
 
         function closeQuickEdit() {
+          resetQuickEditInlineWidths_();
+          els.quickEditExpressionMeasure.style.marginLeft = "";
+          els.quickEditExpressionMeasure.style.marginRight = "";
+          els.quickEditRemoveMeasure.style.marginLeft = "";
+          els.quickEditRemoveMeasure.style.marginRight = "";
+          els.quickEditExpressionScroll.scrollLeft = 0;
+          els.quickEditRemoveScroll.scrollLeft = 0;
+          if (quickEditLayoutFrame_) {
+            window.cancelAnimationFrame(quickEditLayoutFrame_);
+            quickEditLayoutFrame_ = 0;
+          }
           state.quickEditOpen = false;
           state.quickEditItem = null;
           state.quickEditForm = null;
@@ -2037,6 +2159,23 @@
             if (state.quickEditOpen) renderQuickEdit();
           }, 100);
         });
+
+        if (typeof ResizeObserver === "function") {
+          quickEditLayoutObserver_ = new ResizeObserver(function() {
+            if (state.quickEditOpen) {
+              scheduleQuickEditMeasuredLayout_();
+            }
+          });
+          [
+            els.quickEditModal,
+            els.quickEditExpressionMeasure,
+            els.quickEditTailSlot,
+            els.quickEditItemBoxesSlot,
+            els.quickEditPartialSlot
+          ].forEach(function(element) {
+            if (element) quickEditLayoutObserver_.observe(element);
+          });
+        }
 
         state.columnCount = 2;
         hydrate(initialPayload);

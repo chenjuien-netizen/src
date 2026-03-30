@@ -2086,7 +2086,10 @@
             return "空";
           }
           const result = computeQuickExitPreviewState_(state.quickEditItem);
-          return result && result.valid && result.nextState ? buildLocalStockDisplay(result.nextState) : "";
+          if (!(result && result.valid && result.nextState)) return "";
+          return stateModelToPieces(result.nextState) === 0
+            ? "空"
+            : buildLocalStockDisplay(result.nextState);
         }
 
         function setQuickEditError(message) {

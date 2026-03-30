@@ -252,128 +252,6 @@
       </main>
     </div>
 
-    <div class="fixed inset-x-0 top-0 bottom-16 hidden overflow-hidden bg-background" id="historyAppShell">
-      <main class="flex h-full min-h-0 flex-col overflow-hidden">
-        <div class="sticky top-0 z-40 shrink-0 bg-background">
-          <header class="flex h-14 items-center justify-between border-b border-slate-200 bg-slate-50 px-4">
-            <div class="flex items-center gap-3">
-              <button aria-label="Retour inventaire" class="rounded-full p-1 text-slate-700 transition-colors duration-150 hover:bg-slate-100" id="historyBackButton" type="button">
-                <span class="material-symbols-outlined">arrow_back</span>
-              </button>
-              <div>
-                <h1 class="text-lg font-extrabold uppercase tracking-tight text-slate-900">Historique</h1>
-              </div>
-            </div>
-            <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant" id="historySummary">-</div>
-          </header>
-
-          <section class="border-b border-outline-variant/20 bg-surface-container-low px-3 py-2 shadow-ledger">
-            <div class="flex items-center gap-2">
-              <span class="material-symbols-outlined text-on-surface-variant !text-[16px]">search</span>
-              <input autocomplete="off" class="w-full border-none bg-transparent p-0 text-[10px] font-medium tracking-tight text-on-surface placeholder:text-outline focus:ring-0" id="historySearchInput" placeholder="RECHERCHE RÉFÉRENCE / TYPE / REMARQUE..." type="search" />
-            </div>
-            <div class="mt-2 flex items-center gap-2">
-              <label class="min-w-0 flex-1">
-                <select class="w-full border-outline-variant/30 bg-surface-container-lowest text-[12px] font-medium text-on-surface" id="historyActionTypeFilter">
-                  <option value="">Tous types</option>
-                  <option value="modifier">modifier</option>
-                  <option value="sortie_rapide">sortie_rapide</option>
-                </select>
-              </label>
-              <div class="shrink-0 text-[9px] font-bold uppercase tracking-[0.16em] text-on-surface-variant" id="historyStatus">Pret</div>
-            </div>
-          </section>
-        </div>
-
-        <section class="inventory-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain bg-outline-variant/20" id="historyScroll">
-          <div class="flex flex-col gap-px bg-outline-variant/20" id="historyList"></div>
-          <div class="hidden border-t border-outline-variant/20 bg-surface-container-lowest px-4 py-5 text-center" id="historyEmptyState">
-            <p class="text-[12px] font-semibold uppercase tracking-[0.18em] text-on-surface-variant" id="historyEmptyTitle">Aucun historique</p>
-            <p class="mt-1 text-[12px] text-on-surface-variant" id="historyEmptyMessage">Aucun mouvement à afficher.</p>
-          </div>
-          <div class="hidden border-t border-outline-variant/20 bg-surface-container-lowest px-4 py-5 text-center" id="historyLoadingState">
-            <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Chargement...</p>
-          </div>
-          <div class="border-t border-outline-variant/20 bg-surface-container-lowest px-4 py-4" id="historyLoadMoreWrap">
-            <button class="w-full border border-outline-variant/30 py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-on-surface-variant transition-colors duration-150 hover:bg-surface-container" id="historyLoadMoreButton" type="button">CHARGER PLUS</button>
-          </div>
-        </section>
-      </main>
-    </div>
-
-    <div class="fixed inset-x-0 top-0 bottom-16 hidden overflow-hidden bg-background" id="detailAppShell">
-      <main class="flex h-full min-h-0 flex-col overflow-hidden">
-        <div class="sticky top-0 z-40 shrink-0 bg-background">
-          <header class="flex h-14 items-center justify-between border-b border-slate-200 bg-slate-50 px-4">
-            <div class="flex min-w-0 items-center gap-3">
-              <button aria-label="Retour" class="rounded-full p-1 text-slate-700 transition-colors duration-150 hover:bg-slate-100" id="detailBackButton" type="button">
-                <span class="material-symbols-outlined">arrow_back</span>
-              </button>
-              <div class="min-w-0">
-                <h1 class="truncate text-lg font-extrabold uppercase tracking-tight text-slate-900" id="detailReference">-</h1>
-                <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant" id="detailSubline">Fiche produit</p>
-              </div>
-            </div>
-            <button class="bg-surface-tint px-3 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-on-primary transition-colors duration-150 hover:bg-primary-dim" id="detailQuickEditButton" type="button">Modifier</button>
-          </header>
-        </div>
-
-        <section class="inventory-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain bg-surface px-4 py-4" id="detailScroll">
-          <div class="mx-auto flex w-full max-w-3xl flex-col gap-4">
-            <div class="hidden border border-error/20 bg-error-container/15 px-4 py-3 text-[12px] font-medium text-on-error-container" id="detailNotFoundBanner">
-              Référence introuvable dans le stock courant.
-            </div>
-
-            <section class="border border-outline-variant/20 bg-surface-container-lowest p-4">
-              <div class="flex items-start justify-between gap-3">
-                <div class="min-w-0">
-                  <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Stock actuel</div>
-                  <div class="mt-1 truncate text-2xl font-black tracking-tight text-on-surface" id="detailStockDisplay">-</div>
-                </div>
-                <div class="shrink-0 text-right text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant" id="detailStockState">-</div>
-              </div>
-              <div class="mt-3 grid gap-2 sm:grid-cols-2">
-                <div class="border border-outline-variant/20 bg-surface-container-low px-3 py-2">
-                  <div class="text-[9px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Entrepot</div>
-                  <div class="mt-1 text-[12px] font-medium text-on-surface" id="detailWarehouse">-</div>
-                </div>
-                <div class="border border-outline-variant/20 bg-surface-container-low px-3 py-2">
-                  <div class="text-[9px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Création</div>
-                  <div class="mt-1 text-[12px] font-medium text-on-surface" id="detailCreatedAt">-</div>
-                </div>
-                <div class="border border-outline-variant/20 bg-surface-container-low px-3 py-2">
-                  <div class="text-[9px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Dernier mouvement</div>
-                  <div class="mt-1 text-[12px] font-medium text-on-surface" id="detailLastMovement">-</div>
-                </div>
-                <div class="border border-outline-variant/20 bg-surface-container-low px-3 py-2">
-                  <div class="text-[9px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Résumé</div>
-                  <div class="mt-1 text-[12px] font-medium text-on-surface" id="detailSummary">-</div>
-                </div>
-              </div>
-            </section>
-
-            <section class="border border-outline-variant/20 bg-surface-container-lowest p-4" id="detailRemarkSection">
-              <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Remarque</div>
-              <div class="mt-2 whitespace-pre-wrap text-[12px] leading-5 text-on-surface" id="detailRemark">-</div>
-            </section>
-
-            <section class="border border-outline-variant/20 bg-surface-container-lowest">
-              <div class="border-b border-outline-variant/20 px-4 py-3">
-                <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Historique récent</div>
-              </div>
-              <div class="flex flex-col gap-px bg-outline-variant/20" id="detailHistoryList"></div>
-              <div class="hidden px-4 py-5 text-center" id="detailHistoryEmpty">
-                <p class="text-[12px] font-semibold uppercase tracking-[0.18em] text-on-surface-variant">Aucun historique</p>
-              </div>
-              <div class="hidden border-t border-outline-variant/20 px-4 py-4" id="detailHistoryLoadMoreWrap">
-                <button class="w-full border border-outline-variant/30 py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-on-surface-variant transition-colors duration-150 hover:bg-surface-container" id="detailHistoryLoadMoreButton" type="button">Voir plus</button>
-              </div>
-            </section>
-          </div>
-        </section>
-      </main>
-    </div>
-
     <div class="quick-edit-overlay fixed inset-0 z-[60] hidden items-center justify-center bg-on-background/35 px-3 py-6" id="quickEditOverlay" role="presentation">
       <div aria-modal="true" class="relative max-h-[calc(100dvh-2.5rem)] w-full max-w-3xl overflow-hidden border border-outline-variant/20 bg-surface-container-lowest shadow-[0_18px_48px_rgba(11,15,16,0.18)]" id="quickEditModal" role="dialog" aria-labelledby="quickEditReference">
         <div class="border-b border-outline-variant/20 px-4 py-3">
@@ -559,14 +437,14 @@
         <span class="material-symbols-outlined">dashboard</span>
         <span class="mt-1 text-[10px] font-bold uppercase tracking-widest">Dashboard</span>
       </a>
-      <button class="flex flex-1 flex-col items-center justify-center bg-slate-200 px-2 py-1 text-slate-900" id="navInventoryButton" type="button" aria-current="page">
+      <a class="flex flex-col items-center justify-center bg-slate-200 px-2 py-1 text-slate-900" href="javascript:void(0)" aria-current="page">
         <span class="material-symbols-outlined">inventory_2</span>
         <span class="mt-1 text-[10px] font-bold uppercase tracking-widest">Inventaire</span>
-      </button>
-      <button class="flex flex-1 flex-col items-center justify-center px-2 py-1 text-slate-400" id="navHistoryButton" type="button">
+      </a>
+      <a class="flex flex-col items-center justify-center px-2 py-1 text-slate-400" href="javascript:void(0)" tabindex="-1" aria-disabled="true">
         <span class="material-symbols-outlined">history</span>
         <span class="mt-1 text-[10px] font-bold uppercase tracking-widest">Historique</span>
-      </button>
+      </a>
     </nav>
 
     <script>
@@ -605,39 +483,10 @@
             message: "",
             expiresAt: 0
           },
-          syncFeedbackTimer: 0,
-          currentView: "inventory",
-          previousView: "inventory",
-          detailReference: "",
-          historyView: {
-            query: "",
-            actionType: "",
-            offset: 0,
-            hasMore: false,
-            totalMatched: 0,
-            items: [],
-            loading: false,
-            initialized: false,
-            debounceTimer: 0,
-            requestToken: 0,
-            activeRequestToken: 0
-          },
-          detailView: {
-            item: null,
-            history: [],
-            hasMoreHistory: false,
-            historyOffset: 0,
-            loading: false,
-            error: "",
-            notFoundInStock: false,
-            initializedFor: ""
-          }
+          syncFeedbackTimer: 0
         };
 
         const els = {
-          inventoryAppShell: document.getElementById("inventoryAppShell"),
-          historyAppShell: document.getElementById("historyAppShell"),
-          detailAppShell: document.getElementById("detailAppShell"),
           grid: document.getElementById("inventoryGrid"),
           inventoryScroll: document.getElementById("inventoryScroll"),
           emptyState: document.getElementById("emptyState"),
@@ -728,40 +577,7 @@
           quickEditRemark: document.getElementById("quickEditRemark"),
           quickEditMessage: document.getElementById("quickEditMessage"),
           quickEditCancel: document.getElementById("quickEditCancel"),
-          quickEditSave: document.getElementById("quickEditSave"),
-          navInventoryButton: document.getElementById("navInventoryButton"),
-          navHistoryButton: document.getElementById("navHistoryButton"),
-          historyBackButton: document.getElementById("historyBackButton"),
-          historySearchInput: document.getElementById("historySearchInput"),
-          historyActionTypeFilter: document.getElementById("historyActionTypeFilter"),
-          historySummary: document.getElementById("historySummary"),
-          historyStatus: document.getElementById("historyStatus"),
-          historyScroll: document.getElementById("historyScroll"),
-          historyList: document.getElementById("historyList"),
-          historyEmptyState: document.getElementById("historyEmptyState"),
-          historyEmptyTitle: document.getElementById("historyEmptyTitle"),
-          historyEmptyMessage: document.getElementById("historyEmptyMessage"),
-          historyLoadingState: document.getElementById("historyLoadingState"),
-          historyLoadMoreWrap: document.getElementById("historyLoadMoreWrap"),
-          historyLoadMoreButton: document.getElementById("historyLoadMoreButton"),
-          detailBackButton: document.getElementById("detailBackButton"),
-          detailQuickEditButton: document.getElementById("detailQuickEditButton"),
-          detailScroll: document.getElementById("detailScroll"),
-          detailReference: document.getElementById("detailReference"),
-          detailSubline: document.getElementById("detailSubline"),
-          detailNotFoundBanner: document.getElementById("detailNotFoundBanner"),
-          detailStockDisplay: document.getElementById("detailStockDisplay"),
-          detailStockState: document.getElementById("detailStockState"),
-          detailWarehouse: document.getElementById("detailWarehouse"),
-          detailCreatedAt: document.getElementById("detailCreatedAt"),
-          detailLastMovement: document.getElementById("detailLastMovement"),
-          detailSummary: document.getElementById("detailSummary"),
-          detailRemarkSection: document.getElementById("detailRemarkSection"),
-          detailRemark: document.getElementById("detailRemark"),
-          detailHistoryList: document.getElementById("detailHistoryList"),
-          detailHistoryEmpty: document.getElementById("detailHistoryEmpty"),
-          detailHistoryLoadMoreWrap: document.getElementById("detailHistoryLoadMoreWrap"),
-          detailHistoryLoadMoreButton: document.getElementById("detailHistoryLoadMoreButton")
+          quickEditSave: document.getElementById("quickEditSave")
         };
 
         let quickEditLayoutFrame_ = 0;
@@ -1008,311 +824,6 @@
             month: "2-digit",
             year: "numeric"
           }).format(date);
-        }
-
-        function formatDateTimeCompact_(isoText) {
-          if (!isoText) return "-";
-          const date = new Date(isoText);
-          if (Number.isNaN(date.getTime())) return String(isoText || "").trim() || "-";
-          return new Intl.DateTimeFormat("fr-FR", {
-            day: "2-digit",
-            month: "2-digit",
-            hour: "2-digit",
-            minute: "2-digit"
-          }).format(date).replace(",", "");
-        }
-
-        function formatHistoryActionLabel_(actionType) {
-          const normalized = String(actionType || "").trim();
-          if (normalized === "sortie_rapide") return "sortie_rapide";
-          if (normalized === "modifier") return "modifier";
-          return normalized || "-";
-        }
-
-        function getHistoryActionBadgeClass_(actionType) {
-          const normalized = String(actionType || "").trim();
-          if (normalized === "sortie_rapide") {
-            return "bg-error-container/25 text-on-error-container";
-          }
-          if (normalized === "modifier") {
-            return "bg-primary-container text-on-primary-container";
-          }
-          return "bg-surface-container-high text-on-surface-variant";
-        }
-
-        function summarizeDetailItem_(item) {
-          if (!item) return "-";
-          const parts = [];
-          if (toPositiveNumber(item.tail) > 0) {
-            parts.push("尾箱 " + formatTailDisplay(item.tail));
-          }
-          if (toPositiveNumber(item.unitsPerBox) > 0) {
-            parts.push("件/箱 " + formatUnitsPerBoxDisplay(item.unitsPerBox));
-          }
-          if (toPositiveNumber(item.itemBoxes) > 0) {
-            parts.push("箱数 " + formatMetricNumber(item.itemBoxes));
-          }
-          const fractionText = sanitizeFractionText(item.fractionText) || fractionToText(item.fractionValue);
-          if (fractionText) {
-            parts.push("分数 " + fractionText);
-          }
-          const packNotation = getMainPackNotationFromState_(item);
-          if (packNotation) {
-            parts.push(packNotation);
-          }
-          return parts.length ? parts.join(" · ") : "-";
-        }
-
-        function scrollContainerToTop_(container) {
-          if (!container) return;
-          container.scrollTop = 0;
-        }
-
-        function updateBottomNav_() {
-          const isInventory = state.currentView === "inventory";
-          const isHistory = state.currentView === "history";
-          els.navInventoryButton.className = "flex flex-1 flex-col items-center justify-center px-2 py-1 " + (isInventory ? "bg-slate-200 text-slate-900" : "text-slate-400");
-          els.navHistoryButton.className = "flex flex-1 flex-col items-center justify-center px-2 py-1 " + (isHistory ? "bg-slate-200 text-slate-900" : "text-slate-400");
-          els.navInventoryButton.setAttribute("aria-current", isInventory ? "page" : "false");
-          els.navHistoryButton.setAttribute("aria-current", isHistory ? "page" : "false");
-        }
-
-        function syncCurrentView_() {
-          els.inventoryAppShell.classList.toggle("hidden", state.currentView !== "inventory");
-          els.historyAppShell.classList.toggle("hidden", state.currentView !== "history");
-          els.detailAppShell.classList.toggle("hidden", state.currentView !== "detail");
-          updateBottomNav_();
-        }
-
-        function buildHistoryRowsMarkup_(items) {
-          return (Array.isArray(items) ? items : []).map(function(entry) {
-            const beforeMarkup = entry.beforeDisplay
-              ? '<div class="text-[11px] text-on-surface"><span class="font-bold uppercase tracking-[0.14em] text-on-surface-variant">AVANT</span><span class="ml-2">' + escapeHtml(entry.beforeDisplay) + '</span></div>'
-              : '';
-            const afterMarkup = entry.afterDisplay
-              ? '<div class="text-[11px] text-on-surface"><span class="font-bold uppercase tracking-[0.14em] text-on-surface-variant">APRÈS</span><span class="ml-2">' + escapeHtml(entry.afterDisplay) + '</span></div>'
-              : '';
-            const remarkMarkup = entry.remark
-              ? '<div class="text-[11px] text-on-surface-variant">' + escapeHtml(entry.remark) + '</div>'
-              : '';
-            const sourceMarkup = entry.source
-              ? '<div class="text-[10px] font-medium uppercase tracking-[0.14em] text-on-surface-variant">' + escapeHtml(entry.source) + '</div>'
-              : '';
-            return ''
-              + '<article class="bg-surface-container-lowest px-4 py-3 shadow-ledger" data-history-reference="' + escapeHtml(entry.reference) + '">'
-              + '<div class="flex items-start justify-between gap-3">'
-              + '<div class="min-w-0">'
-              + '<button class="truncate text-left text-[12px] font-bold tracking-tight text-primary" type="button" data-action="open-history-detail" data-reference="' + escapeHtml(entry.reference) + '">' + escapeHtml(entry.reference || "-") + '</button>'
-              + '<div class="mt-1 text-[10px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">' + escapeHtml(entry.timestampLabel || "-") + '</div>'
-              + '</div>'
-              + '<span class="shrink-0 rounded px-2 py-1 text-[9px] font-bold uppercase tracking-[0.16em] ' + getHistoryActionBadgeClass_(entry.actionType) + '">' + escapeHtml(formatHistoryActionLabel_(entry.actionType)) + '</span>'
-              + '</div>'
-              + '<div class="mt-3 space-y-1">' + beforeMarkup + afterMarkup + remarkMarkup + sourceMarkup + '</div>'
-              + '</article>';
-          }).join("");
-        }
-
-        function renderHistoryList_(append, incomingItems) {
-          const view = state.historyView;
-          const items = Array.isArray(view.items) ? view.items : [];
-          if (append) {
-            els.historyList.insertAdjacentHTML("beforeend", buildHistoryRowsMarkup_(incomingItems));
-          } else {
-            els.historyList.innerHTML = buildHistoryRowsMarkup_(items);
-          }
-
-          const hasItems = items.length > 0;
-          const hasFilters = !!(view.query || view.actionType);
-          els.historyEmptyState.classList.toggle("hidden", hasItems || view.loading);
-          els.historyLoadingState.classList.toggle("hidden", !view.loading || hasItems);
-          els.historyLoadMoreWrap.classList.toggle("hidden", !view.hasMore || view.loading);
-          els.historyEmptyTitle.textContent = hasFilters ? "Aucun resultat" : "Aucun historique";
-          els.historyEmptyMessage.textContent = hasFilters
-            ? "Aucun mouvement ne correspond à la recherche."
-            : "Aucun mouvement à afficher.";
-          els.historySummary.textContent = view.totalMatched > 0 ? (view.totalMatched + " mouvements") : "-";
-          els.historyStatus.textContent = view.loading ? "Chargement..." : "Pret";
-        }
-
-        function renderDetailView_() {
-          const detail = state.detailView;
-          const item = detail.item;
-          const history = Array.isArray(detail.history) ? detail.history : [];
-          els.detailReference.textContent = state.detailReference || "-";
-          els.detailSubline.textContent = detail.loading ? "Chargement..." : "Fiche produit";
-          els.detailNotFoundBanner.classList.toggle("hidden", !detail.notFoundInStock);
-          els.detailQuickEditButton.classList.toggle("hidden", !item);
-          els.detailQuickEditButton.disabled = !item;
-          els.detailStockDisplay.textContent = item ? (item.stockDisplay || "-") : "-";
-          els.detailStockState.textContent = item ? (item.stockState === "positive" ? "En stock" : "En rupture") : "-";
-          els.detailWarehouse.textContent = item && item.warehouse ? item.warehouse : "-";
-          els.detailCreatedAt.textContent = item && item.createdAt ? item.createdAt : "-";
-          els.detailLastMovement.textContent = detail.lastMovementAt ? formatDateTimeCompact_(detail.lastMovementAt) : "-";
-          els.detailSummary.textContent = item ? summarizeDetailItem_(item) : "-";
-          const remark = item && item.remark ? String(item.remark).trim() : "";
-          els.detailRemarkSection.classList.toggle("hidden", !remark);
-          els.detailRemark.textContent = remark || "-";
-
-          els.detailHistoryList.innerHTML = history.map(function(entry) {
-            const beforeMarkup = entry.beforeDisplay
-              ? '<div class="text-[11px] text-on-surface"><span class="font-bold uppercase tracking-[0.14em] text-on-surface-variant">AVANT</span><span class="ml-2">' + escapeHtml(entry.beforeDisplay) + '</span></div>'
-              : '';
-            const afterMarkup = entry.afterDisplay
-              ? '<div class="text-[11px] text-on-surface"><span class="font-bold uppercase tracking-[0.14em] text-on-surface-variant">APRÈS</span><span class="ml-2">' + escapeHtml(entry.afterDisplay) + '</span></div>'
-              : '';
-            const remarkMarkup = entry.remark
-              ? '<div class="text-[11px] text-on-surface-variant">' + escapeHtml(entry.remark) + '</div>'
-              : '';
-            return ''
-              + '<article class="bg-surface-container-lowest px-4 py-3 shadow-ledger">'
-              + '<div class="flex items-start justify-between gap-3">'
-              + '<div class="text-[10px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">' + escapeHtml(entry.timestampLabel || "-") + '</div>'
-              + '<span class="shrink-0 rounded px-2 py-1 text-[9px] font-bold uppercase tracking-[0.16em] ' + getHistoryActionBadgeClass_(entry.actionType) + '">' + escapeHtml(formatHistoryActionLabel_(entry.actionType)) + '</span>'
-              + '</div>'
-              + '<div class="mt-2 space-y-1">' + beforeMarkup + afterMarkup + remarkMarkup + '</div>'
-              + '</article>';
-          }).join("");
-          els.detailHistoryEmpty.classList.toggle("hidden", history.length > 0 || detail.loading);
-          els.detailHistoryLoadMoreWrap.classList.toggle("hidden", !detail.hasMoreHistory || detail.loading);
-        }
-
-        function switchView_(view) {
-          state.currentView = view;
-          syncCurrentView_();
-          if (view === "history") {
-            scrollContainerToTop_(els.historyScroll);
-          } else if (view === "detail") {
-            scrollContainerToTop_(els.detailScroll);
-          } else {
-            scrollContainerToTop_(els.inventoryScroll);
-          }
-        }
-
-        function openInventoryView_() {
-          state.currentView = "inventory";
-          syncCurrentView_();
-        }
-
-        function clearHistoryResults_() {
-          state.historyView.items = [];
-          state.historyView.offset = 0;
-          state.historyView.hasMore = false;
-          state.historyView.totalMatched = 0;
-          renderHistoryList_(false);
-        }
-
-        function loadHistory_(options) {
-          if (typeof google === "undefined" || !google.script || !google.script.run) return;
-          const historyView = state.historyView;
-          const append = !!(options && options.append);
-          if (!append) {
-            clearHistoryResults_();
-          }
-          historyView.loading = true;
-          const requestToken = historyView.requestToken + 1;
-          historyView.requestToken = requestToken;
-          historyView.activeRequestToken = requestToken;
-          renderHistoryList_(false);
-          google.script.run
-            .withSuccessHandler(function(payload) {
-              if (historyView.activeRequestToken !== requestToken) return;
-              historyView.loading = false;
-              historyView.initialized = true;
-              const incomingItems = Array.isArray(payload && payload.items) ? payload.items : [];
-              historyView.offset = payload && Number(payload.nextOffset || 0) || 0;
-              historyView.hasMore = !!(payload && payload.hasMore);
-              historyView.totalMatched = Math.max(0, Number(payload && payload.totalMatched || 0));
-              historyView.items = append
-                ? historyView.items.concat(incomingItems)
-                : incomingItems;
-              renderHistoryList_(append, incomingItems);
-            })
-            .withFailureHandler(function() {
-              if (historyView.activeRequestToken !== requestToken) return;
-              historyView.loading = false;
-              historyView.items = [];
-              historyView.hasMore = false;
-              historyView.totalMatched = 0;
-              renderHistoryList_(false);
-            })
-            .StockWebApp_getHistory({
-              query: historyView.query,
-              actionType: historyView.actionType,
-              offset: append ? historyView.offset : 0,
-              limit: 20
-            });
-        }
-
-        function scheduleHistoryReload_() {
-          const historyView = state.historyView;
-          window.clearTimeout(historyView.debounceTimer || 0);
-          historyView.debounceTimer = window.setTimeout(function() {
-            loadHistory_({ append: false });
-          }, 240);
-        }
-
-        function openHistoryView_() {
-          state.previousView = state.currentView === "detail" ? (state.previousView || "inventory") : state.currentView;
-          switchView_("history");
-          if (!state.historyView.initialized) {
-            loadHistory_({ append: false });
-          } else {
-            renderHistoryList_(false);
-          }
-        }
-
-        function syncDetailItemIntoState_(item) {
-          if (!item) return;
-          if (!getItemById(item.id)) return;
-          replaceItemInState(item);
-        }
-
-        function loadDetailView_(reference, options) {
-          if (typeof google === "undefined" || !google.script || !google.script.run) return;
-          const normalizedReference = String(reference || "").trim();
-          if (!normalizedReference) return;
-          state.detailReference = normalizedReference;
-          state.detailView.loading = true;
-          state.detailView.error = "";
-          if (!(options && options.appendHistory)) {
-            state.detailView.item = null;
-            state.detailView.history = [];
-            state.detailView.historyOffset = 0;
-            state.detailView.hasMoreHistory = false;
-            state.detailView.notFoundInStock = false;
-            switchView_("detail");
-          }
-          renderDetailView_();
-          google.script.run
-            .withSuccessHandler(function(payload) {
-              if (state.detailReference !== normalizedReference) return;
-              const historyItems = Array.isArray(payload && payload.history) ? payload.history : [];
-              state.detailView.loading = false;
-              state.detailView.item = payload && payload.item ? payload.item : null;
-              state.detailView.notFoundInStock = !!(payload && payload.notFoundInStock);
-              state.detailView.lastMovementAt = payload && payload.lastMovementAt ? payload.lastMovementAt : "";
-              state.detailView.history = options && options.appendHistory
-                ? state.detailView.history.concat(historyItems)
-                : historyItems;
-              state.detailView.historyOffset = Number(payload && payload.nextHistoryOffset || 0) || 0;
-              state.detailView.hasMoreHistory = !!(payload && payload.hasMoreHistory);
-              syncDetailItemIntoState_(state.detailView.item);
-              renderDetailView_();
-            })
-            .withFailureHandler(function(error) {
-              if (state.detailReference !== normalizedReference) return;
-              state.detailView.loading = false;
-              state.detailView.error = error && error.message ? error.message : "Erreur chargement fiche";
-              state.detailView.item = null;
-              state.detailView.history = [];
-              state.detailView.hasMoreHistory = false;
-              state.detailView.notFoundInStock = true;
-              renderDetailView_();
-            })
-            .StockWebApp_getItemDetail(normalizedReference, {
-              historyOffset: options && options.appendHistory ? state.detailView.historyOffset : 0,
-              historyLimit: 10
-            });
         }
 
         function normalizeText(value) {
@@ -3256,13 +2767,7 @@
           const updatedItem = result && result.item ? result.item : null;
           clearPendingSaveEntry(normalizedId);
 
-          const replaced = !!(updatedItem && replaceItemInState(updatedItem));
-          if (updatedItem && state.detailReference && updatedItem.reference === state.detailReference) {
-            state.detailView.item = updatedItem;
-            loadDetailView_(updatedItem.reference, { appendHistory: false });
-          }
-
-          if (!updatedItem || (!replaced && !(state.detailReference && updatedItem.reference === state.detailReference))) {
+          if (!updatedItem || !replaceItemInState(updatedItem)) {
             setLastSyncFeedback("error", "Échec enregistrement", 3200);
             renderGrid();
             return;
@@ -3281,10 +2786,6 @@
 
           if (pendingEntry && pendingEntry.previousItem) {
             replaceItemInState(pendingEntry.previousItem);
-            if (state.detailReference && pendingEntry.previousItem.reference === state.detailReference) {
-              state.detailView.item = pendingEntry.previousItem;
-              renderDetailView_();
-            }
           }
           clearPendingSaveEntry(normalizedId);
           state.lastError = "";
@@ -3308,7 +2809,7 @@
             return;
           }
 
-          const currentItem = getItemById(request.id) || (state.quickEditItem && state.quickEditItem.id === request.id ? state.quickEditItem : null);
+          const currentItem = getItemById(request.id);
           if (!currentItem) {
             setQuickEditError("Reference introuvable. Merci de rafraichir.");
             renderQuickEdit();
@@ -3335,10 +2836,6 @@
             if (!timeoutEntry) return;
             if (timeoutEntry.previousItem) {
               replaceItemInState(timeoutEntry.previousItem);
-              if (state.detailReference && timeoutEntry.previousItem.reference === state.detailReference) {
-                state.detailView.item = timeoutEntry.previousItem;
-                renderDetailView_();
-              }
             }
             clearPendingSaveEntry(itemId);
             state.lastError = "";
@@ -3358,10 +2855,6 @@
           };
           if (optimisticItem) {
             replaceItemInState(optimisticItem);
-            if (state.detailReference && optimisticItem.reference === state.detailReference) {
-              state.detailView.item = optimisticItem;
-              renderDetailView_();
-            }
           }
           closeQuickEdit();
           renderGrid();
@@ -3382,9 +2875,8 @@
         function handleOpenReferenceDetail(reference) {
           const normalizedReference = String(reference || "").trim();
           if (!normalizedReference) return;
-          state.previousView = state.currentView === "history" ? "history" : "inventory";
           state.lastError = "";
-          loadDetailView_(normalizedReference, { appendHistory: false });
+          els.summaryStatus.textContent = "Fiche " + normalizedReference + " bientot";
         }
 
         function renderSummary(visibleItems) {
@@ -3484,60 +2976,6 @@
         els.searchInput.addEventListener("input", function(event) {
           state.query = String(event.target.value || "").trim();
           renderGrid();
-        });
-
-        els.navInventoryButton.addEventListener("click", function() {
-          openInventoryView_();
-        });
-
-        els.navHistoryButton.addEventListener("click", function() {
-          openHistoryView_();
-        });
-
-        els.historyBackButton.addEventListener("click", function() {
-          openInventoryView_();
-        });
-
-        els.historySearchInput.addEventListener("input", function(event) {
-          state.historyView.query = String(event.target.value || "").trim();
-          clearHistoryResults_();
-          scheduleHistoryReload_();
-        });
-
-        els.historyActionTypeFilter.addEventListener("change", function(event) {
-          state.historyView.actionType = String(event.target.value || "").trim();
-          clearHistoryResults_();
-          loadHistory_({ append: false });
-        });
-
-        els.historyLoadMoreButton.addEventListener("click", function() {
-          if (!state.historyView.hasMore || state.historyView.loading) return;
-          loadHistory_({ append: true });
-        });
-
-        els.historyList.addEventListener("click", function(event) {
-          const trigger = event.target.closest('[data-action="open-history-detail"]');
-          if (!trigger) return;
-          event.preventDefault();
-          handleOpenReferenceDetail(trigger.getAttribute("data-reference"));
-        });
-
-        els.detailBackButton.addEventListener("click", function() {
-          if (state.previousView === "history") {
-            openHistoryView_();
-            return;
-          }
-          openInventoryView_();
-        });
-
-        els.detailQuickEditButton.addEventListener("click", function() {
-          if (!state.detailView.item) return;
-          openQuickEdit(state.detailView.item);
-        });
-
-        els.detailHistoryLoadMoreButton.addEventListener("click", function() {
-          if (!state.detailReference || state.detailView.loading || !state.detailView.hasMoreHistory) return;
-          loadDetailView_(state.detailReference, { appendHistory: true });
         });
 
         els.refreshButton.addEventListener("click", function() {
@@ -3823,7 +3261,6 @@
         state.columnCount = 2;
         hydrate(initialPayload);
         renderQuickEdit();
-        syncCurrentView_();
         window.setTimeout(function() {
           syncColumnLayout(false);
         }, 0);

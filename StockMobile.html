@@ -1895,7 +1895,7 @@
           const segment = segmentMap[segmentId];
           const config = getQuickExitSelectionConfig_(segmentId);
           const controls = getQuickExitSegmentElements_(segmentId);
-          if (!segment || !config || !controls.dropdown || !controls.input || !els.quickExitDropdownLayer || !els.quickExitPanelWrap) {
+          if (!segment || !config || !controls.dropdown || !controls.input || !els.quickExitDropdownLayer || !els.quickExitPanelWrap || !els.quickEditBody) {
             clearQuickExitDropdownLayer_();
             return;
           }
@@ -1906,15 +1906,24 @@
             return;
           }
           const panelRect = els.quickExitPanelWrap.getBoundingClientRect();
+          const bodyRect = els.quickEditBody.getBoundingClientRect();
           const inputRect = controls.input.getBoundingClientRect();
           const maxVisibleRows = Math.min(suggestions.length, 5);
-          const left = Math.max(0, Math.min(inputRect.left - panelRect.left, panelRect.width - inputRect.width));
-          const top = Math.max(0, inputRect.bottom - panelRect.top + 4);
-          const width = Math.max(0, Math.min(Math.round(inputRect.width), Math.round(panelRect.width - left)));
-          const maxHeight = Math.max(44, maxVisibleRows * 40);
+          const dropdownWidth = Math.max(0, Math.round(inputRect.width));
+          const left = Math.max(0, Math.min(inputRect.left - panelRect.left, panelRect.width - dropdownWidth));
+          const rowHeight = 40;
+          const desiredHeight = Math.max(44, maxVisibleRows * rowHeight);
+          const gap = 4;
+          const spaceBelow = Math.max(0, bodyRect.bottom - inputRect.bottom - gap);
+          const spaceAbove = Math.max(0, inputRect.top - bodyRect.top - gap);
+          const openUpward = spaceBelow < desiredHeight && spaceAbove > spaceBelow;
+          const maxHeight = Math.max(44, Math.min(desiredHeight, openUpward ? spaceAbove : spaceBelow));
+          const top = openUpward
+            ? Math.max(0, inputRect.top - panelRect.top - maxHeight - gap)
+            : Math.max(0, inputRect.bottom - panelRect.top + gap);
           const highlightedIndex = Math.max(-1, Math.min(Number(config.highlightedIndex || -1), suggestions.length - 1));
           els.quickExitDropdownLayer.innerHTML = '<div class="pointer-events-auto absolute overflow-y-auto rounded border border-outline-variant/40 bg-surface-container-lowest shadow-[0_16px_32px_rgba(11,15,16,0.24)]"'
-            + ' style="left:' + left + 'px;top:' + top + 'px;width:' + width + 'px;max-height:' + maxHeight + 'px;">'
+            + ' style="left:' + left + 'px;top:' + top + 'px;width:' + dropdownWidth + 'px;max-height:' + maxHeight + 'px;">'
             + suggestions.map(function(suggestion, index) {
               return '<button class="flex w-full items-center justify-between border-b border-outline-variant/10 px-3 py-2 text-left text-[12px] font-medium transition-colors duration-150 last:border-b-0 '
               + (index === highlightedIndex ? 'bg-surface-container text-on-surface' : 'text-on-surface-variant hover:bg-surface-container')

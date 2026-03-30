@@ -486,7 +486,8 @@ function StockWebApp_buildQuickExitStateFromInput_(payload, currentItem) {
   return StockWebApp_buildStateFromPieces_(newTotal, {
     unitsPerBox: unitsPerBox,
     colisage: currentItem.colisage,
-    remark: String(payload.remark || "").trim()
+    remark: String(payload.remark || "").trim(),
+    reconstructionMode: exitMode
   });
 }
 
@@ -723,7 +724,7 @@ function StockWebApp_fractionTextFromPieces_(pieces, unitsPerBox) {
   return reduced.num + "/" + reduced.den;
 }
 
-function StockWebApp_buildStateFromPieces_(totalPiecesInput, options) {
+function StockWebApp_buildSimpleStateFromPieces_(totalPiecesInput, options) {
   const totalPieces = Math.max(0, Number(totalPiecesInput || 0));
   const unitsPerBox = Math.max(0, StockWebApp_toInt_(options && options.unitsPerBox));
   const colisage = Math.max(0, StockWebApp_toInt_(options && options.colisage));
@@ -733,7 +734,6 @@ function StockWebApp_buildStateFromPieces_(totalPiecesInput, options) {
     throw new Error("Sortie rapide impossible sans 件/箱.");
   }
 
-  const packsPerBox = StockWebApp_computePacksPerBox_(unitsPerBox, colisage);
   const wholeBoxes = Math.floor(totalPieces / unitsPerBox);
   const remainderPieces = Math.max(0, totalPieces - (wholeBoxes * unitsPerBox));
 
@@ -749,6 +749,37 @@ function StockWebApp_buildStateFromPieces_(totalPiecesInput, options) {
       packNotation: "",
       remark: remark
     });
+  }
+
+  return StockWebApp_normalizeStateModel_({
+    tail: 0,
+    unitsPerBox: unitsPerBox,
+    itemBoxes: wholeBoxes > 0 ? wholeBoxes : 1,
+    sign: wholeBoxes > 0 ? "+" : "×",
+    fractionText: StockWebApp_fractionTextFromPieces_(remainderPieces, unitsPerBox),
+    fractionValue: remainderPieces / unitsPerBox,
+    colisage: colisage,
+    packNotation: "",
+    remark: remark
+  });
+}
+
+function StockWebApp_buildPackFriendlyStateFromPieces_(totalPiecesInput, options) {
+  const totalPieces = Math.max(0, Number(totalPiecesInput || 0));
+  const unitsPerBox = Math.max(0, StockWebApp_toInt_(options && options.unitsPerBox));
+  const colisage = Math.max(0, StockWebApp_toInt_(options && options.colisage));
+  const remark = String(options && options.remark || "").trim();
+
+  if (!(unitsPerBox > 0)) {
+    throw new Error("Sortie rapide impossible sans 件/箱.");
+  }
+
+  const packsPerBox = StockWebApp_computePacksPerBox_(unitsPerBox, colisage);
+  const wholeBoxes = Math.floor(totalPieces / unitsPerBox);
+  const remainderPieces = Math.max(0, totalPieces - (wholeBoxes * unitsPerBox));
+
+  if (!(remainderPieces > 0)) {
+    return StockWebApp_buildSimpleStateFromPieces_(totalPieces, options);
   }
 
   if (packsPerBox > 0 && colisage > 0 && remainderPieces % colisage === 0) {
@@ -782,17 +813,14 @@ function StockWebApp_buildStateFromPieces_(totalPiecesInput, options) {
     });
   }
 
-  return StockWebApp_normalizeStateModel_({
-    tail: 0,
-    unitsPerBox: unitsPerBox,
-    itemBoxes: wholeBoxes > 0 ? wholeBoxes : 1,
-    sign: wholeBoxes > 0 ? "+" : "×",
-    fractionText: StockWebApp_fractionTextFromPieces_(remainderPieces, unitsPerBox),
-    fractionValue: remainderPieces / unitsPerBox,
-    colisage: colisage,
-    packNotation: "",
-    remark: remark
-  });
+  return StockWebApp_buildSimpleStateFromPieces_(totalPieces, options);
+}
+
+function StockWebApp_buildStateFromPieces_(totalPiecesInput, options) {
+  const reconstructionMode = String(options && options.reconstructionMode || "").trim();
+  return reconstructionMode === "packs"
+    ? StockWebApp_buildPackFriendlyStateFromPieces_(totalPiecesInput, options)
+    : StockWebApp_buildSimpleStateFromPieces_(totalPiecesInput, options);
 }
 
 function StockWebApp_buildPackMeta_(stateInput) {

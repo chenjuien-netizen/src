@@ -1276,7 +1276,7 @@
           };
         }
 
-        function buildStateFromPieces(totalPiecesInput, options) {
+        function buildSimpleStateFromPieces_(totalPiecesInput, options) {
           const totalPieces = Math.max(0, Number(totalPiecesInput || 0));
           const unitsPerBox = Math.max(0, Math.trunc(Number(options && options.unitsPerBox) || 0));
           const colisage = Math.max(0, Math.trunc(Number(options && options.colisage) || 0));
@@ -1286,8 +1286,6 @@
 
           const wholeBoxes = Math.floor(totalPieces / unitsPerBox);
           const remainderPieces = Math.max(0, totalPieces - (wholeBoxes * unitsPerBox));
-          const packsPerBox = computePacksPerBox(unitsPerBox, colisage);
-
           if (!(remainderPieces > 0)) {
             return {
               tail: 0,
@@ -1300,6 +1298,35 @@
               packNotation: "",
               remark: remark
             };
+          }
+
+          return {
+            tail: 0,
+            unitsPerBox: unitsPerBox,
+            itemBoxes: wholeBoxes > 0 ? wholeBoxes : 1,
+            sign: wholeBoxes > 0 ? "+" : "×",
+            fractionText: fractionTextFromPieces(remainderPieces, unitsPerBox),
+            fractionValue: remainderPieces / unitsPerBox,
+            colisage: colisage,
+            packNotation: "",
+            remark: remark
+          };
+        }
+
+        function buildPackFriendlyStateFromPieces_(totalPiecesInput, options) {
+          const totalPieces = Math.max(0, Number(totalPiecesInput || 0));
+          const unitsPerBox = Math.max(0, Math.trunc(Number(options && options.unitsPerBox) || 0));
+          const colisage = Math.max(0, Math.trunc(Number(options && options.colisage) || 0));
+          const remark = String(options && options.remark || "").trim();
+
+          if (!(unitsPerBox > 0)) return null;
+
+          const wholeBoxes = Math.floor(totalPieces / unitsPerBox);
+          const remainderPieces = Math.max(0, totalPieces - (wholeBoxes * unitsPerBox));
+          const packsPerBox = computePacksPerBox(unitsPerBox, colisage);
+
+          if (!(remainderPieces > 0)) {
+            return buildSimpleStateFromPieces_(totalPieces, options);
           }
 
           if (packsPerBox > 0 && colisage > 0 && remainderPieces % colisage === 0) {
@@ -1334,17 +1361,14 @@
             };
           }
 
-          return {
-            tail: 0,
-            unitsPerBox: unitsPerBox,
-            itemBoxes: wholeBoxes > 0 ? wholeBoxes : 1,
-            sign: wholeBoxes > 0 ? "+" : "×",
-            fractionText: fractionTextFromPieces(remainderPieces, unitsPerBox),
-            fractionValue: remainderPieces / unitsPerBox,
-            colisage: colisage,
-            packNotation: "",
-            remark: remark
-          };
+          return buildSimpleStateFromPieces_(totalPieces, options);
+        }
+
+        function buildStateFromPieces(totalPiecesInput, options) {
+          const reconstructionMode = String(options && options.reconstructionMode || "").trim();
+          return reconstructionMode === "packs"
+            ? buildPackFriendlyStateFromPieces_(totalPiecesInput, options)
+            : buildSimpleStateFromPieces_(totalPiecesInput, options);
         }
 
         function buildCurrentEditStateModel() {
@@ -1426,6 +1450,138 @@
         function getQuickExitSelectionConfig_(segmentId) {
           const form = state.quickExitForm || { segments: {} };
           return form.segments && form.segments[segmentId] ? form.segments[segmentId] : null;
+        }
+
+        function buildQuickExitEmptyMainState_(item, remark) {
+          return {
+            tail: 0,
+            unitsPerBox: Math.max(0, Math.trunc(Number(item && item.unitsPerBox) || 0)),
+            itemBoxes: 0,
+            sign: "",
+            fractionText: "",
+            fractionValue: 0,
+            colisage: Math.max(0, Math.trunc(Number(item && item.colisage) || 0)),
+            packNotation: "",
+            remark: String(remark || "").trim()
+          };
+        }
+
+        function buildQuickExitCurrentMainState_(item, remark) {
+          const currentItem = item || state.quickEditItem;
+          if (!currentItem) return null;
+          const mainState = {
+            tail: 0,
+            unitsPerBox: Math.max(0, Math.trunc(Number(currentItem.unitsPerBox) || 0)),
+            itemBoxes: Math.max(0, Math.trunc(Number(currentItem.itemBoxes) || 0)),
+            sign: sanitizeSign(currentItem.sign),
+            fractionText: sanitizeFractionText(currentItem.fractionText),
+            fractionValue: toPositiveNumber(currentItem.fractionValue) || parseFraction(currentItem.fractionText),
+            colisage: Math.max(0, Math.trunc(Number(currentItem.colisage) || 0)),
+            packNotation: normalizePackNotation(currentItem.packNotation, false),
+            remark: String(remark || currentItem.remark || "").trim()
+          };
+          return stateModelToPieces(mainState) > 0
+            ? mainState
+            : buildQuickExitEmptyMainState_(currentItem, remark);
+        }
+
+        function buildQuickExitCombinedState_(item, tailPieces, mainState, remark) {
+          const currentItem = item || state.quickEditItem;
+          if (!currentItem) return null;
+          const safeTailPieces = Math.max(0, Math.trunc(Number(tailPieces) || 0));
+          const resolvedRemark = String(remark || "").trim();
+          const resolvedMainState = mainState || buildQuickExitEmptyMainState_(currentItem, resolvedRemark);
+          return {
+            tail: safeTailPieces,
+            unitsPerBox: Math.max(0, Math.trunc(Number(resolvedMainState.unitsPerBox) || 0)),
+            itemBoxes: Math.max(0, Math.trunc(Number(resolvedMainState.itemBoxes) || 0)),
+            sign: sanitizeSign(resolvedMainState.sign),
+            fractionText: sanitizeFractionText(resolvedMainState.fractionText),
+            fractionValue: toPositiveNumber(resolvedMainState.fractionValue) || parseFraction(resolvedMainState.fractionText),
+            colisage: Math.max(0, Math.trunc(Number(resolvedMainState.colisage) || 0)),
+            packNotation: normalizePackNotation(resolvedMainState.packNotation, false),
+            remark: resolvedRemark
+          };
+        }
+
+        function buildQuickExitComputedState_(item, options) {
+          const currentItem = item || state.quickEditItem;
+          if (!currentItem || !state.quickExitForm || !state.quickExitForm.segments) return null;
+          const strict = !!(options && options.strict);
+          const remark = String(state.quickEditForm && state.quickEditForm.remark || "").trim();
+          const segments = getQuickExitSegments_(currentItem);
+          const selectedSegments = segments.filter(function(segment) {
+            return !!getQuickExitSelectionConfig_(segment.id);
+          });
+          if (!selectedSegments.length) return null;
+
+          const currentTailPieces = Math.max(0, Math.trunc(Number(currentItem.tail) || 0));
+          const currentMainState = buildQuickExitCurrentMainState_(currentItem, remark);
+          const currentMainPieces = Math.max(0, Math.round(stateModelToPieces(currentMainState)));
+          let nextTailPieces = currentTailPieces;
+          let nextMainState = currentMainState;
+          let validSegments = 0;
+          const segmentErrors = {};
+
+          for (let i = 0; i < selectedSegments.length; i++) {
+            const segment = selectedSegments[i];
+            const config = getQuickExitSelectionConfig_(segment.id);
+            const result = parseQuickExitSegmentEntry_(currentItem, segment, config);
+            if (!result || !result.valid) {
+              if (strict) {
+                segmentErrors[segment.id] = result && result.message ? result.message : "Sortie invalide.";
+                return { valid: false, message: result && result.message ? result.message : "Sortie invalide.", segmentErrors: segmentErrors };
+              }
+              continue;
+            }
+
+            if (segment.id === "tail") {
+              const updatedTailPieces = currentTailPieces - result.pieces;
+              if (updatedTailPieces < 0) {
+                if (strict) {
+                  segmentErrors[segment.id] = "Sortie trop grande pour 尾箱.";
+                  return { valid: false, message: "Sortie trop grande pour le stock courant.", segmentErrors: segmentErrors };
+                }
+                continue;
+              }
+              nextTailPieces = updatedTailPieces;
+              validSegments += 1;
+              continue;
+            }
+
+            if (segment.id === "main") {
+              const updatedMainPieces = currentMainPieces - result.pieces;
+              if (updatedMainPieces < 0) {
+                if (strict) {
+                  segmentErrors[segment.id] = "Sortie trop grande pour le stock principal.";
+                  return { valid: false, message: "Sortie trop grande pour le stock courant.", segmentErrors: segmentErrors };
+                }
+                continue;
+              }
+              const rebuiltMainState = buildStateFromPieces(updatedMainPieces, {
+                unitsPerBox: currentItem.unitsPerBox,
+                colisage: currentItem.colisage,
+                remark: remark,
+                reconstructionMode: result.mode
+              });
+              if (!rebuiltMainState) {
+                if (strict) {
+                  segmentErrors[segment.id] = "Impossible de calculer l'etat apres sortie.";
+                  return { valid: false, message: "Impossible de calculer l'etat apres sortie.", segmentErrors: segmentErrors };
+                }
+                continue;
+              }
+              nextMainState = rebuiltMainState;
+              validSegments += 1;
+            }
+          }
+
+          if (!validSegments) return null;
+
+          return {
+            valid: true,
+            nextState: buildQuickExitCombinedState_(currentItem, nextTailPieces, nextMainState, remark)
+          };
         }
 
         function ensureQuickExitForm_() {
@@ -1632,13 +1788,20 @@
           const pieces = unitsPerBox * fractionValue;
           if (!(pieces > 0) || Math.round(pieces) !== pieces) return 0;
           if (pieces > segment.availablePieces) return 0;
+          if (segment.id === "tail") {
+            const currentTailPieces = Math.max(0, Math.trunc(Number(currentItem.tail) || 0));
+            return currentTailPieces >= pieces ? pieces : 0;
+          }
           const totalPieces = stateModelToPieces(currentItem);
-          const newTotal = totalPieces - pieces;
-          if (newTotal < 0 || Math.round(newTotal) !== newTotal) return 0;
-          const nextState = buildStateFromPieces(newTotal, {
+          const currentTailPieces = Math.max(0, Math.trunc(Number(currentItem.tail) || 0));
+          const currentMainPieces = Math.max(0, totalPieces - currentTailPieces);
+          const newMainPieces = currentMainPieces - pieces;
+          if (newMainPieces < 0 || Math.round(newMainPieces) !== newMainPieces) return 0;
+          const nextState = buildStateFromPieces(newMainPieces, {
             unitsPerBox: currentItem.unitsPerBox,
             colisage: currentItem.colisage,
-            remark: state.quickEditForm && state.quickEditForm.remark
+            remark: state.quickEditForm && state.quickEditForm.remark,
+            reconstructionMode: "fraction"
           });
           return nextState ? pieces : 0;
         }
@@ -2008,42 +2171,7 @@
               }
             };
           }
-          const segments = getQuickExitSegments_(currentItem);
-          const selectedSegments = segments.filter(function(segment) {
-            return !!getQuickExitSelectionConfig_(segment.id);
-          });
-          if (!selectedSegments.length) return null;
-
-          const totalPieces = stateModelToPieces(currentItem);
-          let totalExitPieces = 0;
-          const segmentErrors = {};
-          for (let i = 0; i < selectedSegments.length; i++) {
-            const segment = selectedSegments[i];
-            const config = getQuickExitSelectionConfig_(segment.id);
-            const result = parseQuickExitSegmentEntry_(currentItem, segment, config);
-            if (!result.valid) {
-              segmentErrors[segment.id] = result.message || "Sortie invalide.";
-              return { valid: false, message: result.message || "Sortie invalide.", segmentErrors: segmentErrors };
-            }
-            totalExitPieces += result.pieces;
-          }
-
-          const newTotal = totalPieces - totalExitPieces;
-          if (newTotal < 0) {
-            return { valid: false, message: "Sortie trop grande pour le stock courant.", segmentErrors: {} };
-          }
-          const nextState = buildStateFromPieces(newTotal, {
-            unitsPerBox: currentItem.unitsPerBox,
-            colisage: currentItem.colisage,
-            remark: state.quickEditForm && state.quickEditForm.remark
-          });
-          if (!nextState) {
-            return { valid: false, message: "Impossible de calculer l'etat apres sortie." };
-          }
-          return {
-            valid: true,
-            nextState: nextState
-          };
+          return buildQuickExitComputedState_(currentItem, { strict: true });
         }
 
         function computeQuickExitPreviewState_(item) {
@@ -2065,36 +2193,7 @@
               }
             };
           }
-          const segments = getQuickExitSegments_(currentItem);
-          const selectedSegments = segments.filter(function(segment) {
-            return !!getQuickExitSelectionConfig_(segment.id);
-          });
-          if (!selectedSegments.length) return null;
-
-          const totalPieces = stateModelToPieces(currentItem);
-          let totalExitPieces = 0;
-          let validSegments = 0;
-          for (let i = 0; i < selectedSegments.length; i++) {
-            const segment = selectedSegments[i];
-            const config = getQuickExitSelectionConfig_(segment.id);
-            const result = parseQuickExitSegmentEntry_(currentItem, segment, config);
-            if (!result || !result.valid) continue;
-            totalExitPieces += result.pieces;
-            validSegments += 1;
-          }
-          if (!validSegments) return null;
-          const newTotal = totalPieces - totalExitPieces;
-          if (newTotal < 0) return null;
-          const nextState = buildStateFromPieces(newTotal, {
-            unitsPerBox: currentItem.unitsPerBox,
-            colisage: currentItem.colisage,
-            remark: state.quickEditForm && state.quickEditForm.remark
-          });
-          if (!nextState) return null;
-          return {
-            valid: true,
-            nextState: nextState
-          };
+          return buildQuickExitComputedState_(currentItem, { strict: false });
         }
 
         function computeQuickExitPreview() {
@@ -2233,7 +2332,8 @@
             const nextState = buildStateFromPieces(newTotal, {
               unitsPerBox: unitsPerBox,
               colisage: baseItem.colisage,
-              remark: String(request.remark || "").trim()
+              remark: String(request.remark || "").trim(),
+              reconstructionMode: request.exitMode
             });
             if (!nextState) return null;
             const nextItem = Object.assign({}, baseItem, nextState, {

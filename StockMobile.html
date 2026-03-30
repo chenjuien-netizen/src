@@ -243,7 +243,10 @@
             <p class="hidden overflow-hidden whitespace-nowrap text-[10px] text-on-surface-variant" id="quickExitPacksHint"></p>
             <section id="quickExitPanel">
               <div class="rounded border border-outline-variant/20 bg-surface-container-low px-3 py-2">
-                <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Stock actuel</div>
+                <div class="flex items-center justify-between gap-3">
+                  <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Stock actuel</div>
+                  <button class="shrink-0 rounded border border-outline-variant/30 px-2 py-1 text-[10px] font-bold tracking-[0.12em] text-on-surface-variant transition-colors duration-150 hover:bg-surface-container" id="quickExitClearButton" type="button">清空库存</button>
+                </div>
                 <div class="mt-2 w-full overflow-x-auto" id="quickExitCurrentStockScroll">
                   <div class="flex justify-center">
                     <div class="inline-flex min-w-fit flex-nowrap gap-2 text-sm font-semibold text-primary" id="quickExitCurrentStock">-</div>
@@ -434,6 +437,7 @@
           quickEditPartialOpen: false,
           quickEditTab: "quick-exit",
           quickExitForm: null,
+          quickExitClearSelected: false,
           quickEditError: "",
           quickEditSaving: false,
           pendingSaveById: {},
@@ -471,6 +475,7 @@
           quickEditTabQuickExit: document.getElementById("quickEditTabQuickExit"),
           quickEditTabEdit: document.getElementById("quickEditTabEdit"),
           quickExitPanel: document.getElementById("quickExitPanel"),
+          quickExitClearButton: document.getElementById("quickExitClearButton"),
           quickExitCurrentStockScroll: document.getElementById("quickExitCurrentStockScroll"),
           quickExitCurrentStock: document.getElementById("quickExitCurrentStock"),
           quickExitPreviewWrap: document.getElementById("quickExitPreviewWrap"),
@@ -1397,21 +1402,55 @@
             : "boxes";
           return {
             action: defaultAction,
-            quantity: "",
-            fractionText: "1/2"
+            value: ""
           };
+        }
+
+        function resetQuickExitErrors_() {
+          setQuickEditError("");
+        }
+
+        function isQuickExitValueCompatible_(action, value) {
+          const normalized = String(value || "").trim();
+          if (!normalized) return true;
+          if (action === "fraction") return isFractionTextValid(normalized);
+          return /^\d+$/.test(normalized) && Math.trunc(Number(normalized)) > 0;
+        }
+
+        function clearQuickExitInlineInputs_() {
+          if (!els.quickExitSegmentForms) return;
+          Array.prototype.forEach.call(
+            els.quickExitSegmentForms.querySelectorAll("input[data-quick-exit-field='value']"),
+            function(input) {
+              input.value = "";
+            }
+          );
+        }
+
+        function setQuickExitClearSelected_(nextValue) {
+          const shouldEnable = !!nextValue;
+          state.quickExitClearSelected = shouldEnable;
+          if (shouldEnable) {
+            ensureQuickExitForm_();
+            state.quickExitForm.segments = {};
+            clearQuickExitInlineInputs_();
+          }
+          resetQuickExitErrors_();
         }
 
         function toggleQuickExitSegment_(segmentId) {
           const segments = getQuickExitSegmentMap_();
           if (!segments[segmentId]) return;
           ensureQuickExitForm_();
+          if (state.quickExitClearSelected) {
+            state.quickExitClearSelected = false;
+          }
           if (state.quickExitForm.segments[segmentId]) {
             delete state.quickExitForm.segments[segmentId];
           } else {
             state.quickExitForm.segments[segmentId] = getDefaultQuickExitConfig_(segments[segmentId]);
           }
-          setQuickEditError("");
+          resetQuickExitErrors_();
           renderQuickEdit();
         }
 
@@ -1422,16 +1461,15 @@
           ensureQuickExitForm_();
           const current = state.quickExitForm.segments[segmentId] || getDefaultQuickExitConfig_(segment);
           if (field === "action") {
-            current.action = String(value || "");
-            current.quantity = "";
-            current.fractionText = "1/2";
-          } else if (field === "fractionText") {
-            current.fractionText = sanitizeFractionText(value);
+            const nextAction = String(value || "");
+            const currentValue = String(current.value || "").trim();
+            current.action = nextAction;
+            current.value = isQuickExitValueCompatible_(nextAction, currentValue) ? currentValue : "";
           } else {
-            current.quantity = sanitizeIntegerInput(value);
+            current.value = String(value || "");
           }
           state.quickExitForm.segments[segmentId] = current;
-          setQuickEditError("");
+          resetQuickExitErrors_();
           renderQuickEdit();
         }
 
@@ -1448,7 +1486,7 @@
             return '<span class="text-on-surface-variant">-</span>';
           }
           return segments.map(function(segment, index) {
-            const selected = !!getQuickExitSelectionConfig_(segment.id);
+            const selected = !state.quickExitClearSelected && !!getQuickExitSelectionConfig_(segment.id);
             const joinMarkup = index > 0
               ? '<span aria-hidden="true" class="pointer-events-none inline-flex items-center text-sm font-medium text-on-surface-variant/80">+</span>'
               : '';
@@ -1461,6 +1499,10 @@
         }
 
         function renderQuickExitSegmentForms_(item) {
+          if (state.quickExitClearSelected) {
+            els.quickExitSegmentForms.innerHTML = "";
+            return;
+          }
           const segments = getQuickExitSegments_(item).filter(function(segment) {
             return !!getQuickExitSelectionConfig_(segment.id);
           });
@@ -1473,15 +1515,15 @@
             const actionOptions = segment.actions.map(function(action) {
               return '<option value="' + escapeHtml(action.value) + '"' + (config.action === action.value ? ' selected' : '') + '>' + escapeHtml(action.label) + '</option>';
             }).join("");
-            const quantityControl = config.action === "fraction"
-              ? '<label class="block min-w-0"><span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">fraction</span><input class="w-[5.5rem] border-outline-variant/30 bg-surface-container-low px-2 text-sm font-semibold text-on-surface" data-quick-exit-field="fractionText" data-segment-id="' + escapeHtml(segment.id) + '" placeholder="1/2" type="text" value="' + escapeHtml(config.fractionText || "") + '" /></label>'
-              : '<label class="block min-w-0"><span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">quantite</span><input class="w-[5.5rem] border-outline-variant/30 bg-surface-container-low px-2 text-sm font-semibold text-on-surface" data-quick-exit-field="quantity" data-segment-id="' + escapeHtml(segment.id) + '" inputmode="numeric" min="0" step="1" type="number" value="' + escapeHtml(config.quantity || "") + '" /></label>';
+            const isFractionAction = config.action === "fraction";
             return '<div class="min-w-fit' + (index > 0 ? ' border-l border-outline-variant/20 pl-6' : '') + '">'
               + '<div class="flex min-w-fit flex-col items-start justify-end">'
               + '<div class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">' + escapeHtml(segment.id === "tail" ? "尾箱" : "箱") + '</div>'
               + '<div class="mt-1 text-sm font-semibold text-on-surface">' + escapeHtml(segment.label) + '</div>'
               + '<div class="mt-2 flex min-h-[4.5rem] items-end gap-2">'
-              + quantityControl
+              + '<label class="block min-w-0"><span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">valeur</span><input class="w-[5.5rem] border-outline-variant/30 bg-surface-container-low px-2 text-sm font-semibold text-on-surface" data-quick-exit-field="value" data-segment-id="' + escapeHtml(segment.id) + '"'
+              + (isFractionAction ? ' inputmode="text" type="text"' : ' inputmode="numeric" type="text"')
+              + ' value="' + escapeHtml(config.value || "") + '" /></label>'
               + '<label class="block min-w-0"><span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">action</span><select class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-semibold text-on-surface" data-quick-exit-field="action" data-segment-id="' + escapeHtml(segment.id) + '">' + actionOptions + '</select></label>'
               + '</div>'
               + '</div>'
@@ -1494,21 +1536,28 @@
           if (!currentItem || !segment || !config) return { valid: false, pieces: 0, message: "" };
           const unitsPerBox = Math.max(0, Math.trunc(Number(currentItem.unitsPerBox) || 0));
           const colisage = Math.max(0, Math.trunc(Number(currentItem.colisage) || 0));
-          const quantity = Math.max(0, Math.trunc(Number(config.quantity) || 0));
+          const rawValue = String(config.value || "").trim();
+          const quantity = Math.max(0, Math.trunc(Number(rawValue) || 0));
           let pieces = 0;
 
           if (config.action === "boxes") {
+            if (!rawValue) return { valid: false, pieces: 0, message: "Indique un nombre de 箱 positif." };
+            if (!/^\d+$/.test(rawValue)) return { valid: false, pieces: 0, message: "Indique un nombre de 箱 positif." };
             if (!(unitsPerBox > 0) || !(quantity > 0)) return { valid: false, pieces: 0, message: "Indique un nombre de 箱 positif." };
             pieces = unitsPerBox * quantity;
           } else if (config.action === "packs") {
+            if (!rawValue) return { valid: false, pieces: 0, message: "Indique un nombre de 包 positif." };
+            if (!/^\d+$/.test(rawValue)) return { valid: false, pieces: 0, message: "Indique un nombre de 包 positif." };
             if (!(colisage > 0)) return { valid: false, pieces: 0, message: "Mode 包 indisponible." };
             if (!(quantity > 0)) return { valid: false, pieces: 0, message: "Indique un nombre de 包 positif." };
             pieces = colisage * quantity;
           } else if (config.action === "fraction") {
-            const fractionText = sanitizeFractionText(config.fractionText);
+            const fractionText = sanitizeFractionText(rawValue);
             if (!fractionText || !isFractionTextValid(fractionText)) return { valid: false, pieces: 0, message: "Selectionne une 分数 valide." };
             pieces = unitsPerBox * parseFraction(fractionText);
           } else if (config.action === "pieces") {
+            if (!rawValue) return { valid: false, pieces: 0, message: "Indique une quantite positive." };
+            if (!/^\d+$/.test(rawValue)) return { valid: false, pieces: 0, message: "Indique une quantite positive." };
             if (!(quantity > 0)) return { valid: false, pieces: 0, message: "Indique une quantite positive." };
             pieces = quantity;
           }
@@ -1525,6 +1574,22 @@
         function buildQuickExitResultState_(item) {
           const currentItem = item || state.quickEditItem;
           if (!currentItem || !state.quickExitForm || !state.quickExitForm.segments) return null;
+          if (state.quickExitClearSelected) {
+            return {
+              valid: true,
+              nextState: {
+                tail: 0,
+                unitsPerBox: Math.max(0, Math.trunc(Number(currentItem.unitsPerBox) || 0)),
+                itemBoxes: 0,
+                sign: "",
+                fractionText: "",
+                fractionValue: 0,
+                colisage: Math.max(0, Math.trunc(Number(currentItem.colisage) || 0)),
+                packNotation: "",
+                remark: String(state.quickEditForm && state.quickEditForm.remark || "").trim()
+              }
+            };
+          }
           const segments = getQuickExitSegments_(currentItem);
           const selectedSegments = segments.filter(function(segment) {
             return !!getQuickExitSelectionConfig_(segment.id);
@@ -1562,6 +1627,9 @@
         }
 
         function computeQuickExitPreview() {
+          if (state.quickExitClearSelected) {
+            return "空";
+          }
           const result = buildQuickExitResultState_(state.quickEditItem);
           return result && result.valid && result.nextState ? buildLocalStockDisplay(result.nextState) : "";
         }
@@ -1658,7 +1726,7 @@
               tail: Math.max(0, Math.trunc(Number(request.tail) || 0)),
               unitsPerBox: Math.max(0, Math.trunc(Number(request.unitsPerBox) || 0)),
               itemBoxes: Math.max(0, Math.trunc(Number(request.itemBoxes) || 0)),
-              sign: sanitizeSign(request.sign),
+              sign: String(request.sign || "").trim() ? sanitizeSign(request.sign) : "",
               fractionText: nextFractionText,
               fractionValue: nextFractionValue,
               packNotation: normalizePackNotation(request.packNotation, false),
@@ -1758,12 +1826,16 @@
           els.quickEditPackNotationCount.disabled = !packsEnabled;
           els.quickEditPartialGroup.classList.toggle("opacity-60", !packsEnabled);
           els.quickEditPartialToggle.classList.toggle("opacity-60", !packsEnabled && !partialHasValue);
+          els.quickExitClearButton.className = "shrink-0 rounded border px-2 py-1 text-[10px] font-bold tracking-[0.12em] transition-colors duration-150 "
+            + (state.quickExitClearSelected
+              ? "border-primary bg-primary text-on-primary"
+              : "border-outline-variant/30 text-on-surface-variant hover:bg-surface-container");
           els.quickExitCurrentStock.innerHTML = buildQuickExitSegmentsMarkup_(item);
           renderQuickExitSegmentForms_(item);
           syncQuickExitScrollableRow_(els.quickExitCurrentStockScroll, els.quickExitCurrentStock);
           syncQuickExitScrollableRow_(els.quickExitSegmentFormsScroll, els.quickExitSegmentForms);
-          els.quickExitPreviewWrap.classList.toggle("hidden", !preview);
-          els.quickExitPreview.textContent = preview || "-";
+          els.quickExitPreviewWrap.classList.toggle("hidden", !preview && !state.quickExitClearSelected);
+          els.quickExitPreview.textContent = state.quickExitClearSelected ? "空" : (preview || "-");
           els.quickExitPacksHint.classList.toggle("hidden", !packsEnabled);
           els.quickExitPacksHint.innerHTML = packsEnabled
             ? buildQuickExitPacksHintMarkup(item.colisage, packMeta.packsPerBox)
@@ -1806,6 +1878,7 @@
           state.quickExitForm = {
             segments: {}
           };
+          state.quickExitClearSelected = false;
           renderQuickEdit();
         }
 
@@ -1827,6 +1900,7 @@
           state.quickEditTailOpen = false;
           state.quickEditPartialOpen = false;
           state.quickExitForm = null;
+          state.quickExitClearSelected = false;
           state.quickEditError = "";
           state.quickEditSaving = false;
           renderQuickEdit();
@@ -1908,8 +1982,27 @@
         }
 
         function validateQuickExitPayload() {
-          if (!state.quickEditItem || !state.quickExitForm) return null;
+          if (!state.quickEditItem) return null;
           const item = state.quickEditItem;
+          if (state.quickExitClearSelected) {
+            resetQuickExitErrors_();
+            return {
+              id: item.id,
+              reference: item.reference,
+              mode: "edit",
+              tail: 0,
+              unitsPerBox: Math.max(0, Math.trunc(Number(item.unitsPerBox) || 0)),
+              itemBoxes: 0,
+              sign: "",
+              fractionText: "",
+              packNotationSign: "+",
+              packNotationCount: 0,
+              packNotation: "",
+              remark: String(state.quickEditForm && state.quickEditForm.remark || "").trim(),
+              fractionValue: 0
+            };
+          }
+          if (!state.quickExitForm) return null;
           const result = buildQuickExitResultState_(item);
           if (!result || !result.valid || !result.nextState) {
             setQuickEditError(result && result.message ? result.message : "Selectionne au moins un segment de sortie.");
@@ -2210,6 +2303,11 @@
         els.quickEditTabEdit.addEventListener("click", function() {
           state.quickEditTab = "edit";
           setQuickEditError("");
+          renderQuickEdit();
+        });
+
+        els.quickExitClearButton.addEventListener("click", function() {
+          setQuickExitClearSelected_(!state.quickExitClearSelected);
           renderQuickEdit();
         });
 

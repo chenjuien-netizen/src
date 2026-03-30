@@ -71,7 +71,7 @@ function exportStockToMsExport() {
       "Pays d'origine",
       "Remise (%)",
       "Date de création",
-      "每箱件数2",
+      "件/箱",
       "包/箱",
       "Couleurs"
     ];
@@ -104,7 +104,7 @@ function exportStockToMsExport() {
     var cPrix = stockMap["prix"] - 1;
     var cRemise = stockMap["remise (%)"] - 1;
     var cDate = stockMap["date de création"] - 1;
-    var cTotalPcs = stockMap["每箱件数2"] - 1;
+    var cTotalPcs = stockMap["件/箱"] - 1;
     var cPacks = stockMap["包/箱"] - 1;
     var cHorsColisage = stockMap["nbr de pièces hors unité de colisage"] - 1;
     var cPoidsG = stockMap["poids (en gramme)"] - 1;

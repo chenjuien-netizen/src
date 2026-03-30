@@ -1499,7 +1499,8 @@
         function updateQuickExitSegmentConfig_(segmentId, field, value) {
           setQuickExitSegmentConfig_(segmentId, {
             entry: String(value || ""),
-            dropdownOpen: true
+            dropdownOpen: true,
+            highlightedIndex: -1
           });
           resetQuickExitErrors_();
           renderQuickExitSegmentUi_(segmentId);
@@ -1631,8 +1632,8 @@
 
         function getQuickExitSegmentPlaceholder_(segment) {
           return segment && segment.id === "tail"
-            ? "(x)/3包/1/2/2/3"
-            : "2箱/5包/1/2/2/3";
+            ? "(x)/3包/ 1/2 / 2/3"
+            : "2箱/5包/ 1/2 / 2/3";
         }
 
         function getQuickExitDefaultSuggestions_(item, segment) {
@@ -1915,12 +1916,8 @@
           const desiredHeight = Math.max(44, maxVisibleRows * rowHeight);
           const gap = 4;
           const spaceBelow = Math.max(0, bodyRect.bottom - inputRect.bottom - gap);
-          const spaceAbove = Math.max(0, inputRect.top - bodyRect.top - gap);
-          const openUpward = spaceBelow < desiredHeight && spaceAbove > spaceBelow;
-          const maxHeight = Math.max(44, Math.min(desiredHeight, openUpward ? spaceAbove : spaceBelow));
-          const top = openUpward
-            ? Math.max(0, inputRect.top - panelRect.top - maxHeight - gap)
-            : Math.max(0, inputRect.bottom - panelRect.top + gap);
+          const maxHeight = Math.max(32, Math.min(desiredHeight, spaceBelow));
+          const top = Math.max(0, inputRect.bottom - panelRect.top + gap);
           const highlightedIndex = Math.max(-1, Math.min(Number(config.highlightedIndex || -1), suggestions.length - 1));
           els.quickExitDropdownLayer.innerHTML = '<div class="pointer-events-auto absolute overflow-y-auto rounded border border-outline-variant/40 bg-surface-container-lowest shadow-[0_16px_32px_rgba(11,15,16,0.24)]"'
             + ' style="left:' + left + 'px;top:' + top + 'px;width:' + dropdownWidth + 'px;max-height:' + maxHeight + 'px;">'

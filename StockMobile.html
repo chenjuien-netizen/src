@@ -856,7 +856,7 @@
 
         function computeInventoryTotals_(items) {
           return (items || []).reduce(function(acc, item) {
-            const tail = toPositiveNumber(item && item.tail);
+            const tail = getTailActualPieces_(item);
             const unitsPerBox = toPositiveNumber(item && item.unitsPerBox);
             const itemBoxes = toPositiveNumber(item && item.itemBoxes);
             const sign = String(item && item.sign ? item.sign : "").trim();
@@ -889,7 +889,7 @@
               cartonCount += 1;
             }
 
-            const packMeta = parsePackNotation(item && item.packNotation);
+            const packMeta = parsePackNotation(getMainPackNotationFromState_(item));
             if (packMeta.count > 0 && colisage > 0) {
               itemPieces += (packMeta.sign === "-" ? -1 : 1) * (packMeta.count * colisage);
             }
@@ -1035,6 +1035,79 @@
           return match[1] + count + "包";
         }
 
+        function normalizeTailRelativeNotation(value) {
+          const normalized = String(value || "").trim().replace(/^TAIL:/i, "");
+          if (!normalized) return "";
+          const packNotation = normalizePackNotation(normalized, false);
+          if (/^-\d+包$/.test(packNotation)) return packNotation;
+          const fractionText = sanitizeFractionText(normalized);
+          return parseFraction(fractionText) > 0 ? fractionText : "";
+        }
+
+        function splitCompositePackNotation(value) {
+          const normalized = String(value || "").trim();
+          if (!normalized) {
+            return { tailNotation: "", mainNotation: "" };
+          }
+          const parts = normalized.split("|");
+          let tailNotation = "";
+          let mainNotation = "";
+          parts.forEach(function(part) {
+            const token = String(part || "").trim();
+            if (!token) return;
+            if (/^TAIL:/i.test(token)) {
+              if (!tailNotation) tailNotation = normalizeTailRelativeNotation(token);
+              return;
+            }
+            const packNotation = normalizePackNotation(token, false);
+            if (!mainNotation && /^([+-])\d+包$/.test(packNotation)) {
+              mainNotation = packNotation;
+            }
+          });
+          return {
+            tailNotation: tailNotation,
+            mainNotation: mainNotation
+          };
+        }
+
+        function buildCompositePackNotation(tailNotation, mainNotation) {
+          const normalizedTail = normalizeTailRelativeNotation(tailNotation);
+          const normalizedMain = normalizePackNotation(mainNotation, false);
+          if (normalizedTail && normalizedMain) return "TAIL:" + normalizedTail + "|" + normalizedMain;
+          if (normalizedTail) return "TAIL:" + normalizedTail;
+          return /^([+-])\d+包$/.test(normalizedMain) ? normalizedMain : "";
+        }
+
+        function getTailNotationFromState_(stateModel) {
+          return splitCompositePackNotation(stateModel && stateModel.packNotation).tailNotation;
+        }
+
+        function getMainPackNotationFromState_(stateModel) {
+          return splitCompositePackNotation(stateModel && stateModel.packNotation).mainNotation;
+        }
+
+        function getTailActualPieces_(stateModel) {
+          const tailBase = Math.max(0, Math.trunc(Number(stateModel && stateModel.tail) || 0));
+          const tailNotation = getTailNotationFromState_(stateModel);
+          if (!(tailBase > 0) || !tailNotation) return tailBase;
+          if (/^-\d+包$/.test(tailNotation)) {
+            const packMeta = parsePackNotation(tailNotation);
+            const colisage = Math.max(0, Math.trunc(Number(stateModel && stateModel.colisage) || 0));
+            return Math.max(0, tailBase - (packMeta.count * colisage));
+          }
+          const fractionValue = parseFraction(tailNotation);
+          if (!(fractionValue > 0)) return tailBase;
+          const pieces = tailBase * fractionValue;
+          return pieces > 0 && Math.round(pieces) === pieces ? Math.max(0, Math.round(pieces)) : tailBase;
+        }
+
+        function buildTailDisplay_(stateModel) {
+          const tailBase = Math.max(0, Math.trunc(Number(stateModel && stateModel.tail) || 0));
+          if (!(tailBase > 0)) return "";
+          const tailNotation = getTailNotationFromState_(stateModel);
+          return "(" + tailBase + "p)" + (tailNotation || "");
+        }
+
         function parsePackNotation(value) {
           const normalized = normalizePackNotation(value, false);
           const match = normalized.match(/^([+-])(\d+)包$/);
@@ -1050,7 +1123,7 @@
         }
 
         function splitPackNotation(value) {
-          const parsed = parsePackNotation(value);
+          const parsed = parsePackNotation(getMainPackNotationFromState_({ packNotation: value }));
           return {
             sign: parsed.sign === "-" ? "-" : "+",
             count: parsed.count > 0 ? String(parsed.count) : ""
@@ -1178,14 +1251,15 @@
         }
 
         function buildRawLocalStockDisplay(stateModel) {
-          const tail = Math.max(0, Math.trunc(Number(stateModel && stateModel.tail) || 0));
+          const tailDisplay = buildTailDisplay_(stateModel);
           const unitsPerBox = Math.max(0, Math.trunc(Number(stateModel && stateModel.unitsPerBox) || 0));
           const itemBoxes = Math.max(0, Math.trunc(Number(stateModel && stateModel.itemBoxes) || 0));
           const sign = String(stateModel && stateModel.sign ? stateModel.sign : "").trim();
           const fractionText = sanitizeFractionText(stateModel && stateModel.fractionText) || fractionToText(stateModel && stateModel.fractionValue);
+          const hasMainContent = itemBoxes > 0 || !!fractionText;
           let core = "";
 
-          if (unitsPerBox > 0) {
+          if (unitsPerBox > 0 && hasMainContent) {
             core = unitsPerBox + "p";
             if (sign === "×" && fractionText) {
               if (itemBoxes > 1) {
@@ -1200,8 +1274,8 @@
             }
           }
 
-          if (tail > 0) {
-            return "(" + tail + "p)" + (core ? "+" + core : "");
+          if (tailDisplay) {
+            return tailDisplay + (core ? "+" + core : "");
           }
 
           return core || "-";
@@ -1209,19 +1283,19 @@
 
         function buildLocalStockDisplay(stateModel) {
           const rawDisplay = buildRawLocalStockDisplay(stateModel);
-          const packNotation = normalizePackNotation(stateModel && stateModel.packNotation, false);
+          const packNotation = getMainPackNotationFromState_(stateModel);
           if (!packNotation) return rawDisplay;
           return rawDisplay === "-" ? packNotation : (rawDisplay + packNotation);
         }
 
         function stateModelToPieces(stateModel) {
-          const tail = Math.max(0, Math.trunc(Number(stateModel && stateModel.tail) || 0));
+          const tail = getTailActualPieces_(stateModel);
           const unitsPerBox = Math.max(0, Math.trunc(Number(stateModel && stateModel.unitsPerBox) || 0));
           const itemBoxes = Math.max(0, Math.trunc(Number(stateModel && stateModel.itemBoxes) || 0));
           const sign = String(stateModel && stateModel.sign ? stateModel.sign : "").trim();
           const fractionValue = toPositiveNumber(stateModel && stateModel.fractionValue) || parseFraction(stateModel && stateModel.fractionText);
           const colisage = Math.max(0, Math.trunc(Number(stateModel && stateModel.colisage) || 0));
-          const packMeta = parsePackNotation(stateModel && stateModel.packNotation);
+          const packMeta = parsePackNotation(getMainPackNotationFromState_(stateModel));
           let totalPieces = tail;
 
           if (unitsPerBox > 0) {
@@ -1267,7 +1341,7 @@
 
           if (packsPerBox > 0) {
             const fractionValue = toPositiveNumber(stateModel && stateModel.fractionValue) || parseFraction(stateModel && stateModel.fractionText);
-            const packMeta = parsePackNotation(stateModel && stateModel.packNotation);
+            const packMeta = parsePackNotation(getMainPackNotationFromState_(stateModel));
             if (fractionValue > 0 || packMeta.count > 0) {
               const basePacks = fractionValue * packsPerBox;
               const delta = packMeta.count > 0 ? (packMeta.sign === "-" ? -packMeta.count : packMeta.count) : 0;
@@ -1404,15 +1478,19 @@
         }
 
         function buildQuickExitMainLabel_(item) {
-          const baseState = Object.assign({}, item || {}, { tail: 0 });
+          const baseState = Object.assign({}, item || {}, { tail: 0, packNotation: getMainPackNotationFromState_(item) });
           return buildRawLocalStockDisplay(baseState);
+        }
+
+        function buildQuickExitTailLabel_(item) {
+          return buildTailDisplay_(item);
         }
 
         function getQuickExitSegments_(item) {
           const currentItem = item || state.quickEditItem;
           if (!currentItem) return [];
           const unitsPerBox = Math.max(0, Math.trunc(Number(currentItem.unitsPerBox) || 0));
-          const tailPieces = Math.max(0, Math.trunc(Number(currentItem.tail) || 0));
+          const tailPieces = getTailActualPieces_(currentItem);
           const totalPieces = stateModelToPieces(currentItem);
           const mainPieces = Math.max(0, totalPieces - tailPieces);
           const colisage = Math.max(0, Math.trunc(Number(currentItem.colisage) || 0));
@@ -1425,7 +1503,7 @@
             if (unitsPerBox > 0) tailActions.push({ value: "fraction", label: "fraction" });
             segments.push({
               id: "tail",
-              label: formatTailDisplay(currentItem.tail),
+              label: buildQuickExitTailLabel_(currentItem),
               availablePieces: tailPieces,
               actions: tailActions
             });
@@ -1484,7 +1562,7 @@
             fractionText: sanitizeFractionText(currentItem.fractionText),
             fractionValue: toPositiveNumber(currentItem.fractionValue) || parseFraction(currentItem.fractionText),
             colisage: Math.max(0, Math.trunc(Number(currentItem.colisage) || 0)),
-            packNotation: normalizePackNotation(currentItem.packNotation, false),
+            packNotation: getMainPackNotationFromState_(currentItem),
             remark: String(remark || currentItem.remark || "").trim()
           };
           return stateModelToPieces(mainState) > 0
@@ -1492,23 +1570,55 @@
             : buildQuickExitEmptyMainState_(currentItem, remark);
         }
 
-        function buildQuickExitCombinedState_(item, tailPieces, mainState, remark) {
+        function buildQuickExitCombinedState_(item, tailState, mainState, remark) {
           const currentItem = item || state.quickEditItem;
           if (!currentItem) return null;
-          const safeTailPieces = Math.max(0, Math.trunc(Number(tailPieces) || 0));
           const resolvedRemark = String(remark || "").trim();
           const resolvedMainState = mainState || buildQuickExitEmptyMainState_(currentItem, resolvedRemark);
+          const resolvedTailState = tailState || { tail: 0, tailNotation: "" };
+          const mainPackNotation = getMainPackNotationFromState_(resolvedMainState);
           return {
-            tail: safeTailPieces,
+            tail: Math.max(0, Math.trunc(Number(resolvedTailState.tail) || 0)),
             unitsPerBox: Math.max(0, Math.trunc(Number(resolvedMainState.unitsPerBox) || 0)),
             itemBoxes: Math.max(0, Math.trunc(Number(resolvedMainState.itemBoxes) || 0)),
             sign: sanitizeSign(resolvedMainState.sign),
             fractionText: sanitizeFractionText(resolvedMainState.fractionText),
             fractionValue: toPositiveNumber(resolvedMainState.fractionValue) || parseFraction(resolvedMainState.fractionText),
             colisage: Math.max(0, Math.trunc(Number(resolvedMainState.colisage) || 0)),
-            packNotation: normalizePackNotation(resolvedMainState.packNotation, false),
+            packNotation: buildCompositePackNotation(resolvedTailState.tailNotation, mainPackNotation),
             remark: resolvedRemark
           };
+        }
+
+        function buildQuickExitTailState_(baseTailPieces, nextTailPieces, exitMode, item) {
+          const currentItem = item || state.quickEditItem;
+          const safeBaseTailPieces = Math.max(0, Math.trunc(Number(baseTailPieces) || 0));
+          const safeNextTailPieces = Math.max(0, Math.trunc(Number(nextTailPieces) || 0));
+          const colisage = Math.max(0, Math.trunc(Number(currentItem && currentItem.colisage) || 0));
+
+          if (!(safeNextTailPieces > 0) || !(safeBaseTailPieces > 0)) {
+            return { tail: 0, tailNotation: "" };
+          }
+          if (safeNextTailPieces >= safeBaseTailPieces) {
+            return { tail: safeBaseTailPieces, tailNotation: "" };
+          }
+          if (exitMode === "packs" && colisage > 0) {
+            const removedPieces = safeBaseTailPieces - safeNextTailPieces;
+            if (removedPieces > 0 && removedPieces % colisage === 0) {
+              return {
+                tail: safeBaseTailPieces,
+                tailNotation: "-" + (removedPieces / colisage) + "包"
+              };
+            }
+          }
+          const remainingFractionText = fractionTextFromPieces(safeNextTailPieces, safeBaseTailPieces);
+          if (remainingFractionText) {
+            return {
+              tail: safeBaseTailPieces,
+              tailNotation: remainingFractionText
+            };
+          }
+          return { tail: safeNextTailPieces, tailNotation: "" };
         }
 
         function buildQuickExitComputedState_(item, options) {
@@ -1522,10 +1632,14 @@
           });
           if (!selectedSegments.length) return null;
 
-          const currentTailPieces = Math.max(0, Math.trunc(Number(currentItem.tail) || 0));
+          const currentTailBasePieces = Math.max(0, Math.trunc(Number(currentItem.tail) || 0));
+          const currentTailPieces = getTailActualPieces_(currentItem);
           const currentMainState = buildQuickExitCurrentMainState_(currentItem, remark);
           const currentMainPieces = Math.max(0, Math.round(stateModelToPieces(currentMainState)));
-          let nextTailPieces = currentTailPieces;
+          let nextTailState = {
+            tail: currentTailBasePieces,
+            tailNotation: getTailNotationFromState_(currentItem)
+          };
           let nextMainState = currentMainState;
           let validSegments = 0;
           const segmentErrors = {};
@@ -1551,7 +1665,7 @@
                 }
                 continue;
               }
-              nextTailPieces = updatedTailPieces;
+              nextTailState = buildQuickExitTailState_(currentTailBasePieces, updatedTailPieces, result.mode, currentItem);
               validSegments += 1;
               continue;
             }
@@ -1587,7 +1701,7 @@
 
           return {
             valid: true,
-            nextState: buildQuickExitCombinedState_(currentItem, nextTailPieces, nextMainState, remark)
+            nextState: buildQuickExitCombinedState_(currentItem, nextTailState, nextMainState, remark)
           };
         }
 

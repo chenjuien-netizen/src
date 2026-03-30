@@ -330,20 +330,22 @@ function StockWebApp_extractStateModel_(row, cols, baseCol) {
 function StockWebApp_buildStockDisplay_(stateInput) {
   const state = StockWebApp_normalizeStateModel_(stateInput || {});
   const rawDisplay = StockWebApp_buildRawStockDisplay_(state);
-  if (!state.packNotation) return rawDisplay;
-  return rawDisplay === "-" ? state.packNotation : (rawDisplay + state.packNotation);
+  const mainPackNotation = StockWebApp_getMainPackNotationFromState_(state);
+  if (!mainPackNotation) return rawDisplay;
+  return rawDisplay === "-" ? mainPackNotation : (rawDisplay + mainPackNotation);
 }
 
 function StockWebApp_buildRawStockDisplay_(stateInput) {
   const state = StockWebApp_normalizeStateModel_(stateInput || {});
-  const tail = state.tail;
+  const tailDisplay = StockWebApp_buildTailDisplay_(state);
   const unitsPerBox = state.unitsPerBox;
   const itemBoxes = state.itemBoxes;
   const sign = state.sign;
   const fractionText = state.fractionText || StockWebApp_fractionToText_(state.fractionValue);
+  const hasMainContent = itemBoxes > 0 || !!fractionText;
 
   let core = "";
-  if (unitsPerBox > 0) {
+  if (unitsPerBox > 0 && hasMainContent) {
     core = String(unitsPerBox) + "p";
     if (sign === "×" && fractionText) {
       if (itemBoxes > 1) {
@@ -358,8 +360,8 @@ function StockWebApp_buildRawStockDisplay_(stateInput) {
     }
   }
 
-  if (tail > 0) {
-    return "(" + String(tail) + "p)" + (core ? "+" + core : "");
+  if (tailDisplay) {
+    return tailDisplay + (core ? "+" + core : "");
   }
 
   return core || "-";
@@ -656,11 +658,86 @@ function StockWebApp_normalizePackNotation_(value, strict) {
   return match[1] + count + "包";
 }
 
+function StockWebApp_normalizeTailRelativeNotation_(value) {
+  const text = String(value || "").trim().replace(/^TAIL:/i, "");
+  if (!text) return "";
+  const packNotation = StockWebApp_normalizePackNotation_(text, false);
+  if (/^-\d+包$/.test(packNotation)) return packNotation;
+  const fractionText = StockWebApp_normalizeFractionText_(text);
+  return fractionText && StockWebApp_parseFractionValue_(fractionText) > 0 ? fractionText : "";
+}
+
+function StockWebApp_splitCompositePackNotation_(value) {
+  const text = String(value || "").trim();
+  if (!text) return { tailNotation: "", mainNotation: "" };
+  const parts = text.split("|");
+  let tailNotation = "";
+  let mainNotation = "";
+  parts.forEach(function(part) {
+    const token = String(part || "").trim();
+    if (!token) return;
+    if (/^TAIL:/i.test(token)) {
+      if (!tailNotation) tailNotation = StockWebApp_normalizeTailRelativeNotation_(token);
+      return;
+    }
+    const packNotation = StockWebApp_normalizePackNotation_(token, false);
+    if (!mainNotation && /^([+-])\d+包$/.test(packNotation)) {
+      mainNotation = packNotation;
+    }
+  });
+  return {
+    tailNotation: tailNotation,
+    mainNotation: mainNotation
+  };
+}
+
+function StockWebApp_buildCompositePackNotation_(tailNotation, mainNotation) {
+  const normalizedTail = StockWebApp_normalizeTailRelativeNotation_(tailNotation);
+  const normalizedMain = StockWebApp_normalizePackNotation_(mainNotation, false);
+  if (normalizedTail && normalizedMain) return "TAIL:" + normalizedTail + "|" + normalizedMain;
+  if (normalizedTail) return "TAIL:" + normalizedTail;
+  return /^([+-])\d+包$/.test(normalizedMain) ? normalizedMain : "";
+}
+
+function StockWebApp_getTailNotationFromState_(stateInput) {
+  return StockWebApp_splitCompositePackNotation_(stateInput && stateInput.packNotation).tailNotation;
+}
+
+function StockWebApp_getMainPackNotationFromState_(stateInput) {
+  return StockWebApp_splitCompositePackNotation_(stateInput && stateInput.packNotation).mainNotation;
+}
+
+function StockWebApp_getTailActualPieces_(stateInput) {
+  const tailBase = Math.max(0, StockWebApp_toInt_(stateInput && stateInput.tail));
+  const tailNotation = StockWebApp_getTailNotationFromState_(stateInput);
+  if (!(tailBase > 0) || !tailNotation) return tailBase;
+  if (/^-\d+包$/.test(tailNotation)) {
+    const packMeta = StockWebApp_parsePackNotation_(tailNotation);
+    const colisage = Math.max(0, StockWebApp_toInt_(stateInput && stateInput.colisage));
+    return Math.max(0, tailBase - (packMeta.count * colisage));
+  }
+  const fractionValue = StockWebApp_parseFractionValue_(tailNotation);
+  if (!(fractionValue > 0)) return tailBase;
+  const pieces = tailBase * fractionValue;
+  return pieces > 0 && Math.round(pieces) === pieces ? Math.max(0, Math.round(pieces)) : tailBase;
+}
+
+function StockWebApp_buildTailDisplay_(stateInput) {
+  const tailBase = Math.max(0, StockWebApp_toInt_(stateInput && stateInput.tail));
+  if (!(tailBase > 0)) return "";
+  const tailNotation = StockWebApp_getTailNotationFromState_(stateInput);
+  return "(" + String(tailBase) + "p)" + (tailNotation || "");
+}
+
 function StockWebApp_buildPackNotationFromParts_(signValue, countValue, fallbackValue) {
   const sign = String(signValue || "").trim();
   const count = Math.max(0, StockWebApp_toInt_(countValue));
   if ((sign === "+" || sign === "-") && count > 0) {
     return sign + count + "包";
+  }
+  const composite = StockWebApp_splitCompositePackNotation_(fallbackValue);
+  if (composite.tailNotation || composite.mainNotation) {
+    return StockWebApp_buildCompositePackNotation_(composite.tailNotation, composite.mainNotation);
   }
   return StockWebApp_normalizePackNotation_(fallbackValue, true);
 }
@@ -692,7 +769,7 @@ function StockWebApp_stateModelToPieces_(stateInput) {
   const state = StockWebApp_normalizeStateModel_(stateInput || {});
   const unitsPerBox = state.unitsPerBox;
   const fractionValue = state.fractionValue;
-  let totalPieces = state.tail;
+  let totalPieces = StockWebApp_getTailActualPieces_(state);
 
   if (unitsPerBox > 0) {
     if (state.sign === "+") {
@@ -708,7 +785,7 @@ function StockWebApp_stateModelToPieces_(stateInput) {
     }
   }
 
-  const packMeta = StockWebApp_parsePackNotation_(state.packNotation);
+  const packMeta = StockWebApp_parsePackNotation_(StockWebApp_getMainPackNotationFromState_(state));
   if (packMeta.count > 0 && state.colisage > 0) {
     totalPieces += (packMeta.sign === "-" ? -1 : 1) * (packMeta.count * state.colisage);
   }
@@ -838,7 +915,7 @@ function StockWebApp_buildPackMeta_(stateInput) {
   }
 
   if (packsPerBox > 0) {
-    const packMeta = StockWebApp_parsePackNotation_(state.packNotation);
+    const packMeta = StockWebApp_parsePackNotation_(StockWebApp_getMainPackNotationFromState_(state));
     const basePackCount = state.fractionValue > 0 ? (state.fractionValue * packsPerBox) : 0;
     const deltaPackCount = packMeta.count > 0 ? (packMeta.sign === "-" ? -packMeta.count : packMeta.count) : 0;
     const hasRelevantCounter = state.fractionValue > 0 || packMeta.count > 0;

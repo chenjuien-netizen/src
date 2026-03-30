@@ -1249,7 +1249,14 @@
           const packsPerBox = computePacksPerBox(stateModel && stateModel.unitsPerBox, stateModel && stateModel.colisage);
           const dynamicFractions = [];
           let packCounterText = "";
-          const baseFractions = { "1/2": true, "1/3": true, "1/4": true, "2/3": true };
+          const baseFractions = {
+            "1/2": true,
+            "1/3": true,
+            "1/4": true,
+            "2/3": true,
+            "2/4": true,
+            "3/4": true
+          };
 
           if (packsPerBox > 1) {
             for (let i = 1; i < packsPerBox; i++) {
@@ -1714,7 +1721,7 @@
         }
 
         function getAllowedQuickExitFractions_() {
-          return ["1/2", "1/3", "1/4", "2/3"];
+          return ["1/2", "1/3", "1/4", "2/3", "2/4", "3/4"];
         }
 
         function getQuickExitWholeBoxesLimit_(item, segment) {
@@ -1906,8 +1913,16 @@
                 suggestions.unshift(fractionText);
               }
             });
-          } else if (/^2\/?$/.test(normalized) && isQuickExitFractionAllowed_(currentItem, segment, "2/3")) {
-            suggestions.unshift("2/3");
+          } else if (/^2\/?$/.test(normalized)) {
+            ["2/3", "2/4"].forEach(function(fractionText) {
+              if (isQuickExitFractionAllowed_(currentItem, segment, fractionText)) {
+                suggestions.unshift(fractionText);
+              }
+            });
+          } else if (/^3\/?$/.test(normalized)) {
+            if (isQuickExitFractionAllowed_(currentItem, segment, "3/4")) {
+              suggestions.unshift("3/4");
+            }
           }
           const lower = normalized.toLowerCase();
           return dedupeQuickExitSuggestions_(suggestions).filter(function(suggestion) {

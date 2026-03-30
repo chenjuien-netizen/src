@@ -438,6 +438,7 @@
           quickEditTab: "quick-exit",
           quickExitForm: null,
           quickExitClearSelected: false,
+          quickExitSegmentErrors: {},
           quickEditError: "",
           quickEditSaving: false,
           pendingSaveById: {},
@@ -1397,30 +1398,20 @@
         }
 
         function getDefaultQuickExitConfig_(segment) {
-          const defaultAction = segment && segment.actions && segment.actions.length
-            ? segment.actions[0].value
-            : "boxes";
           return {
-            action: defaultAction,
-            value: ""
+            entry: ""
           };
         }
 
         function resetQuickExitErrors_() {
+          state.quickExitSegmentErrors = {};
           setQuickEditError("");
-        }
-
-        function isQuickExitValueCompatible_(action, value) {
-          const normalized = String(value || "").trim();
-          if (!normalized) return true;
-          if (action === "fraction") return isFractionTextValid(normalized);
-          return /^\d+$/.test(normalized) && Math.trunc(Number(normalized)) > 0;
         }
 
         function clearQuickExitInlineInputs_() {
           if (!els.quickExitSegmentForms) return;
           Array.prototype.forEach.call(
-            els.quickExitSegmentForms.querySelectorAll("input[data-quick-exit-field='value']"),
+            els.quickExitSegmentForms.querySelectorAll("input[data-quick-exit-field='entry']"),
             function(input) {
               input.value = "";
             }
@@ -1460,17 +1451,133 @@
           if (!segment) return;
           ensureQuickExitForm_();
           const current = state.quickExitForm.segments[segmentId] || getDefaultQuickExitConfig_(segment);
-          if (field === "action") {
-            const nextAction = String(value || "");
-            const currentValue = String(current.value || "").trim();
-            current.action = nextAction;
-            current.value = isQuickExitValueCompatible_(nextAction, currentValue) ? currentValue : "";
-          } else {
-            current.value = String(value || "");
-          }
+          current.entry = String(value || "");
           state.quickExitForm.segments[segmentId] = current;
           resetQuickExitErrors_();
           renderQuickEdit();
+        }
+
+        function getAllowedQuickExitFractions_() {
+          return ["1/2", "1/3", "1/4", "2/3"];
+        }
+
+        function getQuickExitWholeBoxesLimit_(item, segment) {
+          if (!item || !segment || segment.id !== "main") return 0;
+          const unitsPerBox = Math.max(0, Math.trunc(Number(item.unitsPerBox) || 0));
+          if (!(unitsPerBox > 0)) return 0;
+          return Math.max(0, Math.floor(segment.availablePieces / unitsPerBox));
+        }
+
+        function getQuickExitPackLimit_(item, segment) {
+          if (!item || !segment) return 0;
+          const colisage = Math.max(0, Math.trunc(Number(item.colisage) || 0));
+          if (!(colisage > 0)) return 0;
+          return Math.max(0, Math.floor(segment.availablePieces / colisage));
+        }
+
+        function isQuickExitFractionAllowed_(item, segment, fractionText) {
+          if (getAllowedQuickExitFractions_().indexOf(fractionText) === -1) return false;
+          const currentItem = item || state.quickEditItem;
+          if (!currentItem || !segment) return false;
+          const unitsPerBox = Math.max(0, Math.trunc(Number(currentItem.unitsPerBox) || 0));
+          if (!(unitsPerBox > 0)) return false;
+          const pieces = unitsPerBox * parseFraction(fractionText);
+          return pieces > 0 && pieces <= segment.availablePieces + 0.0001;
+        }
+
+        function getQuickExitSegmentPlaceholder_(segment) {
+          return segment && segment.id === "tail"
+            ? "ex: 3包 / 1/2 / 2/3 / (237p)"
+            : "ex: 2箱 / 5包 / 1/2 / 2/3";
+        }
+
+        function getQuickExitDefaultSuggestions_(item, segment) {
+          const currentItem = item || state.quickEditItem;
+          const suggestions = [];
+          if (!currentItem || !segment) return suggestions;
+          if (segment.id === "tail" && segment.label) {
+            suggestions.push(segment.label);
+          }
+          const packLimit = getQuickExitPackLimit_(currentItem, segment);
+          const defaultPackMax = Math.min(packLimit, 3);
+          for (let count = 1; count <= defaultPackMax; count++) {
+            suggestions.push(count + "包");
+          }
+          if (segment.id === "main") {
+            const boxLimit = getQuickExitWholeBoxesLimit_(currentItem, segment);
+            const defaultBoxMax = Math.min(boxLimit, 3);
+            for (let count = 1; count <= defaultBoxMax; count++) {
+              suggestions.unshift(count + "箱");
+            }
+          }
+          getAllowedQuickExitFractions_().forEach(function(fractionText) {
+            if (isQuickExitFractionAllowed_(currentItem, segment, fractionText)) {
+              suggestions.push(fractionText);
+            }
+          });
+          return suggestions;
+        }
+
+        function dedupeQuickExitSuggestions_(values) {
+          const seen = {};
+          return values.filter(function(value) {
+            const key = String(value || "");
+            if (!key || seen[key]) return false;
+            seen[key] = true;
+            return true;
+          });
+        }
+
+        function buildQuickExitSuggestions_(item, segment, entry) {
+          const currentItem = item || state.quickEditItem;
+          if (!currentItem || !segment) return [];
+          const rawEntry = String(entry || "");
+          const normalized = rawEntry.trim();
+          const suggestions = getQuickExitDefaultSuggestions_(currentItem, segment).slice();
+          if (!normalized) {
+            return dedupeQuickExitSuggestions_(suggestions);
+          }
+          if (segment.id === "tail" && /^\($/.test(normalized) && segment.label) {
+            suggestions.unshift(segment.label);
+          }
+          if (/^\d+$/.test(normalized)) {
+            const numeric = Math.max(0, Math.trunc(Number(normalized) || 0));
+            if (numeric > 0) {
+              if (segment.id === "main" && numeric <= getQuickExitWholeBoxesLimit_(currentItem, segment)) {
+                suggestions.unshift(numeric + "箱");
+              }
+              if (numeric <= getQuickExitPackLimit_(currentItem, segment)) {
+                suggestions.unshift(numeric + "包");
+              }
+            }
+          } else if (/^\d+包$/.test(normalized)) {
+            const packCount = Math.max(0, Math.trunc(Number(normalized.replace(/[^\d]/g, "")) || 0));
+            if (packCount > 0 && packCount <= getQuickExitPackLimit_(currentItem, segment)) {
+              suggestions.unshift(packCount + "包");
+            }
+          } else if (segment.id === "main" && /^\d+箱$/.test(normalized)) {
+            const boxCount = Math.max(0, Math.trunc(Number(normalized.replace(/[^\d]/g, "")) || 0));
+            if (boxCount > 0 && boxCount <= getQuickExitWholeBoxesLimit_(currentItem, segment)) {
+              suggestions.unshift(boxCount + "箱");
+            }
+          } else if (/^1\/?$/.test(normalized)) {
+            ["1/2", "1/3", "1/4"].forEach(function(fractionText) {
+              if (isQuickExitFractionAllowed_(currentItem, segment, fractionText)) {
+                suggestions.unshift(fractionText);
+              }
+            });
+          } else if (/^2\/?$/.test(normalized) && isQuickExitFractionAllowed_(currentItem, segment, "2/3")) {
+            suggestions.unshift("2/3");
+          }
+          const lower = normalized.toLowerCase();
+          return dedupeQuickExitSuggestions_(suggestions).filter(function(suggestion) {
+            if (!normalized) return true;
+            return suggestion.toLowerCase().indexOf(lower) === 0;
+          });
+        }
+
+        function getQuickExitSegmentErrorMessage_(segment) {
+          return state.quickExitSegmentErrors && state.quickExitSegmentErrors[segment] ? state.quickExitSegmentErrors[segment] : "";
         }
 
         function syncQuickExitScrollableRow_(scrollEl, innerEl) {
@@ -1512,63 +1619,105 @@
           }
           els.quickExitSegmentForms.innerHTML = segments.map(function(segment, index) {
             const config = getQuickExitSelectionConfig_(segment.id) || getDefaultQuickExitConfig_(segment);
-            const actionOptions = segment.actions.map(function(action) {
-              return '<option value="' + escapeHtml(action.value) + '"' + (config.action === action.value ? ' selected' : '') + '>' + escapeHtml(action.label) + '</option>';
-            }).join("");
-            const isFractionAction = config.action === "fraction";
+            const suggestions = buildQuickExitSuggestions_(item, segment, config.entry);
+            const localError = getQuickExitSegmentErrorMessage_(segment.id);
+            const suggestionMarkup = suggestions.length
+              ? '<div class="mt-2 flex max-w-[15rem] flex-wrap gap-1">'
+                + suggestions.map(function(suggestion) {
+                  return '<button class="rounded border border-outline-variant/20 px-2 py-1 text-[11px] font-medium text-on-surface-variant transition-colors duration-150 hover:bg-surface-container"'
+                    + ' data-quick-exit-suggestion="' + escapeHtml(suggestion) + '"'
+                    + ' data-segment-id="' + escapeHtml(segment.id) + '"'
+                    + ' type="button">'
+                    + escapeHtml(suggestion)
+                    + '</button>';
+                }).join("")
+                + '</div>'
+              : "";
             return '<div class="min-w-fit' + (index > 0 ? ' border-l border-outline-variant/20 pl-6' : '') + '">'
               + '<div class="flex min-w-fit flex-col items-start justify-end">'
               + '<div class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">' + escapeHtml(segment.id === "tail" ? "尾箱" : "箱") + '</div>'
               + '<div class="mt-1 text-sm font-semibold text-on-surface">' + escapeHtml(segment.label) + '</div>'
-              + '<div class="mt-2 flex min-h-[4.5rem] items-end gap-2">'
-              + '<label class="block min-w-0"><span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">valeur</span><input class="w-[5.5rem] border-outline-variant/30 bg-surface-container-low px-2 text-sm font-semibold text-on-surface" data-quick-exit-field="value" data-segment-id="' + escapeHtml(segment.id) + '"'
-              + (isFractionAction ? ' inputmode="text" type="text"' : ' inputmode="numeric" type="text"')
-              + ' value="' + escapeHtml(config.value || "") + '" /></label>'
-              + '<label class="block min-w-0"><span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">action</span><select class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-semibold text-on-surface" data-quick-exit-field="action" data-segment-id="' + escapeHtml(segment.id) + '">' + actionOptions + '</select></label>'
+              + '<div class="mt-2 min-h-[4.5rem]">'
+              + '<label class="block min-w-0"><span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">valeur</span><input class="w-[8.5rem] border-outline-variant/30 bg-surface-container-low px-2 text-sm font-semibold text-on-surface" data-quick-exit-field="entry" data-segment-id="' + escapeHtml(segment.id) + '" inputmode="text" type="text" placeholder="' + escapeHtml(getQuickExitSegmentPlaceholder_(segment)) + '" value="' + escapeHtml(config.entry || "") + '" /></label>'
+              + suggestionMarkup
+              + (localError ? '<p class="mt-2 max-w-[15rem] text-[11px] font-medium text-error">' + escapeHtml(localError) + '</p>' : '')
               + '</div>'
               + '</div>'
               + '</div>';
           }).join("");
         }
 
-        function getQuickExitSegmentExitPieces_(item, segment, config) {
+        function parseQuickExitSegmentEntry_(item, segment, config) {
           const currentItem = item || state.quickEditItem;
           if (!currentItem || !segment || !config) return { valid: false, pieces: 0, message: "" };
           const unitsPerBox = Math.max(0, Math.trunc(Number(currentItem.unitsPerBox) || 0));
           const colisage = Math.max(0, Math.trunc(Number(currentItem.colisage) || 0));
-          const rawValue = String(config.value || "").trim();
-          const quantity = Math.max(0, Math.trunc(Number(rawValue) || 0));
-          let pieces = 0;
-
-          if (config.action === "boxes") {
-            if (!rawValue) return { valid: false, pieces: 0, message: "Indique un nombre de 箱 positif." };
-            if (!/^\d+$/.test(rawValue)) return { valid: false, pieces: 0, message: "Indique un nombre de 箱 positif." };
-            if (!(unitsPerBox > 0) || !(quantity > 0)) return { valid: false, pieces: 0, message: "Indique un nombre de 箱 positif." };
-            pieces = unitsPerBox * quantity;
-          } else if (config.action === "packs") {
-            if (!rawValue) return { valid: false, pieces: 0, message: "Indique un nombre de 包 positif." };
-            if (!/^\d+$/.test(rawValue)) return { valid: false, pieces: 0, message: "Indique un nombre de 包 positif." };
-            if (!(colisage > 0)) return { valid: false, pieces: 0, message: "Mode 包 indisponible." };
-            if (!(quantity > 0)) return { valid: false, pieces: 0, message: "Indique un nombre de 包 positif." };
-            pieces = colisage * quantity;
-          } else if (config.action === "fraction") {
-            const fractionText = sanitizeFractionText(rawValue);
-            if (!fractionText || !isFractionTextValid(fractionText)) return { valid: false, pieces: 0, message: "Selectionne une 分数 valide." };
-            pieces = unitsPerBox * parseFraction(fractionText);
-          } else if (config.action === "pieces") {
-            if (!rawValue) return { valid: false, pieces: 0, message: "Indique une quantite positive." };
-            if (!/^\d+$/.test(rawValue)) return { valid: false, pieces: 0, message: "Indique une quantite positive." };
-            if (!(quantity > 0)) return { valid: false, pieces: 0, message: "Indique une quantite positive." };
-            pieces = quantity;
+          const rawEntry = String(config.entry || "").trim();
+          if (!rawEntry) {
+            return {
+              valid: false,
+              pieces: 0,
+              message: 'Format invalide. Utilise 2箱, 5包, 1/2 ou ' + (segment.id === "tail" ? segment.label : "une valeur explicite") + '.'
+            };
+          }
+          if (segment.id === "tail" && rawEntry === segment.label) {
+            return {
+              valid: true,
+              pieces: segment.availablePieces,
+              mode: "tail-clear",
+              message: ""
+            };
+          }
+          const boxMatch = rawEntry.match(/^(\d+)箱$/);
+          if (boxMatch) {
+            if (segment.id !== "main") {
+              return { valid: false, pieces: 0, message: "Valeur non autorisee pour 尾箱." };
+            }
+            const boxCount = Math.max(0, Math.trunc(Number(boxMatch[1]) || 0));
+            const maxBoxes = getQuickExitWholeBoxesLimit_(currentItem, segment);
+            if (!(boxCount > 0) || !(unitsPerBox > 0) || boxCount > maxBoxes) {
+              return { valid: false, pieces: 0, message: "Format invalide. Utilise 2箱, 5包 ou 1/2." };
+            }
+            return {
+              valid: true,
+              pieces: unitsPerBox * boxCount,
+              mode: "boxes",
+              value: boxCount,
+              message: ""
+            };
+          }
+          const packMatch = rawEntry.match(/^(\d+)包$/);
+          if (packMatch) {
+            const packCount = Math.max(0, Math.trunc(Number(packMatch[1]) || 0));
+            const maxPacks = getQuickExitPackLimit_(currentItem, segment);
+            if (!(colisage > 0) || !(packCount > 0) || packCount > maxPacks) {
+              return { valid: false, pieces: 0, message: segment.id === "tail" ? "Valeur non autorisee pour 尾箱." : "Format invalide. Utilise 2箱, 5包 ou 1/2." };
+            }
+            return {
+              valid: true,
+              pieces: colisage * packCount,
+              mode: "packs",
+              value: packCount,
+              message: ""
+            };
+          }
+          if (isQuickExitFractionAllowed_(currentItem, segment, rawEntry)) {
+            return {
+              valid: true,
+              pieces: unitsPerBox * parseFraction(rawEntry),
+              mode: "fraction",
+              fractionText: rawEntry,
+              message: ""
+            };
           }
 
-          if (!(pieces > 0)) {
-            return { valid: false, pieces: 0, message: "Indique une sortie valide." };
-          }
-          if (pieces > segment.availablePieces + 0.0001) {
-            return { valid: false, pieces: 0, message: "Sortie trop grande pour " + (segment.id === "tail" ? "尾箱" : "箱") + "." };
-          }
-          return { valid: true, pieces: pieces, message: "" };
+          return {
+            valid: false,
+            pieces: 0,
+            message: segment.id === "tail"
+              ? "Valeur non autorisee pour 尾箱."
+              : "Format invalide. Utilise 2箱, 5包 ou 1/2."
+          };
         }
 
         function buildQuickExitResultState_(item) {
@@ -1598,19 +1747,21 @@
 
           const totalPieces = stateModelToPieces(currentItem);
           let totalExitPieces = 0;
+          const segmentErrors = {};
           for (let i = 0; i < selectedSegments.length; i++) {
             const segment = selectedSegments[i];
             const config = getQuickExitSelectionConfig_(segment.id);
-            const result = getQuickExitSegmentExitPieces_(currentItem, segment, config);
+            const result = parseQuickExitSegmentEntry_(currentItem, segment, config);
             if (!result.valid) {
-              return { valid: false, message: result.message || "Sortie invalide." };
+              segmentErrors[segment.id] = result.message || "Sortie invalide.";
+              return { valid: false, message: result.message || "Sortie invalide.", segmentErrors: segmentErrors };
             }
             totalExitPieces += result.pieces;
           }
 
           const newTotal = totalPieces - totalExitPieces;
           if (newTotal < 0) {
-            return { valid: false, message: "Sortie trop grande pour le stock courant." };
+            return { valid: false, message: "Sortie trop grande pour le stock courant.", segmentErrors: {} };
           }
           const nextState = buildStateFromPieces(newTotal, {
             unitsPerBox: currentItem.unitsPerBox,
@@ -1879,6 +2030,7 @@
             segments: {}
           };
           state.quickExitClearSelected = false;
+          state.quickExitSegmentErrors = {};
           renderQuickEdit();
         }
 
@@ -1901,6 +2053,7 @@
           state.quickEditPartialOpen = false;
           state.quickExitForm = null;
           state.quickExitClearSelected = false;
+          state.quickExitSegmentErrors = {};
           state.quickEditError = "";
           state.quickEditSaving = false;
           renderQuickEdit();
@@ -2005,9 +2158,11 @@
           if (!state.quickExitForm) return null;
           const result = buildQuickExitResultState_(item);
           if (!result || !result.valid || !result.nextState) {
+            state.quickExitSegmentErrors = result && result.segmentErrors ? result.segmentErrors : {};
             setQuickEditError(result && result.message ? result.message : "Selectionne au moins un segment de sortie.");
             return null;
           }
+          state.quickExitSegmentErrors = {};
           const nextState = result.nextState;
           const nextMeta = buildPackMeta(nextState);
           return {
@@ -2329,6 +2484,16 @@
           const segmentId = event.target.getAttribute("data-segment-id");
           if (!field || !segmentId) return;
           updateQuickExitSegmentConfig_(segmentId, field, event.target.value);
+        });
+
+        els.quickExitSegmentForms.addEventListener("click", function(event) {
+          const trigger = event.target.closest("[data-quick-exit-suggestion]");
+          if (!trigger) return;
+          updateQuickExitSegmentConfig_(
+            trigger.getAttribute("data-segment-id"),
+            "entry",
+            trigger.getAttribute("data-quick-exit-suggestion")
+          );
         });
 
         els.quickEditTail.addEventListener("input", function(event) {

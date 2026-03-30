@@ -1097,8 +1097,19 @@
           }
           const fractionValue = parseFraction(tailNotation);
           if (!(fractionValue > 0)) return tailBase;
-          const pieces = tailBase * fractionValue;
-          return pieces > 0 && Math.round(pieces) === pieces ? Math.max(0, Math.round(pieces)) : tailBase;
+          return Math.max(0, tailBase * fractionValue);
+        }
+
+        function buildTailRemainingFractionTextFromExit_(fractionText) {
+          const normalized = sanitizeFractionText(fractionText);
+          const match = normalized.match(/^(\d+)\/(\d+)$/);
+          if (!match) return "";
+          const numerator = Math.max(0, Math.trunc(Number(match[1]) || 0));
+          const denominator = Math.max(0, Math.trunc(Number(match[2]) || 0));
+          if (!(denominator > 0) || numerator <= 0 || numerator >= denominator) return "";
+          const remainingNumerator = denominator - numerator;
+          const divisor = gcd(remainingNumerator, denominator);
+          return (remainingNumerator / divisor) + "/" + (denominator / divisor);
         }
 
         function buildTailDisplay_(stateModel) {
@@ -1590,10 +1601,10 @@
           };
         }
 
-        function buildQuickExitTailState_(baseTailPieces, nextTailPieces, exitMode, item) {
+        function buildQuickExitTailState_(baseTailPieces, nextTailPieces, exitMode, item, exitFractionText) {
           const currentItem = item || state.quickEditItem;
           const safeBaseTailPieces = Math.max(0, Math.trunc(Number(baseTailPieces) || 0));
-          const safeNextTailPieces = Math.max(0, Math.trunc(Number(nextTailPieces) || 0));
+          const safeNextTailPieces = Math.max(0, Number(nextTailPieces || 0));
           const colisage = Math.max(0, Math.trunc(Number(currentItem && currentItem.colisage) || 0));
 
           if (!(safeNextTailPieces > 0) || !(safeBaseTailPieces > 0)) {
@@ -1608,6 +1619,15 @@
               return {
                 tail: safeBaseTailPieces,
                 tailNotation: "-" + (removedPieces / colisage) + "包"
+              };
+            }
+          }
+          if (exitMode === "fraction") {
+            const remainingFractionText = buildTailRemainingFractionTextFromExit_(exitFractionText);
+            if (remainingFractionText) {
+              return {
+                tail: safeBaseTailPieces,
+                tailNotation: remainingFractionText
               };
             }
           }
@@ -1665,7 +1685,7 @@
                 }
                 continue;
               }
-              nextTailState = buildQuickExitTailState_(currentTailBasePieces, updatedTailPieces, result.mode, currentItem);
+              nextTailState = buildQuickExitTailState_(currentTailBasePieces, updatedTailPieces, result.mode, currentItem, result.fractionText);
               validSegments += 1;
               continue;
             }
@@ -1903,18 +1923,20 @@
           const currentItem = item || state.quickEditItem;
           if (!currentItem || !segment) return 0;
           if (getQuickExitFractionCandidates_(currentItem, segment).indexOf(fractionText) === -1) return 0;
+          const fractionValue = parseFraction(fractionText);
+          if (segment.id === "tail") {
+            const currentTailPieces = Math.max(0, Number(getTailActualPieces_(currentItem)) || 0);
+            if (!(fractionValue > 0) || !(fractionValue < 1) || !(currentTailPieces > 0)) return 0;
+            const pieces = currentTailPieces * fractionValue;
+            return pieces > 0 ? pieces : 0;
+          }
           const unitsPerBox = Math.max(0, Math.trunc(Number(currentItem.unitsPerBox) || 0));
           if (!(unitsPerBox > 0)) return 0;
-          const fractionValue = parseFraction(fractionText);
           const pieces = unitsPerBox * fractionValue;
           if (!(pieces > 0) || Math.round(pieces) !== pieces) return 0;
           if (pieces > segment.availablePieces) return 0;
-          if (segment.id === "tail") {
-            const currentTailPieces = Math.max(0, Math.trunc(Number(currentItem.tail) || 0));
-            return currentTailPieces >= pieces ? pieces : 0;
-          }
           const totalPieces = stateModelToPieces(currentItem);
-          const currentTailPieces = Math.max(0, Math.trunc(Number(currentItem.tail) || 0));
+          const currentTailPieces = Math.max(0, Number(getTailActualPieces_(currentItem)) || 0);
           const currentMainPieces = Math.max(0, totalPieces - currentTailPieces);
           const newMainPieces = currentMainPieces - pieces;
           if (newMainPieces < 0 || Math.round(newMainPieces) !== newMainPieces) return 0;

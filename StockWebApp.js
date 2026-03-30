@@ -718,8 +718,7 @@ function StockWebApp_getTailActualPieces_(stateInput) {
   }
   const fractionValue = StockWebApp_parseFractionValue_(tailNotation);
   if (!(fractionValue > 0)) return tailBase;
-  const pieces = tailBase * fractionValue;
-  return pieces > 0 && Math.round(pieces) === pieces ? Math.max(0, Math.round(pieces)) : tailBase;
+  return Math.max(0, tailBase * fractionValue);
 }
 
 function StockWebApp_buildTailDisplay_(stateInput) {

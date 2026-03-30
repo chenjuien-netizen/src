@@ -1655,8 +1655,16 @@
 
         function getQuickExitDefaultSuggestions_(item, segment) {
           const currentItem = item || state.quickEditItem;
+          const boxSuggestions = [];
           const suggestions = [];
           if (!currentItem || !segment) return suggestions;
+          if (segment.id === "main") {
+            const boxLimit = getQuickExitWholeBoxesLimit_(currentItem, segment);
+            const defaultBoxMax = Math.min(boxLimit, 3);
+            for (let count = 1; count <= defaultBoxMax; count++) {
+              boxSuggestions.push(count + "箱");
+            }
+          }
           if (segment.id === "tail" && segment.label) {
             suggestions.push(segment.label);
           }
@@ -1665,13 +1673,7 @@
           for (let count = 1; count <= defaultPackMax; count++) {
             suggestions.push(count + "包");
           }
-          if (segment.id === "main") {
-            const boxLimit = getQuickExitWholeBoxesLimit_(currentItem, segment);
-            const defaultBoxMax = Math.min(boxLimit, 3);
-            for (let count = 1; count <= defaultBoxMax; count++) {
-              suggestions.unshift(count + "箱");
-            }
-          }
+          Array.prototype.unshift.apply(suggestions, boxSuggestions);
           getAllowedQuickExitFractions_().forEach(function(fractionText) {
             if (isQuickExitFractionAllowed_(currentItem, segment, fractionText)) {
               suggestions.push(fractionText);
@@ -1705,6 +1707,9 @@
           if (/^\d+$/.test(normalized)) {
             const numeric = Math.max(0, Math.trunc(Number(normalized) || 0));
             if (numeric > 0) {
+              if (segment.id === "tail" && segment.label && numeric === Math.max(0, Math.trunc(Number(segment.availablePieces) || 0))) {
+                suggestions.unshift(segment.label);
+              }
               if (segment.id === "main" && numeric <= getQuickExitWholeBoxesLimit_(currentItem, segment)) {
                 suggestions.unshift(numeric + "箱");
               }

@@ -425,7 +425,7 @@
             <p class="hidden rounded border border-error/20 bg-error-container/20 px-3 py-2 text-[11px] font-medium text-on-error-container" id="quickEditMessage"></p>
           </div>
         </div>
-        <div class="grid grid-cols-2 gap-3 border-t border-outline-variant/20 bg-surface-container-low px-4 py-4">
+        <div class="grid grid-cols-2 gap-3 border-t border-outline-variant/20 bg-surface-container-low px-4 py-4" id="quickEditFooter">
           <button class="border border-outline-variant/30 py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-on-surface-variant transition-colors duration-150 hover:bg-surface-container disabled:opacity-50" id="quickEditCancel" type="button">ANNULER</button>
           <button class="bg-surface-tint py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-on-primary transition-colors duration-150 hover:bg-primary-dim disabled:opacity-50" id="quickEditSave" type="button">APPLIQUER LA SORTIE</button>
         </div>
@@ -510,6 +510,7 @@
           quickEditOverlay: document.getElementById("quickEditOverlay"),
           quickEditModal: document.getElementById("quickEditModal"),
           quickEditBody: document.getElementById("quickEditBody"),
+          quickEditFooter: document.getElementById("quickEditFooter"),
           quickEditTabQuickExit: document.getElementById("quickEditTabQuickExit"),
           quickEditTabEdit: document.getElementById("quickEditTabEdit"),
           quickExitPanelWrap: document.getElementById("quickExitPanelWrap"),
@@ -1540,6 +1541,22 @@
           return !(parsed && parsed.valid);
         }
 
+        function getNextQuickExitHighlightedIndex_(currentIndex, suggestionsLength, direction) {
+          const length = Math.max(0, Math.trunc(Number(suggestionsLength) || 0));
+          if (!length) return -1;
+          const rawIndex = currentIndex == null ? -1 : Number(currentIndex);
+          const normalized = Math.max(-1, Math.min(Number.isFinite(rawIndex) ? rawIndex : -1, length - 1));
+          if (direction === "down") {
+            if (normalized < 0) return 0;
+            return Math.min(length - 1, normalized + 1);
+          }
+          if (direction === "up") {
+            if (normalized < 0) return length - 1;
+            return Math.max(0, normalized - 1);
+          }
+          return normalized;
+        }
+
         function getAllowedQuickExitFractions_() {
           return ["1/2", "1/3", "1/4", "2/3"];
         }
@@ -1896,7 +1913,7 @@
           const segment = segmentMap[segmentId];
           const config = getQuickExitSelectionConfig_(segmentId);
           const controls = getQuickExitSegmentElements_(segmentId);
-          if (!segment || !config || !controls.dropdown || !controls.input || !els.quickExitDropdownLayer || !els.quickExitPanelWrap || !els.quickEditBody) {
+          if (!segment || !config || !controls.dropdown || !controls.input || !els.quickExitDropdownLayer || !els.quickExitPanelWrap || !els.quickEditBody || !els.quickEditFooter) {
             clearQuickExitDropdownLayer_();
             return;
           }
@@ -1907,7 +1924,7 @@
             return;
           }
           const panelRect = els.quickExitPanelWrap.getBoundingClientRect();
-          const bodyRect = els.quickEditBody.getBoundingClientRect();
+          const footerRect = els.quickEditFooter.getBoundingClientRect();
           const inputRect = controls.input.getBoundingClientRect();
           const maxVisibleRows = Math.min(suggestions.length, 5);
           const dropdownWidth = Math.max(0, Math.round(inputRect.width));
@@ -1915,7 +1932,8 @@
           const rowHeight = 40;
           const desiredHeight = Math.max(44, maxVisibleRows * rowHeight);
           const gap = 4;
-          const spaceBelow = Math.max(0, bodyRect.bottom - inputRect.bottom - gap);
+          const safeBottom = Math.max(inputRect.bottom + gap + 32, footerRect.top - gap);
+          const spaceBelow = Math.max(0, safeBottom - inputRect.bottom - gap);
           const maxHeight = Math.max(32, Math.min(desiredHeight, spaceBelow));
           const top = Math.max(0, inputRect.bottom - panelRect.top + gap);
           const highlightedIndex = Math.max(-1, Math.min(Number(config.highlightedIndex || -1), suggestions.length - 1));
@@ -1923,7 +1941,7 @@
             + ' style="left:' + left + 'px;top:' + top + 'px;width:' + dropdownWidth + 'px;max-height:' + maxHeight + 'px;">'
             + suggestions.map(function(suggestion, index) {
               return '<button class="flex w-full items-center justify-between border-b border-outline-variant/10 px-3 py-2 text-left text-[12px] font-medium transition-colors duration-150 last:border-b-0 '
-              + (index === highlightedIndex ? 'bg-surface-container text-on-surface' : 'text-on-surface-variant hover:bg-surface-container')
+              + (index === highlightedIndex ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container')
               + '" data-quick-exit-suggestion="' + escapeHtml(suggestion) + '" data-segment-id="' + escapeHtml(segmentId) + '" type="button">'
               + '<span>' + escapeHtml(suggestion) + '</span>'
               + '</button>';
@@ -2817,19 +2835,19 @@
             }
             return;
           }
-          const currentIndex = Math.max(-1, Math.min(Number(config.highlightedIndex || -1), suggestions.length - 1));
+          const currentIndex = getNextQuickExitHighlightedIndex_(config.highlightedIndex, suggestions.length, "noop");
           if (event.key === "ArrowDown") {
             event.preventDefault();
             setQuickExitSegmentConfig_(segmentId, {
               dropdownOpen: true,
-              highlightedIndex: currentIndex < 0 ? 0 : (currentIndex >= suggestions.length - 1 ? suggestions.length - 1 : currentIndex + 1)
+              highlightedIndex: getNextQuickExitHighlightedIndex_(currentIndex, suggestions.length, "down")
             });
             renderQuickExitSegmentUi_(segmentId);
           } else if (event.key === "ArrowUp") {
             event.preventDefault();
             setQuickExitSegmentConfig_(segmentId, {
               dropdownOpen: true,
-              highlightedIndex: currentIndex < 0 ? suggestions.length - 1 : (currentIndex <= 0 ? 0 : currentIndex - 1)
+              highlightedIndex: getNextQuickExitHighlightedIndex_(currentIndex, suggestions.length, "up")
             });
             renderQuickExitSegmentUi_(segmentId);
           } else if (event.key === "Enter" && config.dropdownOpen && currentIndex >= 0 && suggestions[currentIndex]) {

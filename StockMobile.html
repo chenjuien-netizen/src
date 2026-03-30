@@ -1700,10 +1700,13 @@
           const normalizedNumeric = /^\d+$/.test(normalized)
             ? Math.max(0, Math.trunc(Number(normalized) || 0))
             : 0;
-          const isExactTailNumericMatch = segment.id === "tail"
+          const tailPiecesText = segment.id === "tail"
+            ? String(Math.max(0, Math.trunc(Number(segment.availablePieces) || 0)))
+            : "";
+          const isTailNumericPrefixMatch = segment.id === "tail"
             && !!segment.label
             && normalizedNumeric > 0
-            && normalizedNumeric === Math.max(0, Math.trunc(Number(segment.availablePieces) || 0));
+            && tailPiecesText.indexOf(String(normalizedNumeric)) === 0;
           const suggestions = getQuickExitDefaultSuggestions_(currentItem, segment).slice();
           if (!normalized) {
             return dedupeQuickExitSuggestions_(suggestions);
@@ -1714,7 +1717,7 @@
           if (/^\d+$/.test(normalized)) {
             const numeric = Math.max(0, Math.trunc(Number(normalized) || 0));
             if (numeric > 0) {
-              if (segment.id === "tail" && segment.label && numeric === Math.max(0, Math.trunc(Number(segment.availablePieces) || 0))) {
+              if (isTailNumericPrefixMatch) {
                 suggestions.unshift(segment.label);
               }
               if (segment.id === "main" && numeric <= getQuickExitWholeBoxesLimit_(currentItem, segment)) {
@@ -1746,7 +1749,7 @@
           const lower = normalized.toLowerCase();
           return dedupeQuickExitSuggestions_(suggestions).filter(function(suggestion) {
             if (!normalized) return true;
-            if (isExactTailNumericMatch && suggestion === segment.label) return true;
+            if (isTailNumericPrefixMatch && suggestion === segment.label) return true;
             return suggestion.toLowerCase().indexOf(lower) === 0;
           }).filter(function(suggestion) {
             const result = parseQuickExitSegmentEntry_(currentItem, segment, { entry: suggestion });

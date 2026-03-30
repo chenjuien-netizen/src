@@ -220,7 +220,7 @@
     </div>
 
     <div class="quick-edit-overlay fixed inset-0 z-[60] hidden items-center justify-center bg-on-background/35 px-3 py-6" id="quickEditOverlay" role="presentation">
-      <div aria-modal="true" class="max-h-[calc(100dvh-4rem)] w-full max-w-3xl overflow-hidden border border-outline-variant/20 bg-surface-container-lowest shadow-[0_18px_48px_rgba(11,15,16,0.18)]" id="quickEditModal" role="dialog" aria-labelledby="quickEditReference">
+      <div aria-modal="true" class="relative max-h-[calc(100dvh-4rem)] w-full max-w-3xl overflow-hidden border border-outline-variant/20 bg-surface-container-lowest shadow-[0_18px_48px_rgba(11,15,16,0.18)]" id="quickEditModal" role="dialog" aria-labelledby="quickEditReference">
         <div class="border-b border-outline-variant/20 px-4 py-3">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
@@ -259,7 +259,7 @@
               </div>
               <div class="mt-3 w-full overflow-visible" id="quickExitSegmentFormsScroll">
                 <div class="flex justify-center">
-                  <div class="inline-flex min-w-fit flex-nowrap items-start gap-6 pb-44" id="quickExitSegmentForms"></div>
+                  <div class="inline-flex min-w-fit flex-nowrap items-start gap-6" id="quickExitSegmentForms"></div>
                 </div>
               </div>
             </section>
@@ -339,9 +339,10 @@
                                 <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">包</span>
                                 <input class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-medium text-on-surface" id="quickEditPackNotationCount" inputmode="numeric" min="0" step="1" type="number" />
                               </label>
-                            </div>
-                          </div>
-                        </div>
+          </div>
+        </div>
+        <div class="pointer-events-none absolute inset-0 z-[90] hidden" id="quickExitDropdownLayer"></div>
+      </div>
                       </div>
                     </div>
                   </div>
@@ -483,6 +484,7 @@
           quickExitPreview: document.getElementById("quickExitPreview"),
           quickExitSegmentFormsScroll: document.getElementById("quickExitSegmentFormsScroll"),
           quickExitSegmentForms: document.getElementById("quickExitSegmentForms"),
+          quickExitDropdownLayer: document.getElementById("quickExitDropdownLayer"),
           quickExitPacksHint: document.getElementById("quickExitPacksHint"),
           quickEditForm: document.getElementById("quickEditForm"),
           quickEditReference: document.getElementById("quickEditReference"),
@@ -1428,6 +1430,7 @@
             state.quickExitForm.segments = {};
             clearQuickExitInlineInputs_();
           }
+          clearQuickExitDropdownLayer_();
           resetQuickExitErrors_();
         }
 
@@ -1531,14 +1534,29 @@
           return normalized;
         }
 
-        function isQuickExitFractionAllowed_(item, segment, fractionText) {
-          if (getQuickExitFractionCandidates_(item, segment).indexOf(fractionText) === -1) return false;
+        function getQuickExitFractionPieces_(item, segment, fractionText) {
           const currentItem = item || state.quickEditItem;
-          if (!currentItem || !segment) return false;
+          if (!currentItem || !segment) return 0;
+          if (getQuickExitFractionCandidates_(currentItem, segment).indexOf(fractionText) === -1) return 0;
           const unitsPerBox = Math.max(0, Math.trunc(Number(currentItem.unitsPerBox) || 0));
-          if (!(unitsPerBox > 0)) return false;
-          const parseResult = parseQuickExitSegmentEntry_(currentItem, segment, { entry: fractionText });
-          return !!(parseResult && parseResult.valid && parseResult.pieces > 0);
+          if (!(unitsPerBox > 0)) return 0;
+          const fractionValue = parseFraction(fractionText);
+          const pieces = unitsPerBox * fractionValue;
+          if (!(pieces > 0) || Math.round(pieces) !== pieces) return 0;
+          if (pieces > segment.availablePieces) return 0;
+          const totalPieces = stateModelToPieces(currentItem);
+          const newTotal = totalPieces - pieces;
+          if (newTotal < 0 || Math.round(newTotal) !== newTotal) return 0;
+          const nextState = buildStateFromPieces(newTotal, {
+            unitsPerBox: currentItem.unitsPerBox,
+            colisage: currentItem.colisage,
+            remark: state.quickEditForm && state.quickEditForm.remark
+          });
+          return nextState ? pieces : 0;
+        }
+
+        function isQuickExitFractionAllowed_(item, segment, fractionText) {
+          return getQuickExitFractionPieces_(item, segment, fractionText) > 0;
         }
 
         function getQuickExitSegmentPlaceholder_(segment) {
@@ -1671,6 +1689,7 @@
         function renderQuickExitSegmentForms_(item) {
           if (state.quickExitClearSelected) {
             els.quickExitSegmentForms.innerHTML = "";
+            clearQuickExitDropdownLayer_();
             return;
           }
           const segments = getQuickExitSegments_(item).filter(function(segment) {
@@ -1678,6 +1697,7 @@
           });
           if (!segments.length) {
             els.quickExitSegmentForms.innerHTML = "";
+            clearQuickExitDropdownLayer_();
             return;
           }
           els.quickExitSegmentForms.innerHTML = segments.map(function(segment, index) {
@@ -1690,7 +1710,7 @@
               + '<div class="mt-2 min-h-[4.5rem]">'
               + '<div class="relative min-w-0" data-quick-exit-wrapper="' + escapeHtml(segment.id) + '">'
               + '<label class="block min-w-0"><span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">valeur</span><input class="w-[8.5rem] border-outline-variant/30 bg-surface-container-low px-2 text-sm font-semibold text-on-surface" data-quick-exit-field="entry" data-segment-id="' + escapeHtml(segment.id) + '" inputmode="text" type="text" placeholder="' + escapeHtml(getQuickExitSegmentPlaceholder_(segment)) + '" value="' + escapeHtml(config.entry || "") + '" autocomplete="off" /></label>'
-              + '<div class="absolute left-0 top-full z-40 mt-1 hidden max-h-40 min-w-[8.5rem] overflow-y-auto rounded border border-outline-variant/30 bg-surface-container-lowest shadow-[0_14px_28px_rgba(11,15,16,0.18)]" data-quick-exit-dropdown="' + escapeHtml(segment.id) + '"></div>'
+              + '<div class="hidden" data-quick-exit-dropdown="' + escapeHtml(segment.id) + '" data-quick-exit-role="suggestions"></div>'
               + '</div>'
               + '<p class="mt-2 hidden max-w-[15rem] text-[11px] font-medium text-error" data-quick-exit-error="' + escapeHtml(segment.id) + '"></p>'
               + '</div>'
@@ -1756,10 +1776,11 @@
               message: ""
             };
           }
-          if (isQuickExitFractionAllowed_(currentItem, segment, rawEntry)) {
+          const fractionPieces = getQuickExitFractionPieces_(currentItem, segment, rawEntry);
+          if (fractionPieces > 0) {
             return {
               valid: true,
-              pieces: unitsPerBox * parseFraction(rawEntry),
+              pieces: fractionPieces,
               mode: "fraction",
               fractionText: rawEntry,
               message: ""
@@ -1784,28 +1805,49 @@
           };
         }
 
+        function clearQuickExitDropdownLayer_() {
+          if (!els.quickExitDropdownLayer) return;
+          els.quickExitDropdownLayer.innerHTML = "";
+          els.quickExitDropdownLayer.classList.add("hidden");
+          els.quickExitDropdownLayer.removeAttribute("data-segment-id");
+        }
+
         function renderQuickExitSegmentDropdown_(segmentId) {
           const segmentMap = getQuickExitSegmentMap_();
           const segment = segmentMap[segmentId];
           const config = getQuickExitSelectionConfig_(segmentId);
           const controls = getQuickExitSegmentElements_(segmentId);
-          if (!segment || !config || !controls.dropdown) return;
+          if (!segment || !config || !controls.dropdown || !controls.input || !els.quickExitDropdownLayer || !els.quickEditModal) {
+            clearQuickExitDropdownLayer_();
+            return;
+          }
           const suggestions = buildQuickExitSuggestions_(state.quickEditItem, segment, config.entry);
           const shouldOpen = !!config.dropdownOpen && suggestions.length > 0;
           if (!shouldOpen) {
-            controls.dropdown.innerHTML = "";
-            controls.dropdown.classList.add("hidden");
+            clearQuickExitDropdownLayer_();
             return;
           }
+          const modalRect = els.quickEditModal.getBoundingClientRect();
+          const inputRect = controls.input.getBoundingClientRect();
+          const left = Math.max(12, inputRect.left - modalRect.left);
+          const top = Math.max(12, inputRect.bottom - modalRect.top + 4);
+          const width = Math.min(
+            Math.max(Math.round(inputRect.width), 136),
+            Math.max(136, Math.round(modalRect.width - left - 12))
+          );
           const highlightedIndex = Math.max(-1, Math.min(Number(config.highlightedIndex || -1), suggestions.length - 1));
-          controls.dropdown.innerHTML = suggestions.map(function(suggestion, index) {
-            return '<button class="flex w-full items-center justify-between px-2 py-1.5 text-left text-[11px] font-medium transition-colors duration-150 '
+          els.quickExitDropdownLayer.innerHTML = '<div class="pointer-events-auto absolute max-h-40 overflow-y-auto rounded border border-outline-variant/40 bg-surface-container-lowest shadow-[0_16px_32px_rgba(11,15,16,0.24)]"'
+            + ' style="left:' + left + 'px;top:' + top + 'px;width:' + width + 'px;">'
+            + suggestions.map(function(suggestion, index) {
+              return '<button class="flex w-full items-center justify-between border-b border-outline-variant/10 px-2 py-1.5 text-left text-[11px] font-medium transition-colors duration-150 last:border-b-0 '
               + (index === highlightedIndex ? 'bg-surface-container text-on-surface' : 'text-on-surface-variant hover:bg-surface-container')
               + '" data-quick-exit-suggestion="' + escapeHtml(suggestion) + '" data-segment-id="' + escapeHtml(segmentId) + '" type="button">'
               + '<span>' + escapeHtml(suggestion) + '</span>'
               + '</button>';
-          }).join("");
-          controls.dropdown.classList.remove("hidden");
+            }).join("")
+            + '</div>';
+          els.quickExitDropdownLayer.setAttribute("data-segment-id", segmentId);
+          els.quickExitDropdownLayer.classList.remove("hidden");
         }
 
         function renderQuickExitSegmentError_(segmentId) {
@@ -2041,7 +2083,10 @@
           const isOpen = !!state.quickEditOpen && !!state.quickEditItem;
           els.quickEditOverlay.classList.toggle("hidden", !isOpen);
           els.quickEditOverlay.classList.toggle("flex", isOpen);
-          if (!isOpen) return;
+          if (!isOpen) {
+            clearQuickExitDropdownLayer_();
+            return;
+          }
 
           const item = state.quickEditItem || {};
           const form = state.quickEditForm || {};
@@ -2070,6 +2115,9 @@
           els.quickEditTabQuickExit.className = "border px-2 py-2 text-[10px] font-bold uppercase tracking-[0.18em] " + (isQuickExit ? "border-primary bg-primary text-on-primary" : "border-outline-variant/30 text-on-surface-variant");
           els.quickEditTabEdit.className = "border px-2 py-2 text-[10px] font-bold uppercase tracking-[0.18em] " + (!isQuickExit ? "border-primary bg-primary text-on-primary" : "border-outline-variant/30 text-on-surface-variant");
           els.quickExitPanel.classList.toggle("hidden", !isQuickExit);
+          if (!isQuickExit) {
+            clearQuickExitDropdownLayer_();
+          }
           els.quickEditForm.classList.toggle("hidden", isQuickExit);
           els.quickEditTailToggle.classList.toggle("hidden", tailOpen);
           els.quickEditTailGroup.classList.toggle("hidden", !tailOpen);
@@ -2586,6 +2634,15 @@
         els.quickExitSegmentForms.addEventListener("focusin", function(event) {
           const segmentId = event.target.getAttribute("data-segment-id");
           if (!segmentId) return;
+          ensureQuickExitForm_();
+          Object.keys(state.quickExitForm.segments || {}).forEach(function(key) {
+            if (key !== segmentId && state.quickExitForm.segments[key]) {
+              state.quickExitForm.segments[key] = Object.assign({}, state.quickExitForm.segments[key], {
+                dropdownOpen: false,
+                highlightedIndex: -1
+              });
+            }
+          });
           setQuickExitSegmentConfig_(segmentId, {
             dropdownOpen: true,
             highlightedIndex: -1
@@ -2665,6 +2722,29 @@
         });
 
         els.quickExitSegmentForms.addEventListener("click", function(event) {
+          const trigger = event.target.closest("[data-quick-exit-suggestion]");
+          if (!trigger) return;
+          const segmentId = trigger.getAttribute("data-segment-id");
+          const suggestion = trigger.getAttribute("data-quick-exit-suggestion");
+          updateQuickExitSegmentConfig_(segmentId, "entry", suggestion);
+          setQuickExitSegmentConfig_(segmentId, {
+            entry: suggestion,
+            dropdownOpen: false,
+            highlightedIndex: -1
+          });
+          renderQuickExitSegmentUi_(segmentId);
+          renderQuickExitPreviewUi_();
+          const controls = getQuickExitSegmentElements_(segmentId);
+          if (controls.input) controls.input.focus();
+        });
+
+        els.quickExitDropdownLayer.addEventListener("mousedown", function(event) {
+          const trigger = event.target.closest("[data-quick-exit-suggestion]");
+          if (!trigger) return;
+          event.preventDefault();
+        });
+
+        els.quickExitDropdownLayer.addEventListener("click", function(event) {
           const trigger = event.target.closest("[data-quick-exit-suggestion]");
           if (!trigger) return;
           const segmentId = trigger.getAttribute("data-segment-id");

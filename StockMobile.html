@@ -241,28 +241,31 @@
         <div class="max-h-[calc(100dvh-15rem)] overflow-y-auto px-4 py-4">
           <div class="space-y-4">
             <p class="hidden overflow-hidden whitespace-nowrap text-[10px] text-on-surface-variant" id="quickExitPacksHint"></p>
-            <section id="quickExitPanel">
-              <div class="rounded border border-outline-variant/20 bg-surface-container-low px-3 py-2">
-                <div class="flex items-center justify-between gap-3">
-                  <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Stock actuel</div>
-                  <button class="shrink-0 rounded border border-outline-variant/30 px-2 py-1 text-[10px] font-bold tracking-[0.12em] text-on-surface-variant transition-colors duration-150 hover:bg-surface-container" id="quickExitClearButton" type="button">清空库存</button>
-                </div>
-                <div class="mt-2 w-full overflow-x-auto" id="quickExitCurrentStockScroll">
-                  <div class="flex justify-center">
-                    <div class="inline-flex min-w-fit flex-nowrap gap-2 text-sm font-semibold text-primary" id="quickExitCurrentStock">-</div>
+            <div class="relative overflow-visible" id="quickExitPanelWrap">
+              <section id="quickExitPanel">
+                <div class="rounded border border-outline-variant/20 bg-surface-container-low px-3 py-2">
+                  <div class="flex items-center justify-between gap-3">
+                    <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Stock actuel</div>
+                    <button class="shrink-0 rounded border border-outline-variant/30 px-2 py-1 text-[10px] font-bold tracking-[0.12em] text-on-surface-variant transition-colors duration-150 hover:bg-surface-container" id="quickExitClearButton" type="button">清空库存</button>
+                  </div>
+                  <div class="mt-2 w-full overflow-x-auto" id="quickExitCurrentStockScroll">
+                    <div class="flex justify-center">
+                      <div class="inline-flex min-w-fit flex-nowrap gap-2 text-sm font-semibold text-primary" id="quickExitCurrentStock">-</div>
+                    </div>
+                  </div>
+                  <div class="mt-2 hidden text-[11px] text-on-surface-variant" id="quickExitPreviewWrap">
+                    <span class="font-bold uppercase tracking-[0.16em] text-on-surface-variant">Apres sortie</span>
+                    <span class="ml-2 font-semibold text-on-surface" id="quickExitPreview">-</span>
                   </div>
                 </div>
-                <div class="mt-2 hidden text-[11px] text-on-surface-variant" id="quickExitPreviewWrap">
-                  <span class="font-bold uppercase tracking-[0.16em] text-on-surface-variant">Apres sortie</span>
-                  <span class="ml-2 font-semibold text-on-surface" id="quickExitPreview">-</span>
+                <div class="mt-3 w-full overflow-visible" id="quickExitSegmentFormsScroll">
+                  <div class="flex justify-center">
+                    <div class="inline-flex min-w-fit flex-nowrap items-start gap-6" id="quickExitSegmentForms"></div>
+                  </div>
                 </div>
-              </div>
-              <div class="mt-3 w-full overflow-visible" id="quickExitSegmentFormsScroll">
-                <div class="flex justify-center">
-                  <div class="inline-flex min-w-fit flex-nowrap items-start gap-6" id="quickExitSegmentForms"></div>
-                </div>
-              </div>
-            </section>
+              </section>
+              <div class="pointer-events-none absolute inset-0 z-[90] hidden overflow-visible" id="quickExitDropdownLayer"></div>
+            </div>
 
             <form class="hidden space-y-3" id="quickEditForm" novalidate>
               <div class="space-y-2">
@@ -341,7 +344,6 @@
                               </label>
           </div>
         </div>
-        <div class="pointer-events-none absolute inset-0 z-[90] hidden" id="quickExitDropdownLayer"></div>
       </div>
                       </div>
                     </div>
@@ -476,6 +478,7 @@
           quickEditModal: document.getElementById("quickEditModal"),
           quickEditTabQuickExit: document.getElementById("quickEditTabQuickExit"),
           quickEditTabEdit: document.getElementById("quickEditTabEdit"),
+          quickExitPanelWrap: document.getElementById("quickExitPanelWrap"),
           quickExitPanel: document.getElementById("quickExitPanel"),
           quickExitClearButton: document.getElementById("quickExitClearButton"),
           quickExitCurrentStockScroll: document.getElementById("quickExitCurrentStockScroll"),
@@ -1817,7 +1820,7 @@
           const segment = segmentMap[segmentId];
           const config = getQuickExitSelectionConfig_(segmentId);
           const controls = getQuickExitSegmentElements_(segmentId);
-          if (!segment || !config || !controls.dropdown || !controls.input || !els.quickExitDropdownLayer || !els.quickEditModal) {
+          if (!segment || !config || !controls.dropdown || !controls.input || !els.quickExitDropdownLayer || !els.quickExitPanelWrap) {
             clearQuickExitDropdownLayer_();
             return;
           }
@@ -1827,13 +1830,13 @@
             clearQuickExitDropdownLayer_();
             return;
           }
-          const modalRect = els.quickEditModal.getBoundingClientRect();
+          const panelRect = els.quickExitPanelWrap.getBoundingClientRect();
           const inputRect = controls.input.getBoundingClientRect();
-          const left = Math.max(12, inputRect.left - modalRect.left);
-          const top = Math.max(12, inputRect.bottom - modalRect.top + 4);
+          const left = Math.max(0, inputRect.left - panelRect.left);
+          const top = Math.max(0, inputRect.bottom - panelRect.top + 4);
           const width = Math.min(
             Math.max(Math.round(inputRect.width), 136),
-            Math.max(136, Math.round(modalRect.width - left - 12))
+            Math.max(136, Math.round(panelRect.width - left - 8))
           );
           const highlightedIndex = Math.max(-1, Math.min(Number(config.highlightedIndex || -1), suggestions.length - 1));
           els.quickExitDropdownLayer.innerHTML = '<div class="pointer-events-auto absolute max-h-40 overflow-y-auto rounded border border-outline-variant/40 bg-surface-container-lowest shadow-[0_16px_32px_rgba(11,15,16,0.24)]"'
@@ -1860,7 +1863,7 @@
 
         function renderQuickExitPreviewUi_() {
           const preview = computeQuickExitPreview();
-          const shouldShow = state.quickExitClearSelected || hasActiveQuickExitSegments_();
+          const shouldShow = !!state.quickEditOpen && state.quickEditTab === "quick-exit";
           els.quickExitPreviewWrap.classList.toggle("hidden", !shouldShow);
           els.quickExitPreview.textContent = state.quickExitClearSelected ? "空" : (preview || "-");
         }
@@ -1928,11 +1931,62 @@
           };
         }
 
+        function computeQuickExitPreviewState_(item) {
+          const currentItem = item || state.quickEditItem;
+          if (!currentItem || !state.quickExitForm || !state.quickExitForm.segments) return null;
+          if (state.quickExitClearSelected) {
+            return {
+              valid: true,
+              nextState: {
+                tail: 0,
+                unitsPerBox: Math.max(0, Math.trunc(Number(currentItem.unitsPerBox) || 0)),
+                itemBoxes: 0,
+                sign: "",
+                fractionText: "",
+                fractionValue: 0,
+                colisage: Math.max(0, Math.trunc(Number(currentItem.colisage) || 0)),
+                packNotation: "",
+                remark: String(state.quickEditForm && state.quickEditForm.remark || "").trim()
+              }
+            };
+          }
+          const segments = getQuickExitSegments_(currentItem);
+          const selectedSegments = segments.filter(function(segment) {
+            return !!getQuickExitSelectionConfig_(segment.id);
+          });
+          if (!selectedSegments.length) return null;
+
+          const totalPieces = stateModelToPieces(currentItem);
+          let totalExitPieces = 0;
+          let validSegments = 0;
+          for (let i = 0; i < selectedSegments.length; i++) {
+            const segment = selectedSegments[i];
+            const config = getQuickExitSelectionConfig_(segment.id);
+            const result = parseQuickExitSegmentEntry_(currentItem, segment, config);
+            if (!result || !result.valid) continue;
+            totalExitPieces += result.pieces;
+            validSegments += 1;
+          }
+          if (!validSegments) return null;
+          const newTotal = totalPieces - totalExitPieces;
+          if (newTotal < 0) return null;
+          const nextState = buildStateFromPieces(newTotal, {
+            unitsPerBox: currentItem.unitsPerBox,
+            colisage: currentItem.colisage,
+            remark: state.quickEditForm && state.quickEditForm.remark
+          });
+          if (!nextState) return null;
+          return {
+            valid: true,
+            nextState: nextState
+          };
+        }
+
         function computeQuickExitPreview() {
           if (state.quickExitClearSelected) {
             return "空";
           }
-          const result = buildQuickExitResultState_(state.quickEditItem);
+          const result = computeQuickExitPreviewState_(state.quickEditItem);
           return result && result.valid && result.nextState ? buildLocalStockDisplay(result.nextState) : "";
         }
 
@@ -2114,6 +2168,7 @@
           els.quickEditRemark.value = form.remark || "";
           els.quickEditTabQuickExit.className = "border px-2 py-2 text-[10px] font-bold uppercase tracking-[0.18em] " + (isQuickExit ? "border-primary bg-primary text-on-primary" : "border-outline-variant/30 text-on-surface-variant");
           els.quickEditTabEdit.className = "border px-2 py-2 text-[10px] font-bold uppercase tracking-[0.18em] " + (!isQuickExit ? "border-primary bg-primary text-on-primary" : "border-outline-variant/30 text-on-surface-variant");
+          els.quickExitPanelWrap.classList.toggle("hidden", !isQuickExit);
           els.quickExitPanel.classList.toggle("hidden", !isQuickExit);
           if (!isQuickExit) {
             clearQuickExitDropdownLayer_();

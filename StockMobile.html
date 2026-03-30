@@ -257,9 +257,9 @@
                   <span class="ml-2 font-semibold text-on-surface" id="quickExitPreview">-</span>
                 </div>
               </div>
-              <div class="mt-3 w-full overflow-x-auto" id="quickExitSegmentFormsScroll">
+              <div class="mt-3 w-full overflow-visible" id="quickExitSegmentFormsScroll">
                 <div class="flex justify-center">
-                  <div class="inline-flex min-w-fit flex-nowrap items-end gap-6" id="quickExitSegmentForms"></div>
+                  <div class="inline-flex min-w-fit flex-nowrap items-start gap-6 pb-44" id="quickExitSegmentForms"></div>
                 </div>
               </div>
             </section>
@@ -1639,6 +1639,10 @@
           return state.quickExitSegmentErrors && state.quickExitSegmentErrors[segment] ? state.quickExitSegmentErrors[segment] : "";
         }
 
+        function hasActiveQuickExitSegments_() {
+          return !!(state.quickExitForm && state.quickExitForm.segments && Object.keys(state.quickExitForm.segments).length);
+        }
+
         function syncQuickExitScrollableRow_(scrollEl, innerEl) {
           if (!scrollEl || !innerEl) return;
           if (innerEl.scrollWidth <= scrollEl.clientWidth + 1) {
@@ -1686,7 +1690,7 @@
               + '<div class="mt-2 min-h-[4.5rem]">'
               + '<div class="relative min-w-0" data-quick-exit-wrapper="' + escapeHtml(segment.id) + '">'
               + '<label class="block min-w-0"><span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">valeur</span><input class="w-[8.5rem] border-outline-variant/30 bg-surface-container-low px-2 text-sm font-semibold text-on-surface" data-quick-exit-field="entry" data-segment-id="' + escapeHtml(segment.id) + '" inputmode="text" type="text" placeholder="' + escapeHtml(getQuickExitSegmentPlaceholder_(segment)) + '" value="' + escapeHtml(config.entry || "") + '" autocomplete="off" /></label>'
-              + '<div class="absolute left-0 top-full z-10 mt-1 hidden max-h-40 min-w-full overflow-y-auto rounded border border-outline-variant/20 bg-surface-container-lowest shadow-[0_10px_24px_rgba(11,15,16,0.14)]" data-quick-exit-dropdown="' + escapeHtml(segment.id) + '"></div>'
+              + '<div class="absolute left-0 top-full z-40 mt-1 hidden max-h-40 min-w-[8.5rem] overflow-y-auto rounded border border-outline-variant/30 bg-surface-container-lowest shadow-[0_14px_28px_rgba(11,15,16,0.18)]" data-quick-exit-dropdown="' + escapeHtml(segment.id) + '"></div>'
               + '</div>'
               + '<p class="mt-2 hidden max-w-[15rem] text-[11px] font-medium text-error" data-quick-exit-error="' + escapeHtml(segment.id) + '"></p>'
               + '</div>'
@@ -1814,7 +1818,8 @@
 
         function renderQuickExitPreviewUi_() {
           const preview = computeQuickExitPreview();
-          els.quickExitPreviewWrap.classList.toggle("hidden", !preview && !state.quickExitClearSelected);
+          const shouldShow = state.quickExitClearSelected || hasActiveQuickExitSegments_();
+          els.quickExitPreviewWrap.classList.toggle("hidden", !shouldShow);
           els.quickExitPreview.textContent = state.quickExitClearSelected ? "空" : (preview || "-");
         }
 

@@ -313,7 +313,7 @@
                           <div class="hidden" id="quickEditTailGroup">
                             <label class="block" id="quickEditTailSegment">
                               <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">尾箱</span>
-                              <input class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-medium text-on-surface" id="quickEditTail" inputmode="text" maxlength="16" placeholder="(360p)" type="text" />
+                              <input class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-medium text-on-surface" id="quickEditTail" inputmode="text" maxlength="16" placeholder="(85p)" type="text" />
                             </label>
                           </div>
                         </div>
@@ -328,7 +328,7 @@
                         <div class="flex-none" id="quickEditUnitsPerBoxSlot">
                           <label class="block" id="quickEditUnitsPerBoxField">
                             <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">件/箱</span>
-                            <input class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-semibold text-on-surface" id="quickEditUnitsPerBox" inputmode="text" maxlength="16" placeholder="336p" type="text" />
+                            <input class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-semibold text-on-surface" id="quickEditUnitsPerBox" inputmode="text" maxlength="16" placeholder="144p" type="text" />
                           </label>
                         </div>
 
@@ -1631,8 +1631,8 @@
 
         function getQuickExitSegmentPlaceholder_(segment) {
           return segment && segment.id === "tail"
-            ? "ex: 3包 / 1/2 / 2/3 / (237p)"
-            : "ex: 2箱 / 5包 / 1/2 / 2/3";
+            ? "(x)/3包/1/2/2/3"
+            : "2箱/5包/1/2/2/3";
         }
 
         function getQuickExitDefaultSuggestions_(item, segment) {
@@ -2398,11 +2398,11 @@
           const remark = String(state.quickEditForm.remark || "").trim();
 
           if (!tailResult.valid) {
-            setQuickEditError("尾箱 invalide. Exemple attendu: (360p).");
+            setQuickEditError("尾箱 invalide. Exemple attendu: (85p).");
             return null;
           }
           if (!unitsResult.valid) {
-            setQuickEditError("件/箱 invalide. Exemple attendu: 336p.");
+            setQuickEditError("件/箱 invalide. Exemple attendu: 144p.");
             return null;
           }
           if (!isFractionTextValid(fractionText)) {

@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta content="width=device-width, initial-scale=1.0" name="viewport" />
-    <title>SZFASHION | Inventaire V2</title>
+    <title>SZFASHION | Inventaire</title>
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet" />
@@ -13,29 +13,68 @@
         theme: {
           extend: {
             colors: {
-              background: "#f7f9fb",
-              surface: "#f7f9fb",
-              "surface-container-lowest": "#ffffff",
-              "surface-container-low": "#f0f4f7",
-              "surface-container": "#e8eff3",
-              "surface-container-high": "#e1e9ee",
-              "surface-container-highest": "#d9e4ea",
-              "surface-tint": "#565e74",
-              primary: "#565e74",
-              outline: "#717c82",
-              "outline-variant": "#a9b4b9",
-              "on-surface": "#2a3439",
+              "on-secondary-fixed-variant": "#4e5c71",
+              "inverse-on-surface": "#9a9d9f",
+              "on-secondary-fixed": "#324053",
+              "background": "#f7f9fb",
+              "tertiary-container": "#dad6f7",
+              "surface-variant": "#d9e4ea",
               "on-surface-variant": "#566166",
-              "on-primary": "#f7f7ff",
+              "on-tertiary-fixed": "#393751",
+              "on-tertiary-container": "#4b4a65",
+              "on-tertiary": "#fcf7ff",
+              "surface-bright": "#f7f9fb",
+              "surface-container-lowest": "#ffffff",
+              "error-dim": "#4e0309",
+              "primary-fixed-dim": "#ccd4ee",
+              "surface-tint": "#565e74",
+              "outline": "#717c82",
+              "tertiary-fixed": "#dad6f7",
+              "secondary-fixed-dim": "#c7d5ed",
+              "primary-fixed": "#dae2fd",
               "primary-container": "#dae2fd",
-              "on-primary-container": "#4a5167",
+              "tertiary-fixed-dim": "#ccc9e9",
+              "inverse-surface": "#0b0f10",
+              "on-background": "#2a3439",
+              "on-surface": "#2a3439",
+              "on-primary-fixed": "#373f54",
+              "on-primary-fixed-variant": "#535b71",
+              "tertiary": "#5e5c78",
+              "surface-container-highest": "#d9e4ea",
+              "secondary-container": "#d5e3fc",
+              "surface-container": "#e8eff3",
+              "surface": "#f7f9fb",
+              "secondary-fixed": "#d5e3fc",
+              "secondary": "#526074",
               "error-container": "#fe8983",
-              "on-error-container": "#752121"
+              "tertiary-dim": "#52506b",
+              "on-secondary-container": "#455367",
+              "on-error-container": "#752121",
+              "inverse-primary": "#dae2fd",
+              "surface-container-low": "#f0f4f7",
+              "on-primary-container": "#4a5167",
+              "surface-dim": "#cfdce3",
+              "outline-variant": "#a9b4b9",
+              "on-primary": "#f7f7ff",
+              "surface-container-high": "#e1e9ee",
+              "on-error": "#fff7f6",
+              "on-secondary": "#f8f8ff",
+              "secondary-dim": "#465468",
+              "on-tertiary-fixed-variant": "#55536f",
+              "primary-dim": "#4a5268",
+              "error": "#9f403d",
+              "primary": "#565e74"
             },
             fontFamily: {
               headline: ["Inter", "sans-serif"],
               body: ["Inter", "sans-serif"],
               label: ["Inter", "sans-serif"]
+            },
+            borderRadius: {
+              DEFAULT: "0px",
+              lg: "0px",
+              xl: "0px",
+              full: "9999px"
             },
             boxShadow: {
               ledger: "0 1px 0 rgba(113, 124, 130, 0.12)"
@@ -65,157 +104,267 @@
         background-color: #f7f9fb;
       }
 
-      .StockMobileV2_scroll {
+      .inventory-scroll {
         -webkit-overflow-scrolling: touch;
         overscroll-behavior: contain;
       }
 
-      .StockMobileV2_overlay {
+      .quick-edit-overlay {
         backdrop-filter: blur(2px);
+      }
+
+      .quick-edit-body.dropdown-open {
+        overflow: hidden;
+        overscroll-behavior: contain;
+      }
+
+      @supports (-webkit-touch-callout: none) {
+        @media (hover: none) and (pointer: coarse) {
+          input,
+          select,
+          textarea {
+            font-size: 16px !important;
+          }
+
+          #searchInput {
+            line-height: 1.3;
+          }
+
+          #quickEditTail,
+          #quickEditUnitsPerBox,
+          #quickEditItemBoxes,
+          #quickEditFractionText,
+          #quickEditPackNotationCount,
+          #quickEditSign,
+          #quickEditPackNotationSign,
+          #stockStateFilter,
+          #sortSelect,
+          #warehouseFilter,
+          #quickEditRemark {
+            min-height: 2.5rem;
+          }
+        }
       }
     </style>
   </head>
   <body class="h-[100dvh] max-h-[100dvh] overflow-hidden bg-background text-on-surface antialiased">
-    <script id="StockMobileV2_boot" type="application/json"><?!= StockMobileV2_initialBootJson ?></script>
+    <script id="inventory-boot" type="application/json"><?!= StockMobileV2_initialBootJson ?></script>
 
-    <div class="fixed inset-x-0 top-0 bottom-16 overflow-hidden bg-background" id="StockMobileV2_inventoryShell">
+    <div class="fixed inset-x-0 top-0 bottom-16 overflow-hidden bg-background" id="inventoryAppShell">
       <main class="flex h-full min-h-0 flex-col overflow-hidden">
-        <div class="sticky top-0 z-40 shrink-0 bg-background">
-          <header class="flex h-14 items-center justify-between border-b border-slate-200 bg-slate-50 px-4">
-            <div class="flex items-center gap-3">
-              <button aria-label="Menu" class="rounded-full p-1 text-slate-700">
-                <span class="material-symbols-outlined">menu</span>
-              </button>
-              <div>
-                <h1 class="text-lg font-extrabold uppercase tracking-tight text-slate-900">SZFASHION</h1>
-                <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">V2 frontend-only</p>
-              </div>
+      <div class="sticky top-0 z-40 shrink-0 bg-background">
+        <header class="flex h-14 items-center justify-between border-b border-slate-200 bg-slate-50 px-4">
+          <div class="flex items-center gap-3">
+            <button aria-label="Menu" class="rounded-full p-1 text-slate-700 transition-colors duration-150 hover:bg-slate-100">
+              <span class="material-symbols-outlined">menu</span>
+            </button>
+            <div>
+              <h1 class="text-lg font-extrabold uppercase tracking-tight text-slate-900">SZFASHION</h1>
             </div>
-            <span class="rounded-full border border-outline-variant/40 px-2 py-1 text-[9px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">Aucune donnee connectee</span>
-          </header>
+          </div>
+          <div class="flex items-center gap-1">
+            <button aria-label="Rafraîchir" class="rounded-full p-1 text-slate-700 transition-colors duration-150 hover:bg-slate-100" id="refreshButton" type="button">
+              <span class="material-symbols-outlined">refresh</span>
+            </button>
+          </div>
+        </header>
 
-          <section class="border-b border-outline-variant/20 bg-surface-container-low px-3 py-2 shadow-ledger">
-            <div class="flex items-center gap-2">
-              <span class="material-symbols-outlined text-on-surface-variant !text-[16px]">search</span>
-              <input autocomplete="off" class="w-full border-none bg-transparent p-0 text-[11px] font-medium tracking-tight text-on-surface placeholder:text-outline focus:ring-0" id="StockMobileV2_inventorySearchInput" placeholder="Recherche reference / stock..." type="search" />
-            </div>
-          </section>
-
-          <section class="border-b border-outline-variant/30 bg-surface-container-high px-3 py-2">
-            <div class="flex flex-wrap items-center justify-between gap-2">
-              <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant" id="StockMobileV2_inventorySummary">0 refs</div>
-              <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant" id="StockMobileV2_inventoryStatus">Pret</div>
-            </div>
-          </section>
-        </div>
-
-        <section class="StockMobileV2_scroll min-h-0 flex-1 overflow-y-auto bg-outline-variant/20" id="StockMobileV2_inventoryScroll">
-          <div class="flex flex-col gap-px bg-outline-variant/20" id="StockMobileV2_inventoryList"></div>
-          <div class="hidden border-t border-outline-variant/20 bg-surface-container-lowest px-4 py-6 text-center" id="StockMobileV2_inventoryEmptyState">
-            <p class="text-[12px] font-semibold uppercase tracking-[0.18em] text-on-surface-variant">Aucun resultat</p>
-            <p class="mt-1 text-[12px] text-on-surface-variant">Aucune donnee connectee pour cet inventaire V2.</p>
+        <section class="border-b border-outline-variant/20 bg-surface-container-low px-3 py-1.5 shadow-ledger">
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-on-surface-variant !text-[16px]">search</span>
+            <input autocomplete="off" class="w-full border-none bg-transparent p-0 text-[10px] font-medium tracking-tight text-on-surface placeholder:text-outline focus:ring-0" id="searchInput" placeholder="RECHERCHE RÉFÉRENCE / STOCK..." type="search" />
+            <span class="hidden whitespace-nowrap rounded-full border border-outline-variant/30 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-[0.18em] text-on-surface-variant sm:inline-flex" id="sortBadge">REF ASC</span>
           </div>
         </section>
+
+        <section class="border-b border-outline-variant/30 bg-surface-container-high">
+          <div class="flex divide-x divide-outline-variant/30">
+            <button class="flex flex-1 items-center justify-center gap-1.5 py-1.5 transition-colors duration-150 hover:bg-surface-container-highest" id="toggleFilterButton" type="button">
+              <span class="material-symbols-outlined !text-[15px] text-on-surface-variant">filter_list</span>
+              <span class="text-[9px] font-bold uppercase tracking-widest text-on-surface-variant">Filtrer</span>
+            </button>
+            <button class="flex flex-1 items-center justify-center gap-1.5 py-1.5 transition-colors duration-150 hover:bg-surface-container-highest" id="toggleSortButton" type="button">
+              <span class="material-symbols-outlined !text-[15px] text-on-surface-variant">sort</span>
+              <span class="text-[9px] font-bold uppercase tracking-widest text-on-surface-variant">Trier</span>
+            </button>
+          </div>
+
+          <div class="hidden border-t border-outline-variant/20 px-3 py-2" id="utilityPanel">
+            <div class="grid gap-2 sm:grid-cols-2">
+              <label class="block">
+                <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant">Etat stock</span>
+                <select class="w-full border-outline-variant/30 bg-surface-container-lowest text-[12px] font-medium text-on-surface" id="stockStateFilter">
+                  <option value="all">Tous</option>
+                  <option value="positive">En stock</option>
+                  <option value="zero">En rupture</option>
+                </select>
+              </label>
+              <label class="block">
+                <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant">Tri</span>
+                <select class="w-full border-outline-variant/30 bg-surface-container-lowest text-[12px] font-medium text-on-surface" id="sortSelect">
+                  <option value="ref_asc">Ref asc</option>
+                  <option value="ref_desc">Ref desc</option>
+                  <option value="stock_first">Stock d'abord</option>
+                </select>
+              </label>
+              <label class="block sm:col-span-2" id="warehouseFilterWrap">
+                <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant">Entrepot</span>
+                <select class="w-full border-outline-variant/30 bg-surface-container-lowest text-[12px] font-medium text-on-surface" id="warehouseFilter">
+                  <option value="">Tous</option>
+                </select>
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <section class="border-b border-outline-variant/30 bg-surface-container-high px-3 py-1.5">
+          <div class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+            <div class="flex min-w-0 flex-wrap items-center gap-1.5">
+              <div class="flex items-center gap-1 border border-outline-variant/20 bg-surface-container-lowest px-1.5 py-0.5">
+                <span class="material-symbols-outlined !text-[11px] text-primary">calendar_today</span>
+                <span class="text-[8px] font-bold tracking-tight text-primary" id="summaryDate">--/--/----</span>
+              </div>
+              <div class="flex min-w-0 flex-wrap items-center gap-1 text-[8px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">
+                <span id="summaryRefs">0 refs</span>
+                <span class="text-outline-variant/40">//</span>
+                <span id="summaryPositive">0 en stock</span>
+                <span class="text-outline-variant/40">//</span>
+                <span id="summaryZero">0 en rupture</span>
+                <span class="text-outline-variant/40">//</span>
+                <span id="summaryTotals">0 箱 0 件</span>
+              </div>
+            </div>
+            <div class="text-right text-[8px] font-bold uppercase tracking-[0.18em] text-on-surface-variant" id="summaryStatus">Pret</div>
+          </div>
+          <div class="mt-1 flex flex-wrap gap-1" id="activeFilters"></div>
+        </section>
+      </div>
+
+      <section class="inventory-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain bg-outline-variant/20" id="inventoryScroll">
+        <div class="bg-outline-variant/20" id="inventoryGrid"></div>
+        <div class="hidden border-t border-outline-variant/20 bg-surface-container-lowest px-4 py-5 text-center" id="emptyState">
+          <p class="text-[12px] font-semibold uppercase tracking-[0.18em] text-on-surface-variant">Aucun resultat</p>
+          <p class="mt-1 text-[12px] text-on-surface-variant">Ajuste la recherche ou les filtres pour afficher des references.</p>
+        </div>
+      </section>
       </main>
     </div>
 
-    <div class="fixed inset-x-0 top-0 bottom-16 hidden overflow-hidden bg-background" id="StockMobileV2_historyShell">
+    <div class="fixed inset-x-0 top-0 bottom-16 hidden overflow-hidden bg-background" id="historyAppShell">
       <main class="flex h-full min-h-0 flex-col overflow-hidden">
         <div class="sticky top-0 z-40 shrink-0 bg-background">
           <header class="flex h-14 items-center justify-between border-b border-slate-200 bg-slate-50 px-4">
             <div class="flex items-center gap-3">
-              <button aria-label="Retour inventaire" class="rounded-full p-1 text-slate-700" id="StockMobileV2_historyBackButton" type="button">
+              <button aria-label="Retour inventaire" class="rounded-full p-1 text-slate-700 transition-colors duration-150 hover:bg-slate-100" id="historyBackButton" type="button">
                 <span class="material-symbols-outlined">arrow_back</span>
               </button>
               <div>
                 <h1 class="text-lg font-extrabold uppercase tracking-tight text-slate-900">Historique</h1>
               </div>
             </div>
-            <span class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Bientot branche</span>
+            <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant" id="historySummary">-</div>
           </header>
 
           <section class="border-b border-outline-variant/20 bg-surface-container-low px-3 py-2 shadow-ledger">
             <div class="flex items-center gap-2">
               <span class="material-symbols-outlined text-on-surface-variant !text-[16px]">search</span>
-              <input autocomplete="off" class="w-full border-none bg-transparent p-0 text-[11px] font-medium tracking-tight text-on-surface placeholder:text-outline focus:ring-0" id="StockMobileV2_historySearchInput" placeholder="Recherche reference / remarque..." type="search" />
+              <input autocomplete="off" class="w-full border-none bg-transparent p-0 text-[10px] font-medium tracking-tight text-on-surface placeholder:text-outline focus:ring-0" id="historySearchInput" placeholder="RECHERCHE RÉFÉRENCE / TYPE / REMARQUE..." type="search" />
+            </div>
+            <div class="mt-2 flex items-center gap-2">
+              <label class="min-w-0 flex-1">
+                <select class="w-full border-outline-variant/30 bg-surface-container-lowest text-[12px] font-medium text-on-surface" id="historyActionTypeFilter">
+                  <option value="">Tous types</option>
+                  <option value="modifier">modifier</option>
+                  <option value="sortie_rapide">sortie_rapide</option>
+                </select>
+              </label>
+              <div class="shrink-0 text-[9px] font-bold uppercase tracking-[0.16em] text-on-surface-variant" id="historyStatus">Pret</div>
             </div>
           </section>
         </div>
 
-        <section class="StockMobileV2_scroll min-h-0 flex-1 overflow-y-auto bg-outline-variant/20" id="StockMobileV2_historyScroll">
-          <div class="flex flex-col gap-px bg-outline-variant/20" id="StockMobileV2_historyList"></div>
-          <div class="hidden border-t border-outline-variant/20 bg-surface-container-lowest px-4 py-6 text-center" id="StockMobileV2_historyEmptyState">
-            <p class="text-[12px] font-semibold uppercase tracking-[0.18em] text-on-surface-variant">Aucun historique</p>
-            <p class="mt-1 text-[12px] text-on-surface-variant">Aucune donnee connectee pour l'historique V2.</p>
+        <section class="inventory-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain bg-outline-variant/20" id="historyScroll">
+          <div class="flex flex-col gap-px bg-outline-variant/20" id="historyList"></div>
+          <div class="hidden border-t border-outline-variant/20 bg-surface-container-lowest px-4 py-5 text-center" id="historyEmptyState">
+            <p class="text-[12px] font-semibold uppercase tracking-[0.18em] text-on-surface-variant" id="historyEmptyTitle">Aucun historique</p>
+            <p class="mt-1 text-[12px] text-on-surface-variant" id="historyEmptyMessage">Aucun mouvement à afficher.</p>
+          </div>
+          <div class="hidden border-t border-outline-variant/20 bg-surface-container-lowest px-4 py-5 text-center" id="historyLoadingState">
+            <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Chargement...</p>
+          </div>
+          <div class="border-t border-outline-variant/20 bg-surface-container-lowest px-4 py-4" id="historyLoadMoreWrap">
+            <button class="w-full border border-outline-variant/30 py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-on-surface-variant transition-colors duration-150 hover:bg-surface-container" id="historyLoadMoreButton" type="button">CHARGER PLUS</button>
           </div>
         </section>
       </main>
     </div>
 
-    <div class="fixed inset-x-0 top-0 bottom-16 hidden overflow-hidden bg-background" id="StockMobileV2_detailShell">
+    <div class="fixed inset-x-0 top-0 bottom-16 hidden overflow-hidden bg-background" id="detailAppShell">
       <main class="flex h-full min-h-0 flex-col overflow-hidden">
         <div class="sticky top-0 z-40 shrink-0 bg-background">
           <header class="flex h-14 items-center justify-between border-b border-slate-200 bg-slate-50 px-4">
             <div class="flex min-w-0 items-center gap-3">
-              <button aria-label="Retour" class="rounded-full p-1 text-slate-700" id="StockMobileV2_detailBackButton" type="button">
+              <button aria-label="Retour" class="rounded-full p-1 text-slate-700 transition-colors duration-150 hover:bg-slate-100" id="detailBackButton" type="button">
                 <span class="material-symbols-outlined">arrow_back</span>
               </button>
               <div class="min-w-0">
-                <h1 class="truncate text-lg font-extrabold uppercase tracking-tight text-slate-900" id="StockMobileV2_detailReference">-</h1>
-                <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant" id="StockMobileV2_detailSubtitle">Fiche produit</p>
+                <h1 class="truncate text-lg font-extrabold uppercase tracking-tight text-slate-900" id="detailReference">-</h1>
+                <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant" id="detailSubline">Fiche produit</p>
               </div>
             </div>
-            <button class="bg-surface-tint px-3 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-on-primary" id="StockMobileV2_detailQuickEditButton" type="button">Modifier</button>
+            <button class="bg-surface-tint px-3 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-on-primary transition-colors duration-150 hover:bg-primary-dim" id="detailQuickEditButton" type="button">Modifier</button>
           </header>
         </div>
 
-        <section class="StockMobileV2_scroll min-h-0 flex-1 overflow-y-auto bg-surface px-4 py-4" id="StockMobileV2_detailScroll">
+        <section class="inventory-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain bg-surface px-4 py-4" id="detailScroll">
           <div class="mx-auto flex w-full max-w-3xl flex-col gap-4">
-            <div class="rounded border border-outline-variant/30 bg-surface-container-low px-4 py-3 text-[12px] text-on-surface-variant">
-              Frontend V2 autonome. Les donnees affichees ici sont mockees localement.
+            <div class="hidden border border-error/20 bg-error-container/15 px-4 py-3 text-[12px] font-medium text-on-error-container" id="detailNotFoundBanner">
+              Référence introuvable dans le stock courant.
             </div>
 
             <section class="border border-outline-variant/20 bg-surface-container-lowest p-4">
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
                   <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Stock actuel</div>
-                  <div class="mt-1 truncate text-2xl font-black tracking-tight text-on-surface" id="StockMobileV2_detailStockDisplay">-</div>
+                  <div class="mt-1 truncate text-2xl font-black tracking-tight text-on-surface" id="detailStockDisplay">-</div>
                 </div>
-                <div class="shrink-0 text-right text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant" id="StockMobileV2_detailStockState">-</div>
+                <div class="shrink-0 text-right text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant" id="detailStockState">-</div>
               </div>
               <div class="mt-3 grid gap-2 sm:grid-cols-2">
                 <div class="border border-outline-variant/20 bg-surface-container-low px-3 py-2">
                   <div class="text-[9px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Entrepot</div>
-                  <div class="mt-1 text-[12px] font-medium text-on-surface" id="StockMobileV2_detailWarehouse">-</div>
+                  <div class="mt-1 text-[12px] font-medium text-on-surface" id="detailWarehouse">-</div>
                 </div>
                 <div class="border border-outline-variant/20 bg-surface-container-low px-3 py-2">
-                  <div class="text-[9px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Creation</div>
-                  <div class="mt-1 text-[12px] font-medium text-on-surface" id="StockMobileV2_detailCreatedAt">-</div>
+                  <div class="text-[9px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Création</div>
+                  <div class="mt-1 text-[12px] font-medium text-on-surface" id="detailCreatedAt">-</div>
                 </div>
                 <div class="border border-outline-variant/20 bg-surface-container-low px-3 py-2">
                   <div class="text-[9px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Dernier mouvement</div>
-                  <div class="mt-1 text-[12px] font-medium text-on-surface" id="StockMobileV2_detailLastMovementAt">-</div>
+                  <div class="mt-1 text-[12px] font-medium text-on-surface" id="detailLastMovement">-</div>
                 </div>
                 <div class="border border-outline-variant/20 bg-surface-container-low px-3 py-2">
-                  <div class="text-[9px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Resume</div>
-                  <div class="mt-1 text-[12px] font-medium text-on-surface" id="StockMobileV2_detailSummary">-</div>
+                  <div class="text-[9px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Résumé</div>
+                  <div class="mt-1 text-[12px] font-medium text-on-surface" id="detailSummary">-</div>
                 </div>
               </div>
             </section>
 
-            <section class="border border-outline-variant/20 bg-surface-container-lowest p-4">
+            <section class="border border-outline-variant/20 bg-surface-container-lowest p-4" id="detailRemarkSection">
               <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Remarque</div>
-              <div class="mt-2 whitespace-pre-wrap text-[12px] leading-5 text-on-surface" id="StockMobileV2_detailRemark">-</div>
+              <div class="mt-2 whitespace-pre-wrap text-[12px] leading-5 text-on-surface" id="detailRemark">-</div>
             </section>
 
             <section class="border border-outline-variant/20 bg-surface-container-lowest">
               <div class="border-b border-outline-variant/20 px-4 py-3">
-                <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Historique recent</div>
+                <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Historique récent</div>
               </div>
-              <div class="flex flex-col gap-px bg-outline-variant/20" id="StockMobileV2_detailHistoryList"></div>
-              <div class="hidden px-4 py-5 text-center" id="StockMobileV2_detailHistoryEmpty">
+              <div class="flex flex-col gap-px bg-outline-variant/20" id="detailHistoryList"></div>
+              <div class="hidden px-4 py-5 text-center" id="detailHistoryEmpty">
                 <p class="text-[12px] font-semibold uppercase tracking-[0.18em] text-on-surface-variant">Aucun historique</p>
-                <p class="mt-1 text-[12px] text-on-surface-variant">Bientot branche sur la vraie source detail.</p>
+              </div>
+              <div class="hidden border-t border-outline-variant/20 px-4 py-4" id="detailHistoryLoadMoreWrap">
+                <button class="w-full border border-outline-variant/30 py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-on-surface-variant transition-colors duration-150 hover:bg-surface-container" id="detailHistoryLoadMoreButton" type="button">Voir plus</button>
               </div>
             </section>
           </div>
@@ -223,63 +372,196 @@
       </main>
     </div>
 
-    <div class="StockMobileV2_overlay fixed inset-0 z-[60] hidden bg-slate-950/25" id="StockMobileV2_quickEditOverlay">
-      <div class="absolute inset-x-0 bottom-0 max-h-[88dvh] overflow-hidden border-t border-outline-variant/20 bg-surface-container-lowest shadow-2xl" id="StockMobileV2_quickEditModal">
-        <div class="border-b border-outline-variant/20 px-4 py-4">
+    <div class="quick-edit-overlay fixed inset-0 z-[60] hidden items-center justify-center bg-on-background/35 px-3 py-6" id="quickEditOverlay" role="presentation">
+      <div aria-modal="true" class="relative max-h-[calc(100dvh-2.5rem)] w-full max-w-3xl overflow-hidden border border-outline-variant/20 bg-surface-container-lowest shadow-[0_18px_48px_rgba(11,15,16,0.18)]" id="quickEditModal" role="dialog" aria-labelledby="quickEditReference">
+        <div class="border-b border-outline-variant/20 px-4 py-3">
           <div class="flex items-start justify-between gap-3">
-            <div>
-              <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Quick edit V2</p>
-              <h2 class="mt-1 text-lg font-extrabold tracking-tight text-on-surface" id="StockMobileV2_quickEditReference">-</h2>
+            <div class="min-w-0">
+              <div class="truncate text-lg font-black tracking-tight text-on-surface" id="quickEditReference">-</div>
             </div>
-            <button class="rounded-full p-1 text-slate-700" id="StockMobileV2_quickEditCloseIcon" type="button">
-              <span class="material-symbols-outlined">close</span>
-            </button>
-          </div>
-          <p class="mt-2 text-[12px] text-on-surface-variant">Version visuelle uniquement. La sauvegarde reelle sera rebranchee plus tard.</p>
-        </div>
-
-        <div class="StockMobileV2_scroll max-h-[calc(88dvh-8rem)] overflow-y-auto px-4 py-4">
-          <div class="grid gap-3">
-            <label class="block">
-              <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Mode</span>
-              <select class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-medium text-on-surface" id="StockMobileV2_quickEditMode">
-                <option value="quick-edit">quick-edit</option>
-                <option value="quick-exit">quick-exit</option>
-              </select>
-            </label>
-
-            <label class="block">
-              <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Stock affiche</span>
-              <input class="w-full border-outline-variant/30 bg-surface-container-low px-3 text-sm font-medium text-on-surface" id="StockMobileV2_quickEditStockDisplay" type="text" />
-            </label>
-
-            <label class="block">
-              <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Entrepot</span>
-              <input class="w-full border-outline-variant/30 bg-surface-container-low px-3 text-sm font-medium text-on-surface" id="StockMobileV2_quickEditWarehouse" type="text" />
-            </label>
-
-            <label class="block">
-              <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Remarque</span>
-              <textarea class="min-h-[6rem] w-full border-outline-variant/30 bg-surface-container-low text-sm text-on-surface" id="StockMobileV2_quickEditRemark" maxlength="240" placeholder="Bientot branche"></textarea>
-            </label>
-
-            <p class="hidden rounded border border-primary-container bg-primary-container/35 px-3 py-2 text-[11px] font-medium text-on-primary-container" id="StockMobileV2_quickEditMessage"></p>
+            <div class="text-right">
+              <div class="text-[0.625rem] font-bold uppercase tracking-[0.2em] text-on-surface-variant">STOCK ACTUEL</div>
+              <div class="text-sm font-bold text-primary" id="quickEditStockDisplay">-</div>
+            </div>
           </div>
         </div>
+        <div class="border-b border-outline-variant/20 bg-surface-container-low px-4 py-2">
+          <div class="grid grid-cols-2 gap-2">
+            <button class="border border-outline-variant/30 px-2 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant" id="quickEditTabQuickExit" type="button">Sortie rapide</button>
+            <button class="border border-outline-variant/30 px-2 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant" id="quickEditTabEdit" type="button">Modifier</button>
+          </div>
+        </div>
+        <div class="quick-edit-body max-h-[calc(100dvh-12.5rem)] overflow-y-auto px-4 py-3" id="quickEditBody">
+          <div class="space-y-4">
+            <p class="hidden overflow-hidden whitespace-nowrap text-[10px] text-on-surface-variant" id="quickExitPacksHint"></p>
+            <div class="relative overflow-visible" id="quickExitPanelWrap">
+              <section id="quickExitPanel">
+                <div class="rounded border border-outline-variant/20 bg-surface-container-low px-3 py-2">
+                  <div class="flex items-center justify-between gap-3">
+                    <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Stock actuel</div>
+                    <button class="shrink-0 rounded border border-outline-variant/30 px-2 py-1 text-[10px] font-bold tracking-[0.12em] text-on-surface-variant transition-colors duration-150 hover:bg-surface-container" id="quickExitClearButton" type="button">清空库存</button>
+                  </div>
+                  <div class="mt-2 w-full overflow-x-auto" id="quickExitCurrentStockScroll">
+                    <div class="flex justify-center">
+                      <div class="inline-flex min-w-fit flex-nowrap gap-2 text-sm font-semibold text-primary" id="quickExitCurrentStock">-</div>
+                    </div>
+                  </div>
+                  <div class="mt-2 hidden text-[11px] text-on-surface-variant" id="quickExitPreviewWrap">
+                    <span class="font-bold uppercase tracking-[0.16em] text-on-surface-variant">Apres sortie</span>
+                    <span class="ml-2 font-semibold text-on-surface" id="quickExitPreview">-</span>
+                  </div>
+                </div>
+                <div class="mt-3 w-full overflow-visible" id="quickExitSegmentFormsScroll">
+                  <div class="flex justify-center">
+                    <div class="inline-flex min-w-fit flex-nowrap items-start gap-6" id="quickExitSegmentForms"></div>
+                  </div>
+                </div>
+              </section>
+              <div class="pointer-events-none absolute inset-0 z-[90] hidden overflow-visible" id="quickExitDropdownLayer"></div>
+            </div>
 
-        <div class="grid grid-cols-2 gap-3 border-t border-outline-variant/20 bg-surface-container-low px-4 py-4">
-          <button class="border border-outline-variant/30 py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-on-surface-variant" id="StockMobileV2_quickEditCancelButton" type="button">Annuler</button>
-          <button class="bg-surface-tint py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-on-primary" id="StockMobileV2_quickEditSaveButton" type="button">Bientot branche</button>
+            <form class="hidden space-y-3" id="quickEditForm" novalidate>
+              <div class="space-y-2">
+                <div class="w-full" id="quickEditExpressionCenterWrap">
+                  <div class="overflow-x-auto" id="quickEditExpressionScroll">
+                    <div class="w-max min-w-0" id="quickEditExpressionMeasure">
+                      <div class="relative flex items-end gap-x-2 gap-y-2 whitespace-nowrap pb-1" id="quickEditExpressionLine">
+                        <div class="flex-none" id="quickEditTailSlot">
+                          <button aria-label="Ajouter 尾箱" class="inline-flex h-8 w-8 items-center justify-center rounded border border-outline-variant/30 text-on-surface-variant transition-colors duration-150 hover:bg-surface-container" id="quickEditTailToggle" type="button">
+                            <span class="material-symbols-outlined !text-[15px]" id="quickEditTailToggleIcon">add</span>
+                          </button>
+                          <div class="hidden" id="quickEditTailGroup">
+                            <label class="block" id="quickEditTailSegment">
+                              <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">尾箱</span>
+                              <input class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-medium text-on-surface" id="quickEditTail" inputmode="text" maxlength="16" placeholder="(85p)" type="text" />
+                            </label>
+                          </div>
+                        </div>
+                        <div class="pointer-events-none hidden flex-none w-4 self-stretch" id="quickEditTailJoinSlot">
+                          <div class="grid h-full grid-rows-[auto_minmax(2.25rem,1fr)]">
+                            <span aria-hidden="true" class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] opacity-0">.</span>
+                            <span aria-hidden="true" class="block text-sm font-medium opacity-0">+</span>
+                          </div>
+                          <span aria-hidden="true" class="pointer-events-none absolute text-sm font-medium text-on-surface-variant/80" id="quickEditTailJoin">+</span>
+                        </div>
+
+                        <div class="flex-none" id="quickEditUnitsPerBoxSlot">
+                          <label class="block" id="quickEditUnitsPerBoxField">
+                            <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">件/箱</span>
+                            <input class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-semibold text-on-surface" id="quickEditUnitsPerBox" inputmode="text" maxlength="16" placeholder="144p" type="text" />
+                          </label>
+                        </div>
+
+                        <div class="pointer-events-none flex-none w-4 self-stretch" id="quickEditMultiplyJoinSlot">
+                          <div class="grid h-full grid-rows-[auto_minmax(2.25rem,1fr)]">
+                            <span aria-hidden="true" class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] opacity-0">.</span>
+                            <span aria-hidden="true" class="block text-sm font-medium opacity-0">×</span>
+                          </div>
+                          <span aria-hidden="true" class="pointer-events-none absolute text-sm font-medium text-on-surface-variant/80" id="quickEditMultiplyJoin">×</span>
+                        </div>
+
+                        <div class="flex-none" id="quickEditItemBoxesSlot">
+                          <label class="block" id="quickEditItemBoxesField">
+                            <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">箱数</span>
+                            <input class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-semibold text-on-surface" id="quickEditItemBoxes" inputmode="numeric" min="0" step="1" type="number" />
+                          </label>
+                        </div>
+
+                        <div class="flex-none" id="quickEditPartialSlot">
+                          <button aria-label="Ajouter bloc partiel" class="inline-flex h-8 w-8 items-center justify-center rounded border border-outline-variant/30 text-on-surface-variant transition-colors duration-150 hover:bg-surface-container" id="quickEditPartialToggle" type="button">
+                            <span class="material-symbols-outlined !text-[15px]" id="quickEditPartialToggleIcon">add</span>
+                          </button>
+                          <div class="hidden" id="quickEditPartialGroup">
+                            <div class="flex items-end gap-x-2 gap-y-2" id="quickEditPartialSegment">
+                              <label class="block" id="quickEditSignField">
+                                <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">符号</span>
+                                <select class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-medium text-on-surface" id="quickEditSign">
+                                  <option value="+">+</option>
+                                  <option value="×">×</option>
+                                </select>
+                              </label>
+                              <label class="block" id="quickEditFractionTextField">
+                                <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">分数</span>
+                                <input class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-medium text-on-surface" id="quickEditFractionText" inputmode="text" maxlength="10" placeholder="1/2" type="text" />
+                              </label>
+                              <label class="block" id="quickEditPackSignField">
+                                <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">符号</span>
+                                <select class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-medium text-on-surface" id="quickEditPackNotationSign">
+                                  <option value="+">+</option>
+                                  <option value="-">-</option>
+                                </select>
+                              </label>
+                              <label class="block" id="quickEditPackCountField">
+                                <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">包</span>
+                                <input class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-medium text-on-surface" id="quickEditPackNotationCount" inputmode="numeric" min="0" step="1" type="number" />
+                              </label>
+          </div>
+        </div>
+      </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="hidden w-full" id="quickEditRemoveCenterWrap">
+                  <div class="overflow-x-auto" id="quickEditRemoveScroll">
+                    <div class="w-max min-w-0" id="quickEditRemoveMeasure">
+                      <div class="flex items-start gap-x-2 gap-y-1 whitespace-nowrap" id="quickEditRemoveLine">
+                        <div class="flex-none" id="quickEditTailRemoveSlot">
+                          <button aria-label="Retirer 尾箱" class="hidden inline-flex h-8 w-8 items-center justify-center rounded border border-outline-variant/30 text-on-surface-variant transition-colors duration-150 hover:bg-surface-container" id="quickEditTailRemove" type="button">
+                            <span class="material-symbols-outlined !text-[15px]">remove</span>
+                          </button>
+                        </div>
+                        <div aria-hidden="true" class="hidden flex-none w-4" id="quickEditTailRemoveJoinSlot">
+                          <div class="grid h-full grid-rows-[auto_minmax(2.25rem,1fr)]">
+                            <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] opacity-0">.</span>
+                            <span class="flex items-center justify-center text-sm font-medium opacity-0" id="quickEditTailRemoveJoin">+</span>
+                          </div>
+                        </div>
+                        <span aria-hidden="true" class="flex-none opacity-0" id="quickEditUnitsPerBoxRemoveSpacer"></span>
+                        <div aria-hidden="true" class="flex-none w-4" id="quickEditMultiplyRemoveSpacerSlot">
+                          <div class="grid h-full grid-rows-[auto_minmax(2.25rem,1fr)]">
+                            <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] opacity-0">.</span>
+                            <span class="flex items-center justify-center text-sm font-medium opacity-0" id="quickEditMultiplyRemoveSpacer">×</span>
+                          </div>
+                        </div>
+                        <span aria-hidden="true" class="flex-none opacity-0" id="quickEditItemBoxesRemoveSpacer"></span>
+                        <div class="flex-none hidden" id="quickEditPartialRemoveSlot">
+                          <button aria-label="Retirer bloc partiel" class="inline-flex h-8 w-8 items-center justify-center rounded border border-outline-variant/30 text-on-surface-variant transition-colors duration-150 hover:bg-surface-container" id="quickEditPartialRemove" type="button">
+                            <span class="material-symbols-outlined !text-[15px]">remove</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </form>
+
+            <label class="block">
+              <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">放位</span>
+              <textarea class="min-h-[7rem] w-full border-outline-variant/30 bg-surface-container-low text-sm text-on-surface" id="quickEditRemark" maxlength="240" placeholder="放位"></textarea>
+            </label>
+
+            <p class="hidden rounded border border-error/20 bg-error-container/20 px-3 py-2 text-[11px] font-medium text-on-error-container" id="quickEditMessage"></p>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3 border-t border-outline-variant/20 bg-surface-container-low px-4 py-4" id="quickEditFooter">
+          <button class="border border-outline-variant/30 py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-on-surface-variant transition-colors duration-150 hover:bg-surface-container disabled:opacity-50" id="quickEditCancel" type="button">ANNULER</button>
+          <button class="bg-surface-tint py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-on-primary transition-colors duration-150 hover:bg-primary-dim disabled:opacity-50" id="quickEditSave" type="button">APPLIQUER LA SORTIE</button>
         </div>
       </div>
     </div>
 
     <nav class="fixed inset-x-0 bottom-0 z-50 flex h-16 items-stretch justify-around border-t border-slate-200 bg-slate-50">
-      <button class="flex flex-1 flex-col items-center justify-center bg-slate-200 px-2 py-1 text-slate-900" id="StockMobileV2_navInventoryButton" type="button" aria-current="page">
+      <a class="flex flex-1 flex-col items-center justify-center px-2 py-1 text-slate-400" href="javascript:void(0)" tabindex="-1" aria-disabled="true">
+        <span class="material-symbols-outlined">dashboard</span>
+        <span class="mt-1 text-[10px] font-bold uppercase tracking-widest">Dashboard</span>
+      </a>
+      <button class="flex flex-1 flex-col items-center justify-center bg-slate-200 px-2 py-1 text-slate-900" id="navInventoryButton" type="button" aria-current="page">
         <span class="material-symbols-outlined">inventory_2</span>
         <span class="mt-1 text-[10px] font-bold uppercase tracking-widest">Inventaire</span>
       </button>
-      <button class="flex flex-1 flex-col items-center justify-center px-2 py-1 text-slate-400" id="StockMobileV2_navHistoryButton" type="button">
+      <button class="flex flex-1 flex-col items-center justify-center px-2 py-1 text-slate-400" id="navHistoryButton" type="button">
         <span class="material-symbols-outlined">history</span>
         <span class="mt-1 text-[10px] font-bold uppercase tracking-widest">Historique</span>
       </button>

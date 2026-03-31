@@ -4,23 +4,31 @@
 
   const StockMobileV2_state = {
     boot: null,
+    items: [],
+    historyItems: [],
+    query: "",
+    stockState: "all",
+    warehouse: "",
+    sort: "ref_asc",
+    columnCount: 2,
+    filterPanelOpen: false,
     currentView: "inventory",
     previousView: "inventory",
-    inventoryItems: [],
-    historyItems: [],
-    selectedReference: "",
-    selectedDetail: null,
-    inventoryQuery: "",
+    detailReference: "",
+    detailItem: null,
     historyQuery: "",
+    historyActionType: "",
     quickEditOpen: false,
+    quickEditTab: "quick-exit",
+    quickEditItem: null,
     quickEditDraft: null,
-    quickEditItem: null
+    quickExitClearSelected: false
   };
 
   const StockMobileV2_els = {};
 
   function StockMobileV2_getBootFromDom() {
-    const bootElement = document.getElementById("StockMobileV2_boot");
+    const bootElement = document.getElementById("inventory-boot");
     if (!bootElement) return {};
     try {
       return JSON.parse(bootElement.textContent || "{}");
@@ -34,316 +42,541 @@
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
-      .replace(/\"/g, "&quot;")
+      .replace(/"/g, "&quot;")
       .replace(/'/g, "&#39;");
   }
 
-  function StockMobileV2_cacheElements() {
-    StockMobileV2_els.inventoryShell = document.getElementById("StockMobileV2_inventoryShell");
-    StockMobileV2_els.historyShell = document.getElementById("StockMobileV2_historyShell");
-    StockMobileV2_els.detailShell = document.getElementById("StockMobileV2_detailShell");
-    StockMobileV2_els.inventoryList = document.getElementById("StockMobileV2_inventoryList");
-    StockMobileV2_els.inventoryEmptyState = document.getElementById("StockMobileV2_inventoryEmptyState");
-    StockMobileV2_els.inventorySearchInput = document.getElementById("StockMobileV2_inventorySearchInput");
-    StockMobileV2_els.inventorySummary = document.getElementById("StockMobileV2_inventorySummary");
-    StockMobileV2_els.inventoryStatus = document.getElementById("StockMobileV2_inventoryStatus");
-    StockMobileV2_els.historyList = document.getElementById("StockMobileV2_historyList");
-    StockMobileV2_els.historyEmptyState = document.getElementById("StockMobileV2_historyEmptyState");
-    StockMobileV2_els.historySearchInput = document.getElementById("StockMobileV2_historySearchInput");
-    StockMobileV2_els.historyBackButton = document.getElementById("StockMobileV2_historyBackButton");
-    StockMobileV2_els.detailBackButton = document.getElementById("StockMobileV2_detailBackButton");
-    StockMobileV2_els.detailQuickEditButton = document.getElementById("StockMobileV2_detailQuickEditButton");
-    StockMobileV2_els.detailReference = document.getElementById("StockMobileV2_detailReference");
-    StockMobileV2_els.detailSubtitle = document.getElementById("StockMobileV2_detailSubtitle");
-    StockMobileV2_els.detailStockDisplay = document.getElementById("StockMobileV2_detailStockDisplay");
-    StockMobileV2_els.detailStockState = document.getElementById("StockMobileV2_detailStockState");
-    StockMobileV2_els.detailWarehouse = document.getElementById("StockMobileV2_detailWarehouse");
-    StockMobileV2_els.detailCreatedAt = document.getElementById("StockMobileV2_detailCreatedAt");
-    StockMobileV2_els.detailLastMovementAt = document.getElementById("StockMobileV2_detailLastMovementAt");
-    StockMobileV2_els.detailSummary = document.getElementById("StockMobileV2_detailSummary");
-    StockMobileV2_els.detailRemark = document.getElementById("StockMobileV2_detailRemark");
-    StockMobileV2_els.detailHistoryList = document.getElementById("StockMobileV2_detailHistoryList");
-    StockMobileV2_els.detailHistoryEmpty = document.getElementById("StockMobileV2_detailHistoryEmpty");
-    StockMobileV2_els.quickEditOverlay = document.getElementById("StockMobileV2_quickEditOverlay");
-    StockMobileV2_els.quickEditReference = document.getElementById("StockMobileV2_quickEditReference");
-    StockMobileV2_els.quickEditMode = document.getElementById("StockMobileV2_quickEditMode");
-    StockMobileV2_els.quickEditStockDisplay = document.getElementById("StockMobileV2_quickEditStockDisplay");
-    StockMobileV2_els.quickEditWarehouse = document.getElementById("StockMobileV2_quickEditWarehouse");
-    StockMobileV2_els.quickEditRemark = document.getElementById("StockMobileV2_quickEditRemark");
-    StockMobileV2_els.quickEditMessage = document.getElementById("StockMobileV2_quickEditMessage");
-    StockMobileV2_els.quickEditCloseIcon = document.getElementById("StockMobileV2_quickEditCloseIcon");
-    StockMobileV2_els.quickEditCancelButton = document.getElementById("StockMobileV2_quickEditCancelButton");
-    StockMobileV2_els.quickEditSaveButton = document.getElementById("StockMobileV2_quickEditSaveButton");
-    StockMobileV2_els.navInventoryButton = document.getElementById("StockMobileV2_navInventoryButton");
-    StockMobileV2_els.navHistoryButton = document.getElementById("StockMobileV2_navHistoryButton");
+  function StockMobileV2_formatDateLabel(isoText) {
+    if (!isoText) return "--/--/----";
+    const date = new Date(isoText);
+    if (Number.isNaN(date.getTime())) return "--/--/----";
+    return new Intl.DateTimeFormat("fr-FR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric"
+    }).format(date);
   }
 
-  function StockMobileV2_getInventoryItemByReference(reference) {
-    return StockMobileV2_state.inventoryItems.find(function(item) {
+  function StockMobileV2_toMetric(value) {
+    return Number.isFinite(Number(value)) ? Number(value) : 0;
+  }
+
+  function StockMobileV2_parseStockTotals(stockDisplay) {
+    const text = String(stockDisplay || "");
+    const boxesMatch = text.match(/(\d+)\s*箱/);
+    const piecesMatch = text.match(/(\d+)\s*件/);
+    return {
+      boxes: boxesMatch ? StockMobileV2_toMetric(boxesMatch[1]) : 0,
+      pieces: piecesMatch ? StockMobileV2_toMetric(piecesMatch[1]) : 0
+    };
+  }
+
+  function StockMobileV2_cacheElements() {
+    [
+      "inventoryAppShell", "historyAppShell", "detailAppShell", "inventoryGrid", "emptyState", "searchInput",
+      "refreshButton", "toggleFilterButton", "toggleSortButton", "utilityPanel", "stockStateFilter",
+      "warehouseFilter", "warehouseFilterWrap", "sortSelect", "sortBadge", "summaryDate", "summaryRefs",
+      "summaryPositive", "summaryZero", "summaryTotals", "summaryStatus", "activeFilters", "historySummary",
+      "historyStatus", "historyBackButton", "historySearchInput", "historyActionTypeFilter", "historyList",
+      "historyEmptyState", "historyEmptyTitle", "historyEmptyMessage", "historyLoadingState",
+      "historyLoadMoreWrap", "historyLoadMoreButton", "detailBackButton", "detailReference", "detailSubline",
+      "detailQuickEditButton", "detailNotFoundBanner", "detailStockDisplay", "detailStockState",
+      "detailWarehouse", "detailCreatedAt", "detailLastMovement", "detailSummary", "detailRemarkSection",
+      "detailRemark", "detailHistoryList", "detailHistoryEmpty", "detailHistoryLoadMoreWrap",
+      "detailHistoryLoadMoreButton", "quickEditOverlay", "quickEditReference", "quickEditStockDisplay",
+      "quickEditTabQuickExit", "quickEditTabEdit", "quickExitPanelWrap", "quickExitPanel",
+      "quickExitClearButton", "quickExitCurrentStock", "quickExitPreviewWrap", "quickExitPreview",
+      "quickExitSegmentForms", "quickExitPacksHint", "quickEditForm", "quickEditTailGroup",
+      "quickEditPartialGroup", "quickEditTailToggleIcon", "quickEditPartialToggleIcon", "quickEditTail",
+      "quickEditUnitsPerBox", "quickEditItemBoxes", "quickEditSign", "quickEditFractionText",
+      "quickEditPackNotationSign", "quickEditPackNotationCount", "quickEditRemark", "quickEditMessage",
+      "quickEditCancel", "quickEditSave", "navInventoryButton", "navHistoryButton"
+    ].forEach(function(id) {
+      StockMobileV2_els[id] = document.getElementById(id);
+    });
+  }
+
+  function StockMobileV2_getItemByReference(reference) {
+    return StockMobileV2_state.items.find(function(item) {
       return item && item.reference === reference;
     }) || null;
   }
 
-  function StockMobileV2_filterInventoryItems() {
-    const query = String(StockMobileV2_state.inventoryQuery || "").trim().toLowerCase();
-    if (!query) return StockMobileV2_state.inventoryItems.slice();
-    return StockMobileV2_state.inventoryItems.filter(function(item) {
-      const haystack = [
-        item.reference,
-        item.stockDisplay,
-        item.warehouse,
-        item.remark
-      ].join(" ").toLowerCase();
-      return haystack.indexOf(query) !== -1;
-    });
+  function StockMobileV2_getColumnCount() {
+    return window.innerWidth >= 768 ? 2 : 2;
   }
 
-  function StockMobileV2_filterHistoryItems() {
-    const query = String(StockMobileV2_state.historyQuery || "").trim().toLowerCase();
-    if (!query) return StockMobileV2_state.historyItems.slice();
-    return StockMobileV2_state.historyItems.filter(function(item) {
-      const haystack = [
-        item.reference,
-        item.timestampLabel,
-        item.actionType,
-        item.beforeDisplay,
-        item.afterDisplay,
-        item.remark,
-        item.source
-      ].join(" ").toLowerCase();
-      return haystack.indexOf(query) !== -1;
-    });
+  function StockMobileV2_syncCurrentView() {
+    StockMobileV2_els.inventoryAppShell.classList.toggle("hidden", StockMobileV2_state.currentView !== "inventory");
+    StockMobileV2_els.historyAppShell.classList.toggle("hidden", StockMobileV2_state.currentView !== "history");
+    StockMobileV2_els.detailAppShell.classList.toggle("hidden", StockMobileV2_state.currentView !== "detail");
+    StockMobileV2_els.navInventoryButton.className = "flex flex-1 flex-col items-center justify-center px-2 py-1 " + (StockMobileV2_state.currentView === "inventory" ? "bg-slate-200 text-slate-900" : "text-slate-400");
+    StockMobileV2_els.navHistoryButton.className = "flex flex-1 flex-col items-center justify-center px-2 py-1 " + (StockMobileV2_state.currentView === "history" ? "bg-slate-200 text-slate-900" : "text-slate-400");
+    StockMobileV2_els.navInventoryButton.setAttribute("aria-current", StockMobileV2_state.currentView === "inventory" ? "page" : "false");
+    StockMobileV2_els.navHistoryButton.setAttribute("aria-current", StockMobileV2_state.currentView === "history" ? "page" : "false");
   }
 
-  function StockMobileV2_renderInventory() {
-    const items = StockMobileV2_filterInventoryItems();
-    StockMobileV2_els.inventoryList.innerHTML = items.map(function(item) {
-      const accentClass = item.stockState === "positive" ? "border-emerald-400/50" : "border-rose-400/50";
-      const stockClass = item.stockState === "positive" ? "text-primary" : "text-on-surface-variant";
-      return ''
-        + '<article class="bg-surface-container-lowest relative border-l-4 ' + accentClass + ' flex min-h-[4.1rem] items-stretch shadow-ledger">'
-        + '<button class="flex min-w-0 flex-1 flex-col justify-between px-3 py-2 text-left" type="button" data-stockmobilev2-action="open-detail" data-stockmobilev2-reference="' + StockMobileV2_escapeHtml(item.reference) + '">'
-        + '<div class="flex items-start justify-between gap-2">'
-        + '<span class="truncate pr-2 text-[12px] font-bold tracking-tight text-on-surface">' + StockMobileV2_escapeHtml(item.reference) + '</span>'
-        + '<span class="shrink-0 rounded border border-outline-variant/30 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-[0.14em] text-on-surface-variant">' + StockMobileV2_escapeHtml(item.warehouse || "-") + '</span>'
-        + '</div>'
-        + '<div class="mt-1.5 text-[13px] font-medium ' + stockClass + '">' + StockMobileV2_escapeHtml(item.stockDisplay || "-") + '</div>'
-        + '</button>'
-        + '<button class="flex w-10 shrink-0 items-center justify-center border-l border-outline-variant/20 text-outline" type="button" data-stockmobilev2-action="open-quick-edit" data-stockmobilev2-reference="' + StockMobileV2_escapeHtml(item.reference) + '">'
-        + '<span class="material-symbols-outlined !text-[16px]">edit</span>'
-        + '</button>'
-        + '</article>';
+  function StockMobileV2_syncUtilityPanel() {
+    StockMobileV2_els.utilityPanel.classList.toggle("hidden", !StockMobileV2_state.filterPanelOpen);
+    StockMobileV2_els.stockStateFilter.value = StockMobileV2_state.stockState;
+    StockMobileV2_els.warehouseFilter.value = StockMobileV2_state.warehouse;
+    StockMobileV2_els.sortSelect.value = StockMobileV2_state.sort;
+    StockMobileV2_els.sortBadge.textContent = StockMobileV2_state.sort === "ref_desc" ? "REF DESC" : (StockMobileV2_state.sort === "stock_first" ? "STOCK" : "REF ASC");
+  }
+
+  function StockMobileV2_renderActiveFilters(visibleItems) {
+    const chips = [];
+    if (StockMobileV2_state.query) chips.push("Recherche");
+    if (StockMobileV2_state.stockState === "positive") chips.push("En stock");
+    if (StockMobileV2_state.stockState === "zero") chips.push("En rupture");
+    if (StockMobileV2_state.warehouse) chips.push(StockMobileV2_state.warehouse);
+    if (!StockMobileV2_state.boot.dataConnected) chips.push("Aucune donnee connectee");
+    StockMobileV2_els.activeFilters.innerHTML = chips.map(function(label) {
+      return '<span class="rounded-full border border-outline-variant/25 bg-surface-container-lowest px-2 py-1 text-[8px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">' + StockMobileV2_escapeHtml(label) + '</span>';
     }).join("");
+    StockMobileV2_els.emptyState.classList.toggle("hidden", visibleItems.length > 0);
+  }
 
-    StockMobileV2_els.inventoryEmptyState.classList.toggle("hidden", items.length > 0);
-    StockMobileV2_els.inventorySummary.textContent = items.length + " refs";
-    StockMobileV2_els.inventoryStatus.textContent = StockMobileV2_state.boot && StockMobileV2_state.boot.dataConnected ? "Connecte" : "Mock local";
+  function StockMobileV2_renderSummary(visibleItems) {
+    const totals = visibleItems.reduce(function(acc, item) {
+      const parsed = StockMobileV2_parseStockTotals(item.stockDisplay);
+      acc.boxes += parsed.boxes;
+      acc.pieces += parsed.pieces;
+      if (item.stockState === "positive") acc.positive += 1;
+      return acc;
+    }, { boxes: 0, pieces: 0, positive: 0 });
+
+    StockMobileV2_els.summaryDate.textContent = StockMobileV2_formatDateLabel(StockMobileV2_state.boot.generatedAt);
+    StockMobileV2_els.summaryRefs.textContent = visibleItems.length + " refs";
+    StockMobileV2_els.summaryPositive.textContent = totals.positive + " en stock";
+    StockMobileV2_els.summaryZero.textContent = Math.max(0, visibleItems.length - totals.positive) + " en rupture";
+    StockMobileV2_els.summaryTotals.textContent = totals.boxes + " 箱 " + totals.pieces + " 件";
+    StockMobileV2_els.summaryStatus.textContent = StockMobileV2_state.boot.dataConnected ? "Pret" : "Mock local";
+  }
+
+  function StockMobileV2_buildVisibleInventoryItems() {
+    const query = StockMobileV2_state.query.toLowerCase();
+    let items = StockMobileV2_state.items.filter(function(item) {
+      if (StockMobileV2_state.stockState === "positive" && item.stockState !== "positive") return false;
+      if (StockMobileV2_state.stockState === "zero" && item.stockState !== "zero") return false;
+      if (StockMobileV2_state.warehouse && item.warehouse !== StockMobileV2_state.warehouse) return false;
+      if (!query) return true;
+      const haystack = [item.reference, item.stockDisplay, item.warehouse, item.remark].join(" ").toLowerCase();
+      return haystack.indexOf(query) !== -1;
+    });
+
+    items.sort(function(left, right) {
+      if (StockMobileV2_state.sort === "ref_desc") return String(right.reference || "").localeCompare(String(left.reference || ""));
+      if (StockMobileV2_state.sort === "stock_first") {
+        const stateDiff = String(left.stockState || "").localeCompare(String(right.stockState || ""));
+        if (stateDiff !== 0) return stateDiff;
+      }
+      return String(left.reference || "").localeCompare(String(right.reference || ""));
+    });
+
+    return items;
+  }
+
+  function StockMobileV2_renderItemMarkup(item) {
+    const reference = item && item.reference ? item.reference : "-";
+    const stockDisplay = item && item.stockDisplay ? item.stockDisplay : "-";
+    const itemId = item && item.id ? item.id : reference;
+    const accentClass = item && item.stockState === "positive" ? "border-emerald-400/50" : "border-rose-400/50";
+    const stockClass = item && item.stockState === "positive" ? "text-primary" : "text-on-surface-variant";
+
+    return '' +
+      '<article class="inventory-card bg-surface-container-lowest relative border-l-4 ' + accentClass + ' flex min-h-[4.1rem] items-stretch transition-colors duration-150 hover:bg-surface-container select-none" data-item-id="' + StockMobileV2_escapeHtml(itemId) + '" data-reference="' + StockMobileV2_escapeHtml(reference) + '">' +
+        '<button class="inventory-card-main flex min-w-0 flex-1 flex-col justify-between px-2.5 py-2 text-left" type="button" data-action="open-quick-edit" data-item-id="' + StockMobileV2_escapeHtml(itemId) + '">' +
+          '<div class="flex items-start gap-2">' +
+            '<span class="truncate pr-2 text-[12px] font-bold tracking-tight text-on-surface">' + StockMobileV2_escapeHtml(reference) + '</span>' +
+          '</div>' +
+          '<div class="mt-1.5">' +
+            '<span class="block truncate text-[13px] font-medium ' + stockClass + '">' + StockMobileV2_escapeHtml(stockDisplay) + '</span>' +
+          '</div>' +
+        '</button>' +
+        '<button class="reference-detail-trigger flex w-10 shrink-0 touch-manipulation select-none items-center justify-center border-l border-outline-variant/20 text-outline-variant transition-colors duration-150 hover:bg-surface-container-highest hover:text-on-surface-variant active:bg-surface-container-high" type="button" aria-label="Ouvrir la fiche de ' + StockMobileV2_escapeHtml(reference) + '" data-action="open-detail" data-item-id="' + StockMobileV2_escapeHtml(itemId) + '" data-reference="' + StockMobileV2_escapeHtml(reference) + '">' +
+          '<span class="material-symbols-outlined !text-[16px]">chevron_right</span>' +
+        '</button>' +
+      '</article>';
+  }
+
+  function StockMobileV2_renderColumnLayoutMarkup(items, columnCount) {
+    if (!items.length) return "";
+    const perColumn = Math.ceil(items.length / columnCount) || 1;
+    const columns = [];
+    for (let index = 0; index < columnCount; index += 1) {
+      const slice = items.slice(index * perColumn, (index + 1) * perColumn);
+      if (!slice.length) continue;
+      columns.push('<div class="inventory-column flex min-w-0 flex-1 flex-col gap-px bg-outline-variant/20">' + slice.map(StockMobileV2_renderItemMarkup).join("") + '</div>');
+    }
+    return '<div class="flex items-start gap-px bg-outline-variant/20">' + columns.join("") + '</div>';
+  }
+
+  function StockMobileV2_populateWarehouseFilter() {
+    const warehouses = StockMobileV2_state.items.map(function(item) {
+      return item.warehouse || "";
+    }).filter(Boolean).filter(function(value, index, array) {
+      return array.indexOf(value) === index;
+    }).sort();
+    StockMobileV2_els.warehouseFilter.innerHTML = '<option value="">Tous</option>' + warehouses.map(function(value) {
+      return '<option value="' + StockMobileV2_escapeHtml(value) + '">' + StockMobileV2_escapeHtml(value) + '</option>';
+    }).join("");
+    StockMobileV2_els.warehouseFilterWrap.classList.toggle("hidden", warehouses.length === 0);
+    StockMobileV2_els.warehouseFilter.value = StockMobileV2_state.warehouse;
+  }
+
+  function StockMobileV2_renderGrid() {
+    const visibleItems = StockMobileV2_buildVisibleInventoryItems();
+    StockMobileV2_state.columnCount = StockMobileV2_getColumnCount();
+    StockMobileV2_els.inventoryGrid.innerHTML = StockMobileV2_renderColumnLayoutMarkup(visibleItems, StockMobileV2_state.columnCount);
+    StockMobileV2_renderSummary(visibleItems);
+    StockMobileV2_renderActiveFilters(visibleItems);
+  }
+
+  function StockMobileV2_getVisibleHistoryItems() {
+    const query = StockMobileV2_state.historyQuery.toLowerCase();
+    return StockMobileV2_state.historyItems.filter(function(item) {
+      if (StockMobileV2_state.historyActionType && item.actionType !== StockMobileV2_state.historyActionType) return false;
+      if (!query) return true;
+      const haystack = [item.reference, item.actionType, item.remark, item.beforeDisplay, item.afterDisplay, item.source].join(" ").toLowerCase();
+      return haystack.indexOf(query) !== -1;
+    });
   }
 
   function StockMobileV2_renderHistory() {
-    const items = StockMobileV2_filterHistoryItems();
-    StockMobileV2_els.historyList.innerHTML = items.map(function(item) {
+    const items = StockMobileV2_getVisibleHistoryItems();
+    StockMobileV2_els.historyList.innerHTML = items.map(function(entry) {
+      const remarkMarkup = entry.remark ? '<div class="text-[11px] text-on-surface-variant">' + StockMobileV2_escapeHtml(entry.remark) + '</div>' : '';
       return ''
-        + '<article class="bg-surface-container-lowest px-4 py-3 shadow-ledger">'
+        + '<article class="bg-surface-container-lowest px-4 py-3 shadow-ledger" data-history-reference="' + StockMobileV2_escapeHtml(entry.reference) + '">'
         + '<div class="flex items-start justify-between gap-3">'
-        + '<button class="truncate text-left text-[12px] font-bold tracking-tight text-primary" type="button" data-stockmobilev2-action="open-detail" data-stockmobilev2-reference="' + StockMobileV2_escapeHtml(item.reference) + '">' + StockMobileV2_escapeHtml(item.reference || "-") + '</button>'
-        + '<span class="shrink-0 rounded px-2 py-1 text-[9px] font-bold uppercase tracking-[0.16em] bg-primary-container text-on-primary-container">' + StockMobileV2_escapeHtml(item.actionType || "-") + '</span>'
+        + '<div class="min-w-0">'
+        + '<button class="truncate text-left text-[12px] font-bold tracking-tight text-primary" type="button" data-action="open-history-detail" data-reference="' + StockMobileV2_escapeHtml(entry.reference) + '">' + StockMobileV2_escapeHtml(entry.reference || "-") + '</button>'
+        + '<div class="mt-1 text-[10px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">' + StockMobileV2_escapeHtml(entry.timestampLabel || "-") + '</div>'
         + '</div>'
-        + '<div class="mt-1 text-[10px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">' + StockMobileV2_escapeHtml(item.timestampLabel || "-") + '</div>'
-        + '<div class="mt-3 space-y-1 text-[11px] text-on-surface">'
-        + '<div><span class="font-bold uppercase tracking-[0.14em] text-on-surface-variant">Avant</span><span class="ml-2">' + StockMobileV2_escapeHtml(item.beforeDisplay || "-") + '</span></div>'
-        + '<div><span class="font-bold uppercase tracking-[0.14em] text-on-surface-variant">Apres</span><span class="ml-2">' + StockMobileV2_escapeHtml(item.afterDisplay || "-") + '</span></div>'
-        + '<div class="text-on-surface-variant">' + StockMobileV2_escapeHtml(item.remark || "Bientot branche") + '</div>'
+        + '<span class="shrink-0 rounded px-2 py-1 text-[9px] font-bold uppercase tracking-[0.16em] bg-primary-container text-on-primary-container">' + StockMobileV2_escapeHtml(entry.actionType || "-") + '</span>'
+        + '</div>'
+        + '<div class="mt-3 space-y-1">'
+        + '<div class="text-[11px] text-on-surface"><span class="font-bold uppercase tracking-[0.14em] text-on-surface-variant">AVANT</span><span class="ml-2">' + StockMobileV2_escapeHtml(entry.beforeDisplay || "-") + '</span></div>'
+        + '<div class="text-[11px] text-on-surface"><span class="font-bold uppercase tracking-[0.14em] text-on-surface-variant">APRÈS</span><span class="ml-2">' + StockMobileV2_escapeHtml(entry.afterDisplay || "-") + '</span></div>'
+        + remarkMarkup
         + '</div>'
         + '</article>';
     }).join("");
+
     StockMobileV2_els.historyEmptyState.classList.toggle("hidden", items.length > 0);
+    StockMobileV2_els.historyLoadingState.classList.add("hidden");
+    StockMobileV2_els.historyLoadMoreWrap.classList.add("hidden");
+    StockMobileV2_els.historyEmptyTitle.textContent = (StockMobileV2_state.historyQuery || StockMobileV2_state.historyActionType) ? "Aucun resultat" : "Aucun historique";
+    StockMobileV2_els.historyEmptyMessage.textContent = (StockMobileV2_state.historyQuery || StockMobileV2_state.historyActionType)
+      ? "Aucun mouvement ne correspond à la recherche."
+      : "Aucun mouvement à afficher.";
+    StockMobileV2_els.historySummary.textContent = items.length ? (items.length + " mouvements") : "-";
+    StockMobileV2_els.historyStatus.textContent = StockMobileV2_state.boot.dataConnected ? "Pret" : "Mock local";
   }
 
   function StockMobileV2_renderDetail(reference) {
-    const detail = StockMobileV2_loadMockDetail(StockMobileV2_state.boot, reference) || {
-      reference: reference || "-",
-      stockDisplay: "-",
-      stockState: "zero",
-      warehouse: "-",
-      createdAt: "-",
-      lastMovementAt: "",
-      summary: "Aucune donnee connectee",
-      remark: "",
-      history: []
-    };
-    StockMobileV2_state.selectedReference = detail.reference;
-    StockMobileV2_state.selectedDetail = detail;
+    const detail = StockMobileV2_loadMockDetail(StockMobileV2_state.boot, reference);
+    StockMobileV2_state.detailReference = String(reference || "").trim();
+    StockMobileV2_state.detailItem = detail;
+
+    if (!detail) {
+      StockMobileV2_els.detailReference.textContent = StockMobileV2_state.detailReference || "-";
+      StockMobileV2_els.detailSubline.textContent = "Aucune donnee connectee";
+      StockMobileV2_els.detailNotFoundBanner.classList.remove("hidden");
+      StockMobileV2_els.detailQuickEditButton.classList.add("hidden");
+      StockMobileV2_els.detailStockDisplay.textContent = "-";
+      StockMobileV2_els.detailStockState.textContent = "-";
+      StockMobileV2_els.detailWarehouse.textContent = "-";
+      StockMobileV2_els.detailCreatedAt.textContent = "-";
+      StockMobileV2_els.detailLastMovement.textContent = "-";
+      StockMobileV2_els.detailSummary.textContent = "Aucune donnee connectee";
+      StockMobileV2_els.detailRemarkSection.classList.add("hidden");
+      StockMobileV2_els.detailHistoryList.innerHTML = "";
+      StockMobileV2_els.detailHistoryEmpty.classList.remove("hidden");
+      StockMobileV2_els.detailHistoryLoadMoreWrap.classList.add("hidden");
+      return;
+    }
+
     StockMobileV2_els.detailReference.textContent = detail.reference || "-";
-    StockMobileV2_els.detailSubtitle.textContent = "Fiche produit";
+    StockMobileV2_els.detailSubline.textContent = "Fiche produit";
+    StockMobileV2_els.detailNotFoundBanner.classList.add("hidden");
+    StockMobileV2_els.detailQuickEditButton.classList.remove("hidden");
     StockMobileV2_els.detailStockDisplay.textContent = detail.stockDisplay || "-";
     StockMobileV2_els.detailStockState.textContent = detail.stockState === "positive" ? "En stock" : "En rupture";
     StockMobileV2_els.detailWarehouse.textContent = detail.warehouse || "-";
     StockMobileV2_els.detailCreatedAt.textContent = detail.createdAt || "-";
-    StockMobileV2_els.detailLastMovementAt.textContent = detail.lastMovementAt || "Bientot branche";
+    StockMobileV2_els.detailLastMovement.textContent = detail.lastMovementAt || "Bientot branche";
     StockMobileV2_els.detailSummary.textContent = detail.summary || "Aucune donnee connectee";
-    StockMobileV2_els.detailRemark.textContent = detail.remark || "Aucune donnee connectee";
-    const history = Array.isArray(detail.history) ? detail.history : [];
-    StockMobileV2_els.detailHistoryList.innerHTML = history.map(function(item) {
+    StockMobileV2_els.detailRemark.textContent = detail.remark || "-";
+    StockMobileV2_els.detailRemarkSection.classList.toggle("hidden", !detail.remark);
+    StockMobileV2_els.detailHistoryList.innerHTML = (detail.history || []).map(function(entry) {
       return ''
         + '<article class="bg-surface-container-lowest px-4 py-3 shadow-ledger">'
         + '<div class="flex items-start justify-between gap-3">'
-        + '<div class="text-[10px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">' + StockMobileV2_escapeHtml(item.timestampLabel || "-") + '</div>'
-        + '<span class="shrink-0 rounded px-2 py-1 text-[9px] font-bold uppercase tracking-[0.16em] bg-primary-container text-on-primary-container">' + StockMobileV2_escapeHtml(item.actionType || "-") + '</span>'
+        + '<div class="text-[10px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">' + StockMobileV2_escapeHtml(entry.timestampLabel || "-") + '</div>'
+        + '<span class="shrink-0 rounded px-2 py-1 text-[9px] font-bold uppercase tracking-[0.16em] bg-primary-container text-on-primary-container">' + StockMobileV2_escapeHtml(entry.actionType || "-") + '</span>'
         + '</div>'
-        + '<div class="mt-2 space-y-1 text-[11px] text-on-surface">'
-        + '<div><span class="font-bold uppercase tracking-[0.14em] text-on-surface-variant">Avant</span><span class="ml-2">' + StockMobileV2_escapeHtml(item.beforeDisplay || "-") + '</span></div>'
-        + '<div><span class="font-bold uppercase tracking-[0.14em] text-on-surface-variant">Apres</span><span class="ml-2">' + StockMobileV2_escapeHtml(item.afterDisplay || "-") + '</span></div>'
-        + '<div class="text-on-surface-variant">' + StockMobileV2_escapeHtml(item.remark || "") + '</div>'
+        + '<div class="mt-2 space-y-1">'
+        + '<div class="text-[11px] text-on-surface"><span class="font-bold uppercase tracking-[0.14em] text-on-surface-variant">AVANT</span><span class="ml-2">' + StockMobileV2_escapeHtml(entry.beforeDisplay || "-") + '</span></div>'
+        + '<div class="text-[11px] text-on-surface"><span class="font-bold uppercase tracking-[0.14em] text-on-surface-variant">APRÈS</span><span class="ml-2">' + StockMobileV2_escapeHtml(entry.afterDisplay || "-") + '</span></div>'
+        + (entry.remark ? '<div class="text-[11px] text-on-surface-variant">' + StockMobileV2_escapeHtml(entry.remark) + '</div>' : '')
         + '</div>'
         + '</article>';
     }).join("");
-    StockMobileV2_els.detailHistoryEmpty.classList.toggle("hidden", history.length > 0);
+    StockMobileV2_els.detailHistoryEmpty.classList.toggle("hidden", (detail.history || []).length > 0);
+    StockMobileV2_els.detailHistoryLoadMoreWrap.classList.add("hidden");
   }
 
-  function StockMobileV2_syncViewShells() {
-    StockMobileV2_els.inventoryShell.classList.toggle("hidden", StockMobileV2_state.currentView !== "inventory");
-    StockMobileV2_els.historyShell.classList.toggle("hidden", StockMobileV2_state.currentView !== "history");
-    StockMobileV2_els.detailShell.classList.toggle("hidden", StockMobileV2_state.currentView !== "detail");
-    StockMobileV2_els.navInventoryButton.className = "flex flex-1 flex-col items-center justify-center px-2 py-1 " + (StockMobileV2_state.currentView === "inventory" ? "bg-slate-200 text-slate-900" : "text-slate-400");
-    StockMobileV2_els.navHistoryButton.className = "flex flex-1 flex-col items-center justify-center px-2 py-1 " + (StockMobileV2_state.currentView === "history" ? "bg-slate-200 text-slate-900" : "text-slate-400");
+  function StockMobileV2_openInventoryView() {
+    StockMobileV2_state.currentView = "inventory";
+    StockMobileV2_syncCurrentView();
+    StockMobileV2_renderGrid();
   }
 
-  function StockMobileV2_navigateTo(view, options) {
-    if (StockMobileV2_state.currentView !== "detail") {
-      StockMobileV2_state.previousView = StockMobileV2_state.currentView;
+  function StockMobileV2_openHistoryView() {
+    StockMobileV2_state.previousView = StockMobileV2_state.currentView === "detail" ? (StockMobileV2_state.previousView || "inventory") : StockMobileV2_state.currentView;
+    StockMobileV2_state.currentView = "history";
+    StockMobileV2_syncCurrentView();
+    StockMobileV2_renderHistory();
+  }
+
+  function StockMobileV2_openDetailView(reference) {
+    if (!reference) return;
+    StockMobileV2_state.previousView = StockMobileV2_state.currentView === "history" ? "history" : "inventory";
+    StockMobileV2_state.currentView = "detail";
+    StockMobileV2_renderDetail(reference);
+    StockMobileV2_syncCurrentView();
+  }
+
+  function StockMobileV2_syncQuickEditTabs() {
+    const activeClass = "border-primary bg-primary-container text-on-primary-container";
+    const inactiveClass = "border-outline-variant/30 text-on-surface-variant";
+    StockMobileV2_els.quickEditTabQuickExit.className = "border px-2 py-2 text-[10px] font-bold uppercase tracking-[0.18em] " + (StockMobileV2_state.quickEditTab === "quick-exit" ? activeClass : inactiveClass);
+    StockMobileV2_els.quickEditTabEdit.className = "border px-2 py-2 text-[10px] font-bold uppercase tracking-[0.18em] " + (StockMobileV2_state.quickEditTab === "edit" ? activeClass : inactiveClass);
+  }
+
+  function StockMobileV2_renderQuickEdit() {
+    const item = StockMobileV2_state.quickEditItem;
+    if (!StockMobileV2_state.quickEditOpen || !item) {
+      StockMobileV2_els.quickEditOverlay.classList.add("hidden");
+      StockMobileV2_els.quickEditOverlay.classList.remove("flex");
+      return;
     }
-    StockMobileV2_state.currentView = view;
-    if (view === "detail" && options && options.reference) {
-      StockMobileV2_renderDetail(options.reference);
-    }
-    if (view === "inventory") StockMobileV2_renderInventory();
-    if (view === "history") StockMobileV2_renderHistory();
-    StockMobileV2_syncViewShells();
+
+    StockMobileV2_els.quickEditOverlay.classList.remove("hidden");
+    StockMobileV2_els.quickEditOverlay.classList.add("flex");
+    StockMobileV2_els.quickEditReference.textContent = item.reference || "-";
+    StockMobileV2_els.quickEditStockDisplay.textContent = item.stockDisplay || "-";
+    StockMobileV2_syncQuickEditTabs();
+
+    const isQuickExit = StockMobileV2_state.quickEditTab === "quick-exit";
+    StockMobileV2_els.quickExitPanelWrap.classList.toggle("hidden", !isQuickExit);
+    StockMobileV2_els.quickEditForm.classList.toggle("hidden", isQuickExit);
+    StockMobileV2_els.quickExitPacksHint.classList.remove("hidden");
+    StockMobileV2_els.quickExitPacksHint.textContent = "Bientot branche. Le rendu reste identique, le comportement est simplifie.";
+    StockMobileV2_els.quickExitCurrentStock.textContent = item.stockDisplay || "-";
+    StockMobileV2_els.quickExitPreviewWrap.classList.remove("hidden");
+    StockMobileV2_els.quickExitPreview.textContent = StockMobileV2_state.quickExitClearSelected ? "0" : "Bientot branche";
+    StockMobileV2_els.quickExitSegmentForms.innerHTML = '<div class="rounded border border-outline-variant/20 bg-surface-container-low px-3 py-3 text-[11px] text-on-surface-variant">Interactions quick exit simplifiees en V2. La structure visuelle est conservee.</div>';
+
+    StockMobileV2_els.quickEditTail.value = StockMobileV2_state.quickEditDraft.fields.tailInput || "";
+    StockMobileV2_els.quickEditUnitsPerBox.value = StockMobileV2_state.quickEditDraft.fields.unitsPerBoxInput || "";
+    StockMobileV2_els.quickEditItemBoxes.value = StockMobileV2_state.quickEditDraft.fields.itemBoxes || "";
+    StockMobileV2_els.quickEditSign.value = StockMobileV2_state.quickEditDraft.fields.sign || "+";
+    StockMobileV2_els.quickEditFractionText.value = StockMobileV2_state.quickEditDraft.fields.fractionText || "";
+    StockMobileV2_els.quickEditPackNotationSign.value = StockMobileV2_state.quickEditDraft.fields.packNotationSign || "+";
+    StockMobileV2_els.quickEditPackNotationCount.value = StockMobileV2_state.quickEditDraft.fields.packNotationCount || "";
+    StockMobileV2_els.quickEditRemark.value = StockMobileV2_state.quickEditDraft.remark || "";
+    StockMobileV2_els.quickEditSave.textContent = isQuickExit ? "APPLIQUER LA SORTIE" : "ENREGISTRER";
   }
 
-  function StockMobileV2_openQuickEditModal(item) {
-    const safeItem = item || StockMobileV2_state.selectedDetail || StockMobileV2_getInventoryItemByReference(StockMobileV2_state.selectedReference);
-    if (!safeItem) return;
-    StockMobileV2_state.quickEditItem = safeItem;
-    StockMobileV2_state.quickEditDraft = StockMobileV2_createMockQuickEditDraft(safeItem);
+  function StockMobileV2_openQuickEdit(item) {
+    if (!item) return;
+    StockMobileV2_state.quickEditItem = item;
+    StockMobileV2_state.quickEditDraft = StockMobileV2_createMockQuickEditDraft(item);
     StockMobileV2_state.quickEditOpen = true;
-    StockMobileV2_els.quickEditReference.textContent = safeItem.reference || "-";
-    StockMobileV2_els.quickEditMode.value = StockMobileV2_state.quickEditDraft.mode;
-    StockMobileV2_els.quickEditStockDisplay.value = StockMobileV2_state.quickEditDraft.fields.stockDisplay;
-    StockMobileV2_els.quickEditWarehouse.value = StockMobileV2_state.quickEditDraft.fields.warehouse;
-    StockMobileV2_els.quickEditRemark.value = StockMobileV2_state.quickEditDraft.remark;
+    StockMobileV2_state.quickEditTab = "quick-exit";
+    StockMobileV2_state.quickExitClearSelected = false;
     StockMobileV2_els.quickEditMessage.classList.add("hidden");
     StockMobileV2_els.quickEditMessage.textContent = "";
-    StockMobileV2_els.quickEditOverlay.classList.remove("hidden");
+    StockMobileV2_renderQuickEdit();
   }
 
-  function StockMobileV2_closeQuickEditModal() {
+  function StockMobileV2_closeQuickEdit() {
     StockMobileV2_state.quickEditOpen = false;
+    StockMobileV2_state.quickEditItem = null;
+    StockMobileV2_state.quickEditDraft = null;
     StockMobileV2_els.quickEditOverlay.classList.add("hidden");
+    StockMobileV2_els.quickEditOverlay.classList.remove("flex");
   }
 
   function StockMobileV2_saveQuickEdit() {
     if (!StockMobileV2_state.quickEditItem) return;
     const draft = {
-      reference: StockMobileV2_state.quickEditItem.reference || "",
-      mode: StockMobileV2_els.quickEditMode.value,
-      remark: StockMobileV2_els.quickEditRemark.value,
+      reference: StockMobileV2_state.quickEditItem.reference,
+      mode: StockMobileV2_state.quickEditTab,
+      remark: String(StockMobileV2_els.quickEditRemark.value || "").trim(),
       fields: {
-        stockDisplay: StockMobileV2_els.quickEditStockDisplay.value,
-        warehouse: StockMobileV2_els.quickEditWarehouse.value
+        stockDisplay: StockMobileV2_state.quickEditItem.stockDisplay || "",
+        warehouse: StockMobileV2_state.quickEditItem.warehouse || "",
+        tailInput: StockMobileV2_els.quickEditTail.value || "",
+        unitsPerBoxInput: StockMobileV2_els.quickEditUnitsPerBox.value || "",
+        itemBoxes: StockMobileV2_els.quickEditItemBoxes.value || "",
+        sign: StockMobileV2_els.quickEditSign.value || "+",
+        fractionText: StockMobileV2_els.quickEditFractionText.value || "",
+        packNotationSign: StockMobileV2_els.quickEditPackNotationSign.value || "+",
+        packNotationCount: StockMobileV2_els.quickEditPackNotationCount.value || ""
       }
     };
     const saveResult = StockMobileV2_submitMockQuickEdit(draft, StockMobileV2_state.quickEditItem);
-    const itemIndex = StockMobileV2_state.inventoryItems.findIndex(function(item) {
+    const itemIndex = StockMobileV2_state.items.findIndex(function(item) {
       return item && item.reference === saveResult.item.reference;
     });
     if (itemIndex !== -1) {
-      StockMobileV2_state.inventoryItems[itemIndex] = saveResult.item;
+      StockMobileV2_state.items[itemIndex] = saveResult.item;
     }
-    StockMobileV2_state.selectedDetail = Object.assign({}, StockMobileV2_state.selectedDetail || {}, saveResult.item);
+    if (StockMobileV2_state.detailReference === saveResult.item.reference) {
+      StockMobileV2_state.detailItem = saveResult.item;
+      StockMobileV2_state.boot.detailByReference[saveResult.item.reference] = Object.assign({}, StockMobileV2_state.boot.detailByReference[saveResult.item.reference] || {}, {
+        remark: saveResult.item.remark || "",
+        stockDisplay: saveResult.item.stockDisplay || StockMobileV2_state.detailItem.stockDisplay
+      });
+      StockMobileV2_renderDetail(saveResult.item.reference);
+    }
     StockMobileV2_els.quickEditMessage.textContent = saveResult.message;
     StockMobileV2_els.quickEditMessage.classList.remove("hidden");
-    StockMobileV2_renderInventory();
-    StockMobileV2_renderDetail(saveResult.item.reference);
+    StockMobileV2_renderGrid();
   }
 
   function StockMobileV2_bindEvents() {
-    StockMobileV2_els.inventorySearchInput.addEventListener("input", function(event) {
-      StockMobileV2_state.inventoryQuery = event.target.value || "";
-      StockMobileV2_renderInventory();
+    StockMobileV2_els.searchInput.addEventListener("input", function(event) {
+      StockMobileV2_state.query = String(event.target.value || "").trim();
+      StockMobileV2_renderGrid();
     });
+    StockMobileV2_els.toggleFilterButton.addEventListener("click", function() {
+      StockMobileV2_state.filterPanelOpen = !StockMobileV2_state.filterPanelOpen;
+      StockMobileV2_syncUtilityPanel();
+    });
+    StockMobileV2_els.toggleSortButton.addEventListener("click", function() {
+      StockMobileV2_state.filterPanelOpen = true;
+      StockMobileV2_syncUtilityPanel();
+      StockMobileV2_els.sortSelect.focus();
+    });
+    StockMobileV2_els.stockStateFilter.addEventListener("change", function(event) {
+      StockMobileV2_state.stockState = event.target.value || "all";
+      StockMobileV2_renderGrid();
+    });
+    StockMobileV2_els.warehouseFilter.addEventListener("change", function(event) {
+      StockMobileV2_state.warehouse = event.target.value || "";
+      StockMobileV2_renderGrid();
+    });
+    StockMobileV2_els.sortSelect.addEventListener("change", function(event) {
+      StockMobileV2_state.sort = event.target.value || "ref_asc";
+      StockMobileV2_syncUtilityPanel();
+      StockMobileV2_renderGrid();
+    });
+    StockMobileV2_els.refreshButton.addEventListener("click", function() {
+      StockMobileV2_els.summaryStatus.textContent = "Mock local";
+      StockMobileV2_renderGrid();
+    });
+    StockMobileV2_els.navInventoryButton.addEventListener("click", StockMobileV2_openInventoryView);
+    StockMobileV2_els.navHistoryButton.addEventListener("click", StockMobileV2_openHistoryView);
+    StockMobileV2_els.historyBackButton.addEventListener("click", StockMobileV2_openInventoryView);
     StockMobileV2_els.historySearchInput.addEventListener("input", function(event) {
-      StockMobileV2_state.historyQuery = event.target.value || "";
+      StockMobileV2_state.historyQuery = String(event.target.value || "").trim();
       StockMobileV2_renderHistory();
     });
-    StockMobileV2_els.navInventoryButton.addEventListener("click", function() {
-      StockMobileV2_navigateTo("inventory");
+    StockMobileV2_els.historyActionTypeFilter.addEventListener("change", function(event) {
+      StockMobileV2_state.historyActionType = String(event.target.value || "").trim();
+      StockMobileV2_renderHistory();
     });
-    StockMobileV2_els.navHistoryButton.addEventListener("click", function() {
-      StockMobileV2_navigateTo("history");
+    StockMobileV2_els.historyLoadMoreButton.addEventListener("click", function() {
+      StockMobileV2_els.historyStatus.textContent = "Bientot branche";
     });
-    StockMobileV2_els.historyBackButton.addEventListener("click", function() {
-      StockMobileV2_navigateTo("inventory");
+    StockMobileV2_els.historyList.addEventListener("click", function(event) {
+      const trigger = event.target.closest('[data-action="open-history-detail"]');
+      if (!trigger) return;
+      event.preventDefault();
+      StockMobileV2_openDetailView(trigger.getAttribute("data-reference"));
     });
     StockMobileV2_els.detailBackButton.addEventListener("click", function() {
-      StockMobileV2_navigateTo(StockMobileV2_state.previousView || "inventory");
+      if (StockMobileV2_state.previousView === "history") {
+        StockMobileV2_openHistoryView();
+      } else {
+        StockMobileV2_openInventoryView();
+      }
     });
     StockMobileV2_els.detailQuickEditButton.addEventListener("click", function() {
-      StockMobileV2_openQuickEditModal(StockMobileV2_state.selectedDetail);
+      if (StockMobileV2_state.detailItem) StockMobileV2_openQuickEdit(StockMobileV2_state.detailItem);
     });
-    StockMobileV2_els.quickEditCloseIcon.addEventListener("click", StockMobileV2_closeQuickEditModal);
-    StockMobileV2_els.quickEditCancelButton.addEventListener("click", StockMobileV2_closeQuickEditModal);
-    StockMobileV2_els.quickEditSaveButton.addEventListener("click", StockMobileV2_saveQuickEdit);
+    StockMobileV2_els.detailHistoryLoadMoreButton.addEventListener("click", function() {
+      StockMobileV2_els.detailSubline.textContent = "Bientot branche";
+    });
+    StockMobileV2_els.inventoryGrid.addEventListener("click", function(event) {
+      const detailTrigger = event.target.closest('[data-action="open-detail"]');
+      if (detailTrigger) {
+        event.preventDefault();
+        StockMobileV2_openDetailView(detailTrigger.getAttribute("data-reference"));
+        return;
+      }
+      const quickEditTrigger = event.target.closest('[data-action="open-quick-edit"]');
+      if (!quickEditTrigger) return;
+      event.preventDefault();
+      StockMobileV2_openQuickEdit(StockMobileV2_getItemByReference(quickEditTrigger.closest("[data-reference]").getAttribute("data-reference")));
+    });
+    StockMobileV2_els.quickEditTabQuickExit.addEventListener("click", function() {
+      StockMobileV2_state.quickEditTab = "quick-exit";
+      StockMobileV2_renderQuickEdit();
+    });
+    StockMobileV2_els.quickEditTabEdit.addEventListener("click", function() {
+      StockMobileV2_state.quickEditTab = "edit";
+      StockMobileV2_renderQuickEdit();
+    });
+    StockMobileV2_els.quickExitClearButton.addEventListener("click", function() {
+      StockMobileV2_state.quickExitClearSelected = !StockMobileV2_state.quickExitClearSelected;
+      StockMobileV2_renderQuickEdit();
+    });
+    StockMobileV2_els.quickEditCancel.addEventListener("click", StockMobileV2_closeQuickEdit);
+    StockMobileV2_els.quickEditSave.addEventListener("click", StockMobileV2_saveQuickEdit);
     StockMobileV2_els.quickEditOverlay.addEventListener("click", function(event) {
       if (event.target === StockMobileV2_els.quickEditOverlay) {
-        StockMobileV2_closeQuickEditModal();
+        StockMobileV2_closeQuickEdit();
       }
     });
-
-    document.addEventListener("click", function(event) {
-      const actionTarget = event.target.closest("[data-stockmobilev2-action]");
-      if (!actionTarget) return;
-      const action = actionTarget.getAttribute("data-stockmobilev2-action");
-      const reference = actionTarget.getAttribute("data-stockmobilev2-reference");
-      if (action === "open-detail" && reference) {
-        StockMobileV2_navigateTo("detail", { reference: reference });
-      }
-      if (action === "open-quick-edit" && reference) {
-        StockMobileV2_openQuickEditModal(StockMobileV2_getInventoryItemByReference(reference));
+    window.addEventListener("resize", function() {
+      StockMobileV2_renderGrid();
+      if (StockMobileV2_state.quickEditOpen) StockMobileV2_renderQuickEdit();
+    });
+    document.addEventListener("keydown", function(event) {
+      if (event.key === "Escape" && StockMobileV2_state.quickEditOpen) {
+        StockMobileV2_closeQuickEdit();
       }
     });
   }
 
   function StockMobileV2_bootstrapApp() {
-    const rawBoot = StockMobileV2_getBootFromDom();
-    StockMobileV2_state.boot = StockMobileV2_loadMockBoot(rawBoot);
-    StockMobileV2_state.currentView = StockMobileV2_state.boot.ui.defaultView || "inventory";
-    StockMobileV2_state.inventoryItems = StockMobileV2_loadMockInventory(StockMobileV2_state.boot);
+    StockMobileV2_state.boot = StockMobileV2_loadMockBoot(StockMobileV2_getBootFromDom());
+    StockMobileV2_state.items = StockMobileV2_loadMockInventory(StockMobileV2_state.boot);
     StockMobileV2_state.historyItems = StockMobileV2_loadMockHistory(StockMobileV2_state.boot);
-
-    // Future boot V2: remplacer la source de bootstrap locale par une source V2 reelle.
-    // Future inventaire V2: remplacer la source mock de liste inventaire.
-    // Future detail V2: remplacer la source mock detail par reference.
-    // Future historique V2: remplacer la source mock historique globale et detail.
-    // Future save quick edit V2: remplacer la sauvegarde mock locale.
-
+    StockMobileV2_state.sort = "ref_asc";
     StockMobileV2_cacheElements();
+    StockMobileV2_populateWarehouseFilter();
+    StockMobileV2_syncUtilityPanel();
     StockMobileV2_bindEvents();
-    StockMobileV2_renderInventory();
+    StockMobileV2_renderGrid();
     StockMobileV2_renderHistory();
-    StockMobileV2_syncViewShells();
+    StockMobileV2_renderQuickEdit();
+    StockMobileV2_syncCurrentView();
   }
 
   global.StockMobileV2_state = StockMobileV2_state;
   global.StockMobileV2_bootstrapApp = StockMobileV2_bootstrapApp;
-  global.StockMobileV2_navigateTo = StockMobileV2_navigateTo;
-  global.StockMobileV2_renderInventory = StockMobileV2_renderInventory;
-  global.StockMobileV2_renderHistory = StockMobileV2_renderHistory;
-  global.StockMobileV2_renderDetail = StockMobileV2_renderDetail;
-  global.StockMobileV2_openQuickEditModal = StockMobileV2_openQuickEditModal;
-  global.StockMobileV2_closeQuickEditModal = StockMobileV2_closeQuickEditModal;
-  global.StockMobileV2_saveQuickEdit = StockMobileV2_saveQuickEdit;
+  global.StockMobileV2_openInventoryView = StockMobileV2_openInventoryView;
+  global.StockMobileV2_openHistoryView = StockMobileV2_openHistoryView;
+  global.StockMobileV2_openDetailView = StockMobileV2_openDetailView;
+  global.StockMobileV2_openQuickEdit = StockMobileV2_openQuickEdit;
+  global.StockMobileV2_closeQuickEdit = StockMobileV2_closeQuickEdit;
 
   document.addEventListener("DOMContentLoaded", StockMobileV2_bootstrapApp);
 })(window);

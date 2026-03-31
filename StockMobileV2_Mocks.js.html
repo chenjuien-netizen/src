@@ -42,11 +42,18 @@
     const safeItem = item || {};
     return {
       reference: safeItem.reference || "",
-      mode: "quick-edit",
+      mode: "quick-exit",
       remark: safeItem.remark || "",
       fields: {
         stockDisplay: safeItem.stockDisplay || "",
-        warehouse: safeItem.warehouse || ""
+        warehouse: safeItem.warehouse || "",
+        tailInput: "",
+        unitsPerBoxInput: "",
+        itemBoxes: "",
+        sign: "+",
+        fractionText: "",
+        packNotationSign: "+",
+        packNotationCount: ""
       }
     };
   }

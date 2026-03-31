@@ -580,6 +580,8 @@
           filters: initialPayload.filters || {},
           summary: initialPayload.summary || {},
           generatedAt: initialPayload.generatedAt || "",
+          inventoryLoading: !!(boot && boot.loadingInventory),
+          inventoryLoaded: Array.isArray(initialPayload.items) && initialPayload.items.length > 0,
           query: "",
           stockState: "all",
           warehouse: "",
@@ -1004,6 +1006,17 @@
             '</article>';
         }
 
+        function renderInventoryLoadingMarkup_() {
+          return '<div class="flex flex-col gap-px bg-outline-variant/20">'
+            + [0, 1, 2, 3, 4, 5].map(function() {
+              return '<div class="bg-surface-container-lowest px-3 py-3">'
+                + '<div class="h-3 w-24 animate-pulse bg-surface-container-high"></div>'
+                + '<div class="mt-2 h-3 w-40 animate-pulse bg-surface-container-high"></div>'
+                + '</div>';
+            }).join("")
+            + '</div>';
+        }
+
         function renderColumnLayoutMarkup(columns) {
           if (!columns.length) return "";
           return '<div class="flex items-start gap-px bg-outline-variant/20">' + columns.map(function(columnItems) {
@@ -1193,6 +1206,7 @@
 
         function maybeScheduleHistoryPrefetch_() {
           const historyView = state.historyView;
+          if (state.inventoryLoading) return;
           if (historyView.prefetchStarted || historyView.loading || historyView.initialized) return;
           historyView.prefetchStarted = true;
           window.setTimeout(function() {
@@ -3224,7 +3238,9 @@
 
           state.lastSyncFeedback = { kind: "", message: "", expiresAt: 0 };
 
-          if (state.isRefreshing) {
+          if (state.inventoryLoading) {
+            els.summaryStatus.textContent = "Chargement inventaire...";
+          } else if (state.isRefreshing) {
             els.summaryStatus.textContent = "Refresh...";
           } else if (state.lastError) {
             els.summaryStatus.textContent = state.lastError;
@@ -3755,8 +3771,12 @@
         function renderGrid() {
           const visibleItems = getVisibleItems();
           const columns = buildColumnLayout_(visibleItems, state.columnCount);
-          els.grid.innerHTML = renderColumnLayoutMarkup(columns);
-          els.emptyState.classList.toggle("hidden", visibleItems.length > 0);
+          if (state.inventoryLoading && !state.items.length) {
+            els.grid.innerHTML = renderInventoryLoadingMarkup_();
+          } else {
+            els.grid.innerHTML = renderColumnLayoutMarkup(columns);
+          }
+          els.emptyState.classList.toggle("hidden", state.inventoryLoading || visibleItems.length > 0);
           renderSummary(visibleItems);
           renderActiveFilters();
           scheduleDetailWarmup_();
@@ -3809,18 +3829,26 @@
           google.script.run
             .withSuccessHandler(function(payload) {
               state.isRefreshing = false;
+              state.inventoryLoading = false;
+              state.inventoryLoaded = true;
               hydrate(payload || {});
             })
             .withFailureHandler(function(error) {
               state.isRefreshing = false;
+              state.inventoryLoading = false;
               state.lastError = error && error.message ? error.message : "Erreur de rafraichissement";
               renderGrid();
             })
-            .StockWebApp_getList();
+            .StockWebAppV2_getInventory();
 
           if (isAuto) {
             els.summaryStatus.textContent = "Sync...";
           }
+        }
+
+        function loadInitialInventory_() {
+          if (!state.inventoryLoading || state.inventoryLoaded) return;
+          runRefresh(false);
         }
 
         els.searchInput.addEventListener("input", function(event) {
@@ -4168,13 +4196,8 @@
         syncCurrentView_();
         window.setTimeout(function() {
           syncColumnLayout(false);
+          loadInitialInventory_();
         }, 0);
-
-        if (state.summary && state.summary.isPartial) {
-          window.setTimeout(function() {
-            runRefresh(true);
-          }, 250);
-        }
       })();
     </script>
   </body>

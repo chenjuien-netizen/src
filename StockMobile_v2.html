@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html class="light" lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>SZFASHION | Inventaire V2</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet" />
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              background: "#f7f9fb",
+              surface: "#f7f9fb",
+              "surface-container-lowest": "#ffffff",
+              "surface-container-low": "#f0f4f7",
+              "surface-container": "#e8eff3",
+              "surface-container-high": "#e1e9ee",
+              "surface-container-highest": "#d9e4ea",
+              "surface-tint": "#565e74",
+              primary: "#565e74",
+              outline: "#717c82",
+              "outline-variant": "#a9b4b9",
+              "on-surface": "#2a3439",
+              "on-surface-variant": "#566166",
+              "on-primary": "#f7f7ff",
+              "primary-container": "#dae2fd",
+              "on-primary-container": "#4a5167",
+              "error-container": "#fe8983",
+              "on-error-container": "#752121"
+            },
+            fontFamily: {
+              headline: ["Inter", "sans-serif"],
+              body: ["Inter", "sans-serif"],
+              label: ["Inter", "sans-serif"]
+            },
+            boxShadow: {
+              ledger: "0 1px 0 rgba(113, 124, 130, 0.12)"
+            }
+          }
+        }
+      };
+    </script>
+    <style>
+      .material-symbols-outlined {
+        font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 20;
+        font-size: 18px;
+      }
+
+      html,
+      body {
+        height: 100%;
+        min-height: 100dvh;
+        max-height: 100dvh;
+        overflow: hidden;
+        overscroll-behavior: none;
+      }
+
+      body {
+        min-height: 100dvh;
+        font-family: "Inter", sans-serif;
+        background-color: #f7f9fb;
+      }
+
+      .StockMobileV2_scroll {
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+      }
+
+      .StockMobileV2_overlay {
+        backdrop-filter: blur(2px);
+      }
+    </style>
+  </head>
+  <body class="h-[100dvh] max-h-[100dvh] overflow-hidden bg-background text-on-surface antialiased">
+    <script id="StockMobileV2_boot" type="application/json"><?!= StockMobileV2_initialBootJson ?></script>
+
+    <div class="fixed inset-x-0 top-0 bottom-16 overflow-hidden bg-background" id="StockMobileV2_inventoryShell">
+      <main class="flex h-full min-h-0 flex-col overflow-hidden">
+        <div class="sticky top-0 z-40 shrink-0 bg-background">
+          <header class="flex h-14 items-center justify-between border-b border-slate-200 bg-slate-50 px-4">
+            <div class="flex items-center gap-3">
+              <button aria-label="Menu" class="rounded-full p-1 text-slate-700">
+                <span class="material-symbols-outlined">menu</span>
+              </button>
+              <div>
+                <h1 class="text-lg font-extrabold uppercase tracking-tight text-slate-900">SZFASHION</h1>
+                <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">V2 frontend-only</p>
+              </div>
+            </div>
+            <span class="rounded-full border border-outline-variant/40 px-2 py-1 text-[9px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">Aucune donnee connectee</span>
+          </header>
+
+          <section class="border-b border-outline-variant/20 bg-surface-container-low px-3 py-2 shadow-ledger">
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-on-surface-variant !text-[16px]">search</span>
+              <input autocomplete="off" class="w-full border-none bg-transparent p-0 text-[11px] font-medium tracking-tight text-on-surface placeholder:text-outline focus:ring-0" id="StockMobileV2_inventorySearchInput" placeholder="Recherche reference / stock..." type="search" />
+            </div>
+          </section>
+
+          <section class="border-b border-outline-variant/30 bg-surface-container-high px-3 py-2">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant" id="StockMobileV2_inventorySummary">0 refs</div>
+              <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant" id="StockMobileV2_inventoryStatus">Pret</div>
+            </div>
+          </section>
+        </div>
+
+        <section class="StockMobileV2_scroll min-h-0 flex-1 overflow-y-auto bg-outline-variant/20" id="StockMobileV2_inventoryScroll">
+          <div class="flex flex-col gap-px bg-outline-variant/20" id="StockMobileV2_inventoryList"></div>
+          <div class="hidden border-t border-outline-variant/20 bg-surface-container-lowest px-4 py-6 text-center" id="StockMobileV2_inventoryEmptyState">
+            <p class="text-[12px] font-semibold uppercase tracking-[0.18em] text-on-surface-variant">Aucun resultat</p>
+            <p class="mt-1 text-[12px] text-on-surface-variant">Aucune donnee connectee pour cet inventaire V2.</p>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="fixed inset-x-0 top-0 bottom-16 hidden overflow-hidden bg-background" id="StockMobileV2_historyShell">
+      <main class="flex h-full min-h-0 flex-col overflow-hidden">
+        <div class="sticky top-0 z-40 shrink-0 bg-background">
+          <header class="flex h-14 items-center justify-between border-b border-slate-200 bg-slate-50 px-4">
+            <div class="flex items-center gap-3">
+              <button aria-label="Retour inventaire" class="rounded-full p-1 text-slate-700" id="StockMobileV2_historyBackButton" type="button">
+                <span class="material-symbols-outlined">arrow_back</span>
+              </button>
+              <div>
+                <h1 class="text-lg font-extrabold uppercase tracking-tight text-slate-900">Historique</h1>
+              </div>
+            </div>
+            <span class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Bientot branche</span>
+          </header>
+
+          <section class="border-b border-outline-variant/20 bg-surface-container-low px-3 py-2 shadow-ledger">
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-on-surface-variant !text-[16px]">search</span>
+              <input autocomplete="off" class="w-full border-none bg-transparent p-0 text-[11px] font-medium tracking-tight text-on-surface placeholder:text-outline focus:ring-0" id="StockMobileV2_historySearchInput" placeholder="Recherche reference / remarque..." type="search" />
+            </div>
+          </section>
+        </div>
+
+        <section class="StockMobileV2_scroll min-h-0 flex-1 overflow-y-auto bg-outline-variant/20" id="StockMobileV2_historyScroll">
+          <div class="flex flex-col gap-px bg-outline-variant/20" id="StockMobileV2_historyList"></div>
+          <div class="hidden border-t border-outline-variant/20 bg-surface-container-lowest px-4 py-6 text-center" id="StockMobileV2_historyEmptyState">
+            <p class="text-[12px] font-semibold uppercase tracking-[0.18em] text-on-surface-variant">Aucun historique</p>
+            <p class="mt-1 text-[12px] text-on-surface-variant">Aucune donnee connectee pour l'historique V2.</p>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="fixed inset-x-0 top-0 bottom-16 hidden overflow-hidden bg-background" id="StockMobileV2_detailShell">
+      <main class="flex h-full min-h-0 flex-col overflow-hidden">
+        <div class="sticky top-0 z-40 shrink-0 bg-background">
+          <header class="flex h-14 items-center justify-between border-b border-slate-200 bg-slate-50 px-4">
+            <div class="flex min-w-0 items-center gap-3">
+              <button aria-label="Retour" class="rounded-full p-1 text-slate-700" id="StockMobileV2_detailBackButton" type="button">
+                <span class="material-symbols-outlined">arrow_back</span>
+              </button>
+              <div class="min-w-0">
+                <h1 class="truncate text-lg font-extrabold uppercase tracking-tight text-slate-900" id="StockMobileV2_detailReference">-</h1>
+                <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant" id="StockMobileV2_detailSubtitle">Fiche produit</p>
+              </div>
+            </div>
+            <button class="bg-surface-tint px-3 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-on-primary" id="StockMobileV2_detailQuickEditButton" type="button">Modifier</button>
+          </header>
+        </div>
+
+        <section class="StockMobileV2_scroll min-h-0 flex-1 overflow-y-auto bg-surface px-4 py-4" id="StockMobileV2_detailScroll">
+          <div class="mx-auto flex w-full max-w-3xl flex-col gap-4">
+            <div class="rounded border border-outline-variant/30 bg-surface-container-low px-4 py-3 text-[12px] text-on-surface-variant">
+              Frontend V2 autonome. Les donnees affichees ici sont mockees localement.
+            </div>
+
+            <section class="border border-outline-variant/20 bg-surface-container-lowest p-4">
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Stock actuel</div>
+                  <div class="mt-1 truncate text-2xl font-black tracking-tight text-on-surface" id="StockMobileV2_detailStockDisplay">-</div>
+                </div>
+                <div class="shrink-0 text-right text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant" id="StockMobileV2_detailStockState">-</div>
+              </div>
+              <div class="mt-3 grid gap-2 sm:grid-cols-2">
+                <div class="border border-outline-variant/20 bg-surface-container-low px-3 py-2">
+                  <div class="text-[9px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Entrepot</div>
+                  <div class="mt-1 text-[12px] font-medium text-on-surface" id="StockMobileV2_detailWarehouse">-</div>
+                </div>
+                <div class="border border-outline-variant/20 bg-surface-container-low px-3 py-2">
+                  <div class="text-[9px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Creation</div>
+                  <div class="mt-1 text-[12px] font-medium text-on-surface" id="StockMobileV2_detailCreatedAt">-</div>
+                </div>
+                <div class="border border-outline-variant/20 bg-surface-container-low px-3 py-2">
+                  <div class="text-[9px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Dernier mouvement</div>
+                  <div class="mt-1 text-[12px] font-medium text-on-surface" id="StockMobileV2_detailLastMovementAt">-</div>
+                </div>
+                <div class="border border-outline-variant/20 bg-surface-container-low px-3 py-2">
+                  <div class="text-[9px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Resume</div>
+                  <div class="mt-1 text-[12px] font-medium text-on-surface" id="StockMobileV2_detailSummary">-</div>
+                </div>
+              </div>
+            </section>
+
+            <section class="border border-outline-variant/20 bg-surface-container-lowest p-4">
+              <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Remarque</div>
+              <div class="mt-2 whitespace-pre-wrap text-[12px] leading-5 text-on-surface" id="StockMobileV2_detailRemark">-</div>
+            </section>
+
+            <section class="border border-outline-variant/20 bg-surface-container-lowest">
+              <div class="border-b border-outline-variant/20 px-4 py-3">
+                <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Historique recent</div>
+              </div>
+              <div class="flex flex-col gap-px bg-outline-variant/20" id="StockMobileV2_detailHistoryList"></div>
+              <div class="hidden px-4 py-5 text-center" id="StockMobileV2_detailHistoryEmpty">
+                <p class="text-[12px] font-semibold uppercase tracking-[0.18em] text-on-surface-variant">Aucun historique</p>
+                <p class="mt-1 text-[12px] text-on-surface-variant">Bientot branche sur la vraie source detail.</p>
+              </div>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="StockMobileV2_overlay fixed inset-0 z-[60] hidden bg-slate-950/25" id="StockMobileV2_quickEditOverlay">
+      <div class="absolute inset-x-0 bottom-0 max-h-[88dvh] overflow-hidden border-t border-outline-variant/20 bg-surface-container-lowest shadow-2xl" id="StockMobileV2_quickEditModal">
+        <div class="border-b border-outline-variant/20 px-4 py-4">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Quick edit V2</p>
+              <h2 class="mt-1 text-lg font-extrabold tracking-tight text-on-surface" id="StockMobileV2_quickEditReference">-</h2>
+            </div>
+            <button class="rounded-full p-1 text-slate-700" id="StockMobileV2_quickEditCloseIcon" type="button">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+          <p class="mt-2 text-[12px] text-on-surface-variant">Version visuelle uniquement. La sauvegarde reelle sera rebranchee plus tard.</p>
+        </div>
+
+        <div class="StockMobileV2_scroll max-h-[calc(88dvh-8rem)] overflow-y-auto px-4 py-4">
+          <div class="grid gap-3">
+            <label class="block">
+              <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Mode</span>
+              <select class="w-full border-outline-variant/30 bg-surface-container-low text-sm font-medium text-on-surface" id="StockMobileV2_quickEditMode">
+                <option value="quick-edit">quick-edit</option>
+                <option value="quick-exit">quick-exit</option>
+              </select>
+            </label>
+
+            <label class="block">
+              <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Stock affiche</span>
+              <input class="w-full border-outline-variant/30 bg-surface-container-low px-3 text-sm font-medium text-on-surface" id="StockMobileV2_quickEditStockDisplay" type="text" />
+            </label>
+
+            <label class="block">
+              <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Entrepot</span>
+              <input class="w-full border-outline-variant/30 bg-surface-container-low px-3 text-sm font-medium text-on-surface" id="StockMobileV2_quickEditWarehouse" type="text" />
+            </label>
+
+            <label class="block">
+              <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">Remarque</span>
+              <textarea class="min-h-[6rem] w-full border-outline-variant/30 bg-surface-container-low text-sm text-on-surface" id="StockMobileV2_quickEditRemark" maxlength="240" placeholder="Bientot branche"></textarea>
+            </label>
+
+            <p class="hidden rounded border border-primary-container bg-primary-container/35 px-3 py-2 text-[11px] font-medium text-on-primary-container" id="StockMobileV2_quickEditMessage"></p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 border-t border-outline-variant/20 bg-surface-container-low px-4 py-4">
+          <button class="border border-outline-variant/30 py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-on-surface-variant" id="StockMobileV2_quickEditCancelButton" type="button">Annuler</button>
+          <button class="bg-surface-tint py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-on-primary" id="StockMobileV2_quickEditSaveButton" type="button">Bientot branche</button>
+        </div>
+      </div>
+    </div>
+
+    <nav class="fixed inset-x-0 bottom-0 z-50 flex h-16 items-stretch justify-around border-t border-slate-200 bg-slate-50">
+      <button class="flex flex-1 flex-col items-center justify-center bg-slate-200 px-2 py-1 text-slate-900" id="StockMobileV2_navInventoryButton" type="button" aria-current="page">
+        <span class="material-symbols-outlined">inventory_2</span>
+        <span class="mt-1 text-[10px] font-bold uppercase tracking-widest">Inventaire</span>
+      </button>
+      <button class="flex flex-1 flex-col items-center justify-center px-2 py-1 text-slate-400" id="StockMobileV2_navHistoryButton" type="button">
+        <span class="material-symbols-outlined">history</span>
+        <span class="mt-1 text-[10px] font-bold uppercase tracking-widest">Historique</span>
+      </button>
+    </nav>
+
+    <script><?!= StockWebAppV2_include_("StockMobileV2_Mocks.js"); ?></script>
+    <script><?!= StockWebAppV2_include_("StockMobileV2_App.js"); ?></script>
+  </body>
+</html>

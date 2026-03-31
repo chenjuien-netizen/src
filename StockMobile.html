@@ -618,9 +618,22 @@
             items: [],
             loading: false,
             initialized: false,
+            prefetchStarted: false,
+            prefetched: false,
+            prefetchedAt: 0,
             debounceTimer: 0,
             requestToken: 0,
             activeRequestToken: 0
+          },
+          detailCacheByReference: {},
+          detailRequestCounter: 0,
+          detailWarmup: {
+            queue: [],
+            generation: 0,
+            activeCount: 0,
+            scheduledTimer: 0,
+            maxRefs: 4,
+            maxConcurrency: 1
           },
           detailView: {
             item: null,
@@ -630,7 +643,8 @@
             loading: false,
             error: "",
             notFoundInStock: false,
-            initializedFor: ""
+            initializedFor: "",
+            activeRequestToken: 0
           }
         };
 
@@ -1063,6 +1077,294 @@
           return parts.length ? parts.join(" · ") : "-";
         }
 
+        function isFreshTimestamp_(timestampMs, maxAgeMs) {
+          const numeric = Number(timestampMs || 0);
+          return numeric > 0 && (Date.now() - numeric) < maxAgeMs;
+        }
+
+        function isHistoryPrefetchFresh_() {
+          return isFreshTimestamp_(state.historyView.prefetchedAt, 60000);
+        }
+
+        function ensureDetailCacheEntry_(reference) {
+          const normalizedReference = String(reference || "").trim();
+          if (!normalizedReference) return null;
+          if (!state.detailCacheByReference[normalizedReference]) {
+            state.detailCacheByReference[normalizedReference] = {
+              item: null,
+              history: [],
+              historyOffset: 0,
+              hasMoreHistory: false,
+              generatedAt: "",
+              lastMovementAt: "",
+              notFoundInStock: false,
+              isWarm: false,
+              fetchedAt: 0,
+              isStale: false,
+              requestToken: 0
+            };
+          }
+          return state.detailCacheByReference[normalizedReference];
+        }
+
+        function isDetailCacheFresh_(reference) {
+          const cacheEntry = ensureDetailCacheEntry_(reference);
+          if (!cacheEntry) return false;
+          return !cacheEntry.isStale && isFreshTimestamp_(cacheEntry.fetchedAt, 60000);
+        }
+
+        function cloneDetailHistoryEntries_(history) {
+          return (Array.isArray(history) ? history : []).map(function(entry) {
+            return Object.assign({}, entry);
+          });
+        }
+
+        function writeDetailCacheFromPayload_(reference, payload, requestToken, options) {
+          const cacheEntry = ensureDetailCacheEntry_(reference);
+          if (!cacheEntry) return null;
+          if (requestToken && cacheEntry.requestToken && cacheEntry.requestToken !== requestToken) {
+            return cacheEntry;
+          }
+          const historyItems = cloneDetailHistoryEntries_(payload && payload.history);
+          cacheEntry.item = payload && payload.item ? Object.assign({}, payload.item) : null;
+          cacheEntry.history = options && options.appendHistory
+            ? cacheEntry.history.concat(historyItems)
+            : historyItems;
+          cacheEntry.historyOffset = Number(payload && payload.nextHistoryOffset || 0) || 0;
+          cacheEntry.hasMoreHistory = !!(payload && payload.hasMoreHistory);
+          cacheEntry.generatedAt = payload && payload.generatedAt ? payload.generatedAt : "";
+          cacheEntry.lastMovementAt = payload && payload.lastMovementAt ? payload.lastMovementAt : "";
+          cacheEntry.notFoundInStock = !!(payload && payload.notFoundInStock);
+          cacheEntry.isWarm = true;
+          cacheEntry.fetchedAt = Date.now();
+          cacheEntry.isStale = false;
+          return cacheEntry;
+        }
+
+        function applyDetailCacheToView_(reference, cacheEntry, options) {
+          if (!cacheEntry) return;
+          const shouldAppendHistory = !!(options && options.appendHistory);
+          if (!shouldAppendHistory) {
+            state.detailReference = reference;
+            state.detailView.item = cacheEntry.item ? Object.assign({}, cacheEntry.item) : null;
+            state.detailView.history = cloneDetailHistoryEntries_(cacheEntry.history);
+            state.detailView.historyOffset = cacheEntry.historyOffset;
+            state.detailView.hasMoreHistory = !!cacheEntry.hasMoreHistory;
+            state.detailView.notFoundInStock = !!cacheEntry.notFoundInStock;
+            state.detailView.lastMovementAt = cacheEntry.lastMovementAt || "";
+          } else {
+            state.detailView.history = cloneDetailHistoryEntries_(cacheEntry.history);
+            state.detailView.historyOffset = cacheEntry.historyOffset;
+            state.detailView.hasMoreHistory = !!cacheEntry.hasMoreHistory;
+          }
+          if (options && options.loading !== undefined) {
+            state.detailView.loading = !!options.loading;
+          }
+          renderDetailView_();
+        }
+
+        function markAllDetailCacheStale_() {
+          Object.keys(state.detailCacheByReference || {}).forEach(function(reference) {
+            const entry = state.detailCacheByReference[reference];
+            if (entry) entry.isStale = true;
+          });
+        }
+
+        function pruneDetailCacheAgainstItems_(items) {
+          const visibleReferences = new Set((Array.isArray(items) ? items : []).map(function(item) {
+            return String(item && item.reference ? item.reference : "").trim();
+          }).filter(Boolean));
+          Object.keys(state.detailCacheByReference || {}).forEach(function(reference) {
+            const entry = state.detailCacheByReference[reference];
+            if (!entry) return;
+            if (!visibleReferences.has(reference) && entry.notFoundInStock !== true) {
+              entry.isStale = true;
+            }
+          });
+        }
+
+        function nextDetailRequestToken_(reference) {
+          state.detailRequestCounter += 1;
+          const token = state.detailRequestCounter;
+          const cacheEntry = ensureDetailCacheEntry_(reference);
+          if (cacheEntry) cacheEntry.requestToken = token;
+          return token;
+        }
+
+        function maybeScheduleHistoryPrefetch_() {
+          const historyView = state.historyView;
+          if (historyView.prefetchStarted || historyView.loading || historyView.initialized) return;
+          historyView.prefetchStarted = true;
+          window.setTimeout(function() {
+            loadHistory_({
+              append: false,
+              preserveItems: false,
+              markPrefetched: true
+            });
+          }, 160);
+        }
+
+        function getWarmupReferences_() {
+          const visibleItems = getVisibleItems().slice(0, state.detailWarmup.maxRefs);
+          return visibleItems
+            .map(function(item) { return String(item && item.reference ? item.reference : "").trim(); })
+            .filter(function(reference) {
+              return !!reference && !isDetailCacheFresh_(reference);
+            });
+        }
+
+        function consumeDetailWarmupQueue_() {
+          const warmup = state.detailWarmup;
+          if (warmup.activeCount >= warmup.maxConcurrency) return;
+          if (state.currentView === "detail" && state.detailView.loading) {
+            window.clearTimeout(warmup.scheduledTimer || 0);
+            warmup.scheduledTimer = window.setTimeout(function() {
+              consumeDetailWarmupQueue_();
+            }, 220);
+            return;
+          }
+          const nextReference = warmup.queue.shift();
+          if (!nextReference) return;
+          warmup.activeCount += 1;
+          fetchDetailPayload_(nextReference, {
+            updateActiveView: false,
+            warmup: true,
+            historyLimit: 5
+          }).finally(function() {
+            warmup.activeCount = Math.max(0, warmup.activeCount - 1);
+            consumeDetailWarmupQueue_();
+          });
+        }
+
+        function scheduleDetailWarmup_() {
+          const warmup = state.detailWarmup;
+          window.clearTimeout(warmup.scheduledTimer || 0);
+          warmup.generation += 1;
+          const generation = warmup.generation;
+          warmup.scheduledTimer = window.setTimeout(function() {
+            if (generation !== warmup.generation) return;
+            warmup.queue = getWarmupReferences_();
+            if (!warmup.queue.length) return;
+            consumeDetailWarmupQueue_();
+          }, 180);
+        }
+
+        function buildOptimisticDetailHistoryEntry_(request, beforeItem, afterItem) {
+          if (!request || !afterItem) return null;
+          return {
+            timestampRaw: new Date().toISOString(),
+            timestampLabel: formatDateTimeCompact_(new Date().toISOString()),
+            actionType: request.mode === "quick-exit" ? "sortie_rapide" : "modifier",
+            reference: afterItem.reference,
+            beforeDisplay: beforeItem && beforeItem.stockDisplay ? beforeItem.stockDisplay : "",
+            afterDisplay: afterItem.stockDisplay || "",
+            remark: String(request.remark || "").trim(),
+            source: "sync...",
+            isOptimistic: true
+          };
+        }
+
+        function applyOptimisticDetailState_(reference, optimisticItem, historyEntry) {
+          const normalizedReference = String(reference || "").trim();
+          if (!normalizedReference || !optimisticItem) return;
+          const cacheEntry = ensureDetailCacheEntry_(normalizedReference);
+          if (cacheEntry) {
+            cacheEntry.item = Object.assign({}, optimisticItem);
+            cacheEntry.fetchedAt = Date.now();
+            cacheEntry.isStale = false;
+            if (historyEntry) {
+              cacheEntry.history = [Object.assign({}, historyEntry)].concat(
+                cloneDetailHistoryEntries_(cacheEntry.history).filter(function(entry) {
+                  return !entry || !entry.isOptimistic;
+                })
+              );
+            }
+          }
+          if (state.detailReference === normalizedReference) {
+            state.detailView.item = Object.assign({}, optimisticItem);
+            if (historyEntry) {
+              state.detailView.history = [Object.assign({}, historyEntry)].concat(
+                cloneDetailHistoryEntries_(state.detailView.history).filter(function(entry) {
+                  return !entry || !entry.isOptimistic;
+                })
+              );
+            }
+            renderDetailView_();
+          }
+        }
+
+        function rollbackDetailOptimisticState_(reference, previousItem) {
+          const normalizedReference = String(reference || "").trim();
+          if (!normalizedReference) return;
+          const cacheEntry = ensureDetailCacheEntry_(normalizedReference);
+          if (cacheEntry) {
+            cacheEntry.item = previousItem ? Object.assign({}, previousItem) : null;
+            cacheEntry.history = cloneDetailHistoryEntries_(cacheEntry.history).filter(function(entry) {
+              return !entry || !entry.isOptimistic;
+            });
+          }
+          if (state.detailReference === normalizedReference) {
+            state.detailView.item = previousItem ? Object.assign({}, previousItem) : null;
+            state.detailView.history = cloneDetailHistoryEntries_(state.detailView.history).filter(function(entry) {
+              return !entry || !entry.isOptimistic;
+            });
+            renderDetailView_();
+          }
+        }
+
+        function fetchDetailPayload_(reference, options) {
+          if (typeof google === "undefined" || !google.script || !google.script.run) {
+            return Promise.resolve(null);
+          }
+          const normalizedReference = String(reference || "").trim();
+          if (!normalizedReference) return Promise.resolve(null);
+          const requestToken = nextDetailRequestToken_(normalizedReference);
+          const updateActiveView = !!(options && options.updateActiveView);
+          if (updateActiveView) {
+            state.detailView.activeRequestToken = requestToken;
+          }
+          return new Promise(function(resolve) {
+            google.script.run
+              .withSuccessHandler(function(payload) {
+                const cacheEntry = writeDetailCacheFromPayload_(normalizedReference, payload, requestToken, options);
+                const canUpdateActiveView = updateActiveView
+                  && state.detailReference === normalizedReference
+                  && state.detailView.activeRequestToken === requestToken;
+                if (canUpdateActiveView && cacheEntry) {
+                  state.detailView.loading = false;
+                  state.detailView.error = "";
+                  applyDetailCacheToView_(normalizedReference, cacheEntry, {
+                    appendHistory: !!(options && options.appendHistory)
+                  });
+                }
+                resolve(payload || null);
+              })
+              .withFailureHandler(function(error) {
+                const cacheEntry = ensureDetailCacheEntry_(normalizedReference);
+                if (cacheEntry && cacheEntry.requestToken === requestToken) {
+                  cacheEntry.requestToken = requestToken;
+                }
+                if (updateActiveView
+                  && state.detailReference === normalizedReference
+                  && state.detailView.activeRequestToken === requestToken) {
+                  state.detailView.loading = false;
+                  state.detailView.error = error && error.message ? error.message : "Erreur chargement fiche";
+                  if (!state.detailView.item) {
+                    state.detailView.history = [];
+                    state.detailView.hasMoreHistory = false;
+                    state.detailView.notFoundInStock = true;
+                  }
+                  renderDetailView_();
+                }
+                resolve(null);
+              })
+              .StockWebApp_getItemDetail(normalizedReference, {
+                historyOffset: options && options.appendHistory ? state.detailView.historyOffset : 0,
+                historyLimit: options && options.historyLimit ? options.historyLimit : 10
+              });
+          });
+        }
+
         function scrollContainerToTop_(container) {
           if (!container) return;
           container.scrollTop = 0;
@@ -1139,7 +1441,9 @@
           const item = detail.item;
           const history = Array.isArray(detail.history) ? detail.history : [];
           els.detailReference.textContent = state.detailReference || "-";
-          els.detailSubline.textContent = detail.loading ? "Chargement..." : "Fiche produit";
+          els.detailSubline.textContent = detail.loading
+            ? (item ? "Synchronisation..." : "Chargement...")
+            : (detail.error ? detail.error : "Fiche produit");
           els.detailNotFoundBanner.classList.toggle("hidden", !detail.notFoundInStock);
           els.detailQuickEditButton.classList.toggle("hidden", !item);
           els.detailQuickEditButton.disabled = !item;
@@ -1163,11 +1467,17 @@
             const remarkMarkup = entry.remark
               ? '<div class="text-[11px] text-on-surface-variant">' + escapeHtml(entry.remark) + '</div>'
               : '';
+            const syncBadge = entry.isOptimistic
+              ? '<span class="shrink-0 rounded border border-outline-variant/30 px-2 py-1 text-[9px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">sync...</span>'
+              : '';
             return ''
-              + '<article class="bg-surface-container-lowest px-4 py-3 shadow-ledger">'
+              + '<article class="bg-surface-container-lowest px-4 py-3 shadow-ledger' + (entry.isOptimistic ? ' opacity-75' : '') + '">'
               + '<div class="flex items-start justify-between gap-3">'
               + '<div class="text-[10px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">' + escapeHtml(entry.timestampLabel || "-") + '</div>'
+              + '<div class="flex items-center gap-2">'
+              + syncBadge
               + '<span class="shrink-0 rounded px-2 py-1 text-[9px] font-bold uppercase tracking-[0.16em] ' + getHistoryActionBadgeClass_(entry.actionType) + '">' + escapeHtml(formatHistoryActionLabel_(entry.actionType)) + '</span>'
+              + '</div>'
               + '</div>'
               + '<div class="mt-2 space-y-1">' + beforeMarkup + afterMarkup + remarkMarkup + '</div>'
               + '</article>';
@@ -1198,6 +1508,7 @@
           state.historyView.offset = 0;
           state.historyView.hasMore = false;
           state.historyView.totalMatched = 0;
+          state.historyView.prefetched = false;
           renderHistoryList_(false);
         }
 
@@ -1205,7 +1516,9 @@
           if (typeof google === "undefined" || !google.script || !google.script.run) return;
           const historyView = state.historyView;
           const append = !!(options && options.append);
-          if (!append) {
+          const preserveItems = !!(options && options.preserveItems);
+          const markPrefetched = !!(options && options.markPrefetched);
+          if (!append && !preserveItems) {
             clearHistoryResults_();
           }
           historyView.loading = true;
@@ -1225,14 +1538,26 @@
               historyView.items = append
                 ? historyView.items.concat(incomingItems)
                 : incomingItems;
+              if (markPrefetched) {
+                historyView.prefetched = true;
+                historyView.prefetchedAt = Date.now();
+              } else if (!historyView.query && !historyView.actionType && historyView.items.length) {
+                historyView.prefetchedAt = Date.now();
+              }
               renderHistoryList_(append, incomingItems);
             })
             .withFailureHandler(function() {
               if (historyView.activeRequestToken !== requestToken) return;
               historyView.loading = false;
-              historyView.items = [];
-              historyView.hasMore = false;
-              historyView.totalMatched = 0;
+              if (markPrefetched) {
+                historyView.prefetchStarted = false;
+                historyView.prefetched = false;
+              }
+              if (!preserveItems) {
+                historyView.items = [];
+                historyView.hasMore = false;
+                historyView.totalMatched = 0;
+              }
               renderHistoryList_(false);
             })
             .StockWebApp_getHistory({
@@ -1255,7 +1580,14 @@
           state.previousView = state.currentView === "detail" ? (state.previousView || "inventory") : state.currentView;
           switchView_("history");
           if (!state.historyView.initialized) {
+            if (state.historyView.loading && state.historyView.prefetchStarted) {
+              renderHistoryList_(false);
+              return;
+            }
             loadHistory_({ append: false });
+          } else if (!state.historyView.query && !state.historyView.actionType && !isHistoryPrefetchFresh_()) {
+            renderHistoryList_(false);
+            loadHistory_({ append: false, preserveItems: true });
           } else {
             renderHistoryList_(false);
           }
@@ -1268,51 +1600,51 @@
         }
 
         function loadDetailView_(reference, options) {
-          if (typeof google === "undefined" || !google.script || !google.script.run) return;
           const normalizedReference = String(reference || "").trim();
           if (!normalizedReference) return;
-          state.detailReference = normalizedReference;
-          state.detailView.loading = true;
-          state.detailView.error = "";
-          if (!(options && options.appendHistory)) {
-            state.detailView.item = null;
-            state.detailView.history = [];
-            state.detailView.historyOffset = 0;
-            state.detailView.hasMoreHistory = false;
-            state.detailView.notFoundInStock = false;
-            switchView_("detail");
+          const cacheEntry = ensureDetailCacheEntry_(normalizedReference);
+          const appendHistory = !!(options && options.appendHistory);
+          const updateActiveView = !options || options.updateActiveView !== false;
+          if (!appendHistory && updateActiveView) {
+            state.detailRequestCounter += 1;
+            state.detailView.activeRequestToken = state.detailRequestCounter;
           }
-          renderDetailView_();
-          google.script.run
-            .withSuccessHandler(function(payload) {
-              if (state.detailReference !== normalizedReference) return;
-              const historyItems = Array.isArray(payload && payload.history) ? payload.history : [];
-              state.detailView.loading = false;
-              state.detailView.item = payload && payload.item ? payload.item : null;
-              state.detailView.notFoundInStock = !!(payload && payload.notFoundInStock);
-              state.detailView.lastMovementAt = payload && payload.lastMovementAt ? payload.lastMovementAt : "";
-              state.detailView.history = options && options.appendHistory
-                ? state.detailView.history.concat(historyItems)
-                : historyItems;
-              state.detailView.historyOffset = Number(payload && payload.nextHistoryOffset || 0) || 0;
-              state.detailView.hasMoreHistory = !!(payload && payload.hasMoreHistory);
-              syncDetailItemIntoState_(state.detailView.item);
-              renderDetailView_();
-            })
-            .withFailureHandler(function(error) {
-              if (state.detailReference !== normalizedReference) return;
-              state.detailView.loading = false;
-              state.detailView.error = error && error.message ? error.message : "Erreur chargement fiche";
-              state.detailView.item = null;
+          state.detailReference = normalizedReference;
+          if (!appendHistory) {
+            state.detailView.error = "";
+            if (cacheEntry && (cacheEntry.item || cacheEntry.history.length || cacheEntry.notFoundInStock)) {
+              state.detailView.loading = !isDetailCacheFresh_(normalizedReference) || !!cacheEntry.isStale;
+              applyDetailCacheToView_(normalizedReference, cacheEntry, { loading: state.detailView.loading });
+            } else {
+              const fallbackItem = state.items.find(function(item) {
+                return item && item.reference === normalizedReference;
+              }) || null;
+              state.detailView.item = fallbackItem ? Object.assign({}, fallbackItem) : null;
               state.detailView.history = [];
+              state.detailView.historyOffset = 0;
               state.detailView.hasMoreHistory = false;
-              state.detailView.notFoundInStock = true;
-              renderDetailView_();
-            })
-            .StockWebApp_getItemDetail(normalizedReference, {
-              historyOffset: options && options.appendHistory ? state.detailView.historyOffset : 0,
-              historyLimit: 10
-            });
+              state.detailView.notFoundInStock = false;
+              state.detailView.loading = true;
+            }
+            switchView_("detail");
+            renderDetailView_();
+          } else {
+            state.detailView.loading = true;
+            renderDetailView_();
+          }
+          if (!appendHistory && isDetailCacheFresh_(normalizedReference)) {
+            return Promise.resolve(cacheEntry);
+          }
+          return fetchDetailPayload_(normalizedReference, {
+            appendHistory: appendHistory,
+            updateActiveView: updateActiveView,
+            historyLimit: appendHistory ? 10 : ((options && options.historyLimit) || 10)
+          }).then(function(payload) {
+            if (payload && payload.item) {
+              syncDetailItemIntoState_(payload.item);
+            }
+            return payload;
+          });
         }
 
         function normalizeText(value) {
@@ -3257,9 +3589,22 @@
           clearPendingSaveEntry(normalizedId);
 
           const replaced = !!(updatedItem && replaceItemInState(updatedItem));
+          if (updatedItem) {
+            const cacheEntry = ensureDetailCacheEntry_(updatedItem.reference);
+            if (cacheEntry) {
+              cacheEntry.item = Object.assign({}, updatedItem);
+              cacheEntry.fetchedAt = Date.now();
+              cacheEntry.isStale = false;
+            }
+          }
           if (updatedItem && state.detailReference && updatedItem.reference === state.detailReference) {
-            state.detailView.item = updatedItem;
-            loadDetailView_(updatedItem.reference, { appendHistory: false });
+            state.detailView.item = Object.assign({}, updatedItem);
+            renderDetailView_();
+            fetchDetailPayload_(updatedItem.reference, {
+              appendHistory: false,
+              updateActiveView: true,
+              historyLimit: 10
+            });
           }
 
           if (!updatedItem || (!replaced && !(state.detailReference && updatedItem.reference === state.detailReference))) {
@@ -3281,10 +3626,7 @@
 
           if (pendingEntry && pendingEntry.previousItem) {
             replaceItemInState(pendingEntry.previousItem);
-            if (state.detailReference && pendingEntry.previousItem.reference === state.detailReference) {
-              state.detailView.item = pendingEntry.previousItem;
-              renderDetailView_();
-            }
+            rollbackDetailOptimisticState_(pendingEntry.previousItem.reference, pendingEntry.previousItem);
           }
           clearPendingSaveEntry(normalizedId);
           state.lastError = "";
@@ -3327,6 +3669,7 @@
             renderQuickEdit();
             return;
           }
+          const optimisticHistoryEntry = buildOptimisticDetailHistoryEntry_(request, currentItem, optimisticItem);
 
           const startedAt = Date.now();
           const timeoutId = window.setTimeout(function() {
@@ -3335,10 +3678,7 @@
             if (!timeoutEntry) return;
             if (timeoutEntry.previousItem) {
               replaceItemInState(timeoutEntry.previousItem);
-              if (state.detailReference && timeoutEntry.previousItem.reference === state.detailReference) {
-                state.detailView.item = timeoutEntry.previousItem;
-                renderDetailView_();
-              }
+              rollbackDetailOptimisticState_(timeoutEntry.previousItem.reference, timeoutEntry.previousItem);
             }
             clearPendingSaveEntry(itemId);
             state.lastError = "";
@@ -3354,14 +3694,12 @@
             request: Object.assign({}, request),
             startedAt: startedAt,
             status: "pending",
-            timeoutId: timeoutId
+            timeoutId: timeoutId,
+            optimisticHistoryEntry: optimisticHistoryEntry ? Object.assign({}, optimisticHistoryEntry) : null
           };
           if (optimisticItem) {
             replaceItemInState(optimisticItem);
-            if (state.detailReference && optimisticItem.reference === state.detailReference) {
-              state.detailView.item = optimisticItem;
-              renderDetailView_();
-            }
+            applyOptimisticDetailState_(optimisticItem.reference, optimisticItem, optimisticHistoryEntry);
           }
           closeQuickEdit();
           renderGrid();
@@ -3421,6 +3759,7 @@
           els.emptyState.classList.toggle("hidden", visibleItems.length > 0);
           renderSummary(visibleItems);
           renderActiveFilters();
+          scheduleDetailWarmup_();
         }
 
         function syncUtilityPanel() {
@@ -3440,14 +3779,17 @@
         }
 
         function hydrate(payload) {
+          markAllDetailCacheStale_();
           state.items = Array.isArray(payload && payload.items) ? payload.items.slice() : [];
           state.filters = payload && payload.filters ? payload.filters : {};
           state.summary = payload && payload.summary ? payload.summary : {};
           state.generatedAt = payload && payload.generatedAt ? payload.generatedAt : "";
           state.lastError = "";
+          pruneDetailCacheAgainstItems_(state.items);
           populateWarehouseFilter();
           syncUtilityPanel();
           renderGrid();
+          maybeScheduleHistoryPrefetch_();
         }
 
         function syncColumnLayout(force) {

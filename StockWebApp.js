@@ -1,14 +1,24 @@
+const INITIAL_SERVER_RENDER_COUNT = 80;
 const STOCK_WEBAPP_HISTORY_SHEET = "STOCK_HISTORY";
 const STOCK_WEBAPP_STOCK_EXTRA_COLUMNS = ["Notation paquets"];
 
 function doGet() {
+  const initialResult = StockWebApp_collectPayload_(INITIAL_SERVER_RENDER_COUNT);
   const template = HtmlService.createTemplateFromFile("StockMobile");
-  const bootPayload = StockWebApp_buildInitialBootPayload_();
+  const bootPayload = StockWebApp_buildInitialBootPayload_(initialResult.payload);
 
   template.initialBootJson = StockWebApp_safeJsonForTemplate_(bootPayload);
-  template.initialListMarkup = "";
+  template.initialListMarkup = StockWebApp_renderColumnLayoutHtml_(initialResult.payload.items, 2);
 
-  Logger.log("StockWebApp_doGet | bootMode=light | generatedAt=%s", bootPayload.generatedAt);
+  Logger.log(
+    "StockWebApp_doGet | bootMode=hybrid | initialItems=%s | totalRows=%s | partial=%s | readRange=%s:%s | timingsMs=%s",
+    initialResult.payload.items.length,
+    initialResult.payload.summary.totalRows,
+    initialResult.payload.summary.isPartial,
+    initialResult.meta.minCol,
+    initialResult.meta.maxCol,
+    JSON.stringify(initialResult.meta.timings)
+  );
 
   return template.evaluate()
     .setTitle("SZFashion | Inventaire")
@@ -37,38 +47,15 @@ function StockWebApp_getList() {
   return StockWebAppV2_getInventory();
 }
 
-function StockWebApp_buildInitialBootPayload_() {
+function StockWebApp_buildInitialBootPayload_(initialPayload) {
+  const payload = initialPayload || {};
+  const items = Array.isArray(payload.items) ? payload.items : [];
   return {
-    payload: {
-      items: [],
-      filters: {
-        warehouses: [],
-        stockStates: [
-          { value: "all", label: "Tous" },
-          { value: "positive", label: "En stock" },
-          { value: "zero", label: "Zero" }
-        ]
-      },
-      summary: {
-        visibleCount: 0,
-        positiveCount: 0,
-        zeroCount: 0,
-        totalRows: 0,
-        isPartial: false,
-        generatedAt: ""
-      },
-      ui: {
-        defaultSort: "ref_asc",
-        availableSorts: [
-          { value: "ref_asc", label: "REF ASC" },
-          { value: "ref_desc", label: "REF DESC" },
-          { value: "stock_first", label: "STOCK" }
-        ]
-      },
-      generatedAt: ""
-    },
-    loadingInventory: true,
-    source: "server-light",
+    payload: payload,
+    loadingInventory: false,
+    needsInventoryHydration: !!(payload.summary && payload.summary.isPartial),
+    initialCount: items.length,
+    source: "server-hybrid",
     generatedAt: new Date().toISOString()
   };
 }
@@ -1019,7 +1006,10 @@ function StockWebApp_collectHistoryPayload_(input) {
   const payload = input || {};
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = StockWebApp_getOrCreateHistorySheet_(ss);
-  const limit = Math.max(1, Math.min(50, StockWebApp_toInt_(payload.limit) || 20));
+  const loadAll = !!payload.loadAll;
+  const limit = loadAll
+    ? Number.MAX_SAFE_INTEGER
+    : Math.max(1, Math.min(50, StockWebApp_toInt_(payload.limit) || 20));
   const offset = Math.max(0, StockWebApp_toInt_(payload.offset));
   const query = StockWebApp_normalizeHeaderCandidate_(payload.query || "");
   const reference = StockWebApp_normalizeReference_(payload.reference || "");

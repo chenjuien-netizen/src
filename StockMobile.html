@@ -582,6 +582,7 @@
           generatedAt: initialPayload.generatedAt || "",
           inventoryLoading: !!(boot && boot.loadingInventory),
           inventoryLoaded: Array.isArray(initialPayload.items) && initialPayload.items.length > 0,
+          inventoryNeedsHydration: !!(boot && boot.needsInventoryHydration),
           query: "",
           stockState: "all",
           warehouse: "",
@@ -1090,6 +1091,52 @@
           return parts.length ? parts.join(" · ") : "-";
         }
 
+        function getVisibleHistoryItems_() {
+          const query = normalizeText(state.historyView.query);
+          const actionType = String(state.historyView.actionType || "").trim();
+          const allItems = Array.isArray(state.historyView.items) ? state.historyView.items : [];
+          return allItems.filter(function(entry) {
+            if (!entry) return false;
+            if (actionType && entry.actionType !== actionType) return false;
+            if (!query) return true;
+            const haystack = [
+              entry.reference,
+              entry.actionType,
+              entry.remark,
+              entry.source,
+              entry.beforeDisplay,
+              entry.afterDisplay
+            ].map(normalizeText).join(" ");
+            return haystack.indexOf(query) !== -1;
+          });
+        }
+
+        function getHistoryItemsForReference_(reference) {
+          const normalizedReference = String(reference || "").trim();
+          if (!normalizedReference) return [];
+          return (Array.isArray(state.historyView.items) ? state.historyView.items : []).filter(function(entry) {
+            return entry && entry.reference === normalizedReference;
+          });
+        }
+
+        function syncDetailFromState_(reference) {
+          const normalizedReference = String(reference || "").trim();
+          if (!normalizedReference) return;
+          const item = state.items.find(function(candidate) {
+            return candidate && candidate.reference === normalizedReference;
+          }) || null;
+          const history = getHistoryItemsForReference_(normalizedReference);
+          state.detailReference = normalizedReference;
+          state.detailView.item = item ? Object.assign({}, item) : null;
+          state.detailView.history = cloneDetailHistoryEntries_(history.slice(0, 20));
+          state.detailView.historyOffset = history.length;
+          state.detailView.hasMoreHistory = false;
+          state.detailView.lastMovementAt = history.length ? history[0].timestampRaw : "";
+          state.detailView.notFoundInStock = !item;
+          state.detailView.loading = false;
+          state.detailView.error = "";
+        }
+
         function isFreshTimestamp_(timestampMs, maxAgeMs) {
           const numeric = Number(timestampMs || 0);
           return numeric > 0 && (Date.now() - numeric) < maxAgeMs;
@@ -1206,13 +1253,11 @@
 
         function maybeScheduleHistoryPrefetch_() {
           const historyView = state.historyView;
-          if (state.inventoryLoading) return;
-          if (historyView.prefetchStarted || historyView.loading || historyView.initialized) return;
+          if (state.inventoryLoading || state.inventoryNeedsHydration) return;
+          if (historyView.prefetchStarted || historyView.loading) return;
           historyView.prefetchStarted = true;
           window.setTimeout(function() {
             loadHistory_({
-              append: false,
-              preserveItems: false,
               markPrefetched: true
             });
           }, 160);
@@ -1430,7 +1475,7 @@
 
         function renderHistoryList_(append, incomingItems) {
           const view = state.historyView;
-          const items = Array.isArray(view.items) ? view.items : [];
+          const items = getVisibleHistoryItems_();
           if (append) {
             els.historyList.insertAdjacentHTML("beforeend", buildHistoryRowsMarkup_(incomingItems));
           } else {
@@ -1441,12 +1486,12 @@
           const hasFilters = !!(view.query || view.actionType);
           els.historyEmptyState.classList.toggle("hidden", hasItems || view.loading);
           els.historyLoadingState.classList.toggle("hidden", !view.loading || hasItems);
-          els.historyLoadMoreWrap.classList.toggle("hidden", !view.hasMore || view.loading);
+          els.historyLoadMoreWrap.classList.add("hidden");
           els.historyEmptyTitle.textContent = hasFilters ? "Aucun resultat" : "Aucun historique";
           els.historyEmptyMessage.textContent = hasFilters
             ? "Aucun mouvement ne correspond à la recherche."
             : "Aucun mouvement à afficher.";
-          els.historySummary.textContent = view.totalMatched > 0 ? (view.totalMatched + " mouvements") : "-";
+          els.historySummary.textContent = items.length > 0 ? (items.length + " mouvements") : "-";
           els.historyStatus.textContent = view.loading ? "Chargement..." : "Pret";
         }
 
@@ -1497,7 +1542,7 @@
               + '</article>';
           }).join("");
           els.detailHistoryEmpty.classList.toggle("hidden", history.length > 0 || detail.loading);
-          els.detailHistoryLoadMoreWrap.classList.toggle("hidden", !detail.hasMoreHistory || detail.loading);
+          els.detailHistoryLoadMoreWrap.classList.add("hidden");
         }
 
         function switchView_(view) {
@@ -1518,23 +1563,13 @@
         }
 
         function clearHistoryResults_() {
-          state.historyView.items = [];
-          state.historyView.offset = 0;
-          state.historyView.hasMore = false;
-          state.historyView.totalMatched = 0;
-          state.historyView.prefetched = false;
           renderHistoryList_(false);
         }
 
         function loadHistory_(options) {
           if (typeof google === "undefined" || !google.script || !google.script.run) return;
           const historyView = state.historyView;
-          const append = !!(options && options.append);
-          const preserveItems = !!(options && options.preserveItems);
           const markPrefetched = !!(options && options.markPrefetched);
-          if (!append && !preserveItems) {
-            clearHistoryResults_();
-          }
           historyView.loading = true;
           const requestToken = historyView.requestToken + 1;
           historyView.requestToken = requestToken;
@@ -1546,19 +1581,19 @@
               historyView.loading = false;
               historyView.initialized = true;
               const incomingItems = Array.isArray(payload && payload.items) ? payload.items : [];
-              historyView.offset = payload && Number(payload.nextOffset || 0) || 0;
-              historyView.hasMore = !!(payload && payload.hasMore);
-              historyView.totalMatched = Math.max(0, Number(payload && payload.totalMatched || 0));
-              historyView.items = append
-                ? historyView.items.concat(incomingItems)
-                : incomingItems;
+              historyView.offset = incomingItems.length;
+              historyView.hasMore = false;
+              historyView.totalMatched = incomingItems.length;
+              historyView.items = incomingItems;
               if (markPrefetched) {
                 historyView.prefetched = true;
                 historyView.prefetchedAt = Date.now();
-              } else if (!historyView.query && !historyView.actionType && historyView.items.length) {
-                historyView.prefetchedAt = Date.now();
               }
-              renderHistoryList_(append, incomingItems);
+              renderHistoryList_(false);
+              if (state.currentView === "detail" && state.detailReference) {
+                syncDetailFromState_(state.detailReference);
+                renderDetailView_();
+              }
             })
             .withFailureHandler(function() {
               if (historyView.activeRequestToken !== requestToken) return;
@@ -1567,18 +1602,10 @@
                 historyView.prefetchStarted = false;
                 historyView.prefetched = false;
               }
-              if (!preserveItems) {
-                historyView.items = [];
-                historyView.hasMore = false;
-                historyView.totalMatched = 0;
-              }
               renderHistoryList_(false);
             })
             .StockWebApp_getHistory({
-              query: historyView.query,
-              actionType: historyView.actionType,
-              offset: append ? historyView.offset : 0,
-              limit: 20
+              loadAll: true
             });
         }
 
@@ -1586,22 +1613,15 @@
           const historyView = state.historyView;
           window.clearTimeout(historyView.debounceTimer || 0);
           historyView.debounceTimer = window.setTimeout(function() {
-            loadHistory_({ append: false });
-          }, 240);
+            renderHistoryList_(false);
+          }, 120);
         }
 
         function openHistoryView_() {
           state.previousView = state.currentView === "detail" ? (state.previousView || "inventory") : state.currentView;
           switchView_("history");
           if (!state.historyView.initialized) {
-            if (state.historyView.loading && state.historyView.prefetchStarted) {
-              renderHistoryList_(false);
-              return;
-            }
-            loadHistory_({ append: false });
-          } else if (!state.historyView.query && !state.historyView.actionType && !isHistoryPrefetchFresh_()) {
             renderHistoryList_(false);
-            loadHistory_({ append: false, preserveItems: true });
           } else {
             renderHistoryList_(false);
           }
@@ -1616,49 +1636,11 @@
         function loadDetailView_(reference, options) {
           const normalizedReference = String(reference || "").trim();
           if (!normalizedReference) return;
-          const cacheEntry = ensureDetailCacheEntry_(normalizedReference);
-          const appendHistory = !!(options && options.appendHistory);
-          const updateActiveView = !options || options.updateActiveView !== false;
-          if (!appendHistory && updateActiveView) {
-            state.detailRequestCounter += 1;
-            state.detailView.activeRequestToken = state.detailRequestCounter;
-          }
-          state.detailReference = normalizedReference;
-          if (!appendHistory) {
-            state.detailView.error = "";
-            if (cacheEntry && (cacheEntry.item || cacheEntry.history.length || cacheEntry.notFoundInStock)) {
-              state.detailView.loading = !isDetailCacheFresh_(normalizedReference) || !!cacheEntry.isStale;
-              applyDetailCacheToView_(normalizedReference, cacheEntry, { loading: state.detailView.loading });
-            } else {
-              const fallbackItem = state.items.find(function(item) {
-                return item && item.reference === normalizedReference;
-              }) || null;
-              state.detailView.item = fallbackItem ? Object.assign({}, fallbackItem) : null;
-              state.detailView.history = [];
-              state.detailView.historyOffset = 0;
-              state.detailView.hasMoreHistory = false;
-              state.detailView.notFoundInStock = false;
-              state.detailView.loading = true;
-            }
-            switchView_("detail");
-            renderDetailView_();
-          } else {
-            state.detailView.loading = true;
-            renderDetailView_();
-          }
-          if (!appendHistory && isDetailCacheFresh_(normalizedReference)) {
-            return Promise.resolve(cacheEntry);
-          }
-          return fetchDetailPayload_(normalizedReference, {
-            appendHistory: appendHistory,
-            updateActiveView: updateActiveView,
-            historyLimit: appendHistory ? 10 : ((options && options.historyLimit) || 10)
-          }).then(function(payload) {
-            if (payload && payload.item) {
-              syncDetailItemIntoState_(payload.item);
-            }
-            return payload;
-          });
+          state.detailView.loading = false;
+          syncDetailFromState_(normalizedReference);
+          switchView_("detail");
+          renderDetailView_();
+          return Promise.resolve(state.detailView);
         }
 
         function normalizeText(value) {
@@ -3605,22 +3587,9 @@
           clearPendingSaveEntry(normalizedId);
 
           const replaced = !!(updatedItem && replaceItemInState(updatedItem));
-          if (updatedItem) {
-            const cacheEntry = ensureDetailCacheEntry_(updatedItem.reference);
-            if (cacheEntry) {
-              cacheEntry.item = Object.assign({}, updatedItem);
-              cacheEntry.fetchedAt = Date.now();
-              cacheEntry.isStale = false;
-            }
-          }
           if (updatedItem && state.detailReference && updatedItem.reference === state.detailReference) {
-            state.detailView.item = Object.assign({}, updatedItem);
+            syncDetailFromState_(updatedItem.reference);
             renderDetailView_();
-            fetchDetailPayload_(updatedItem.reference, {
-              appendHistory: false,
-              updateActiveView: true,
-              historyLimit: 10
-            });
           }
 
           if (!updatedItem || (!replaced && !(state.detailReference && updatedItem.reference === state.detailReference))) {
@@ -3642,7 +3611,10 @@
 
           if (pendingEntry && pendingEntry.previousItem) {
             replaceItemInState(pendingEntry.previousItem);
-            rollbackDetailOptimisticState_(pendingEntry.previousItem.reference, pendingEntry.previousItem);
+            if (state.detailReference && pendingEntry.previousItem.reference === state.detailReference) {
+              syncDetailFromState_(pendingEntry.previousItem.reference);
+              renderDetailView_();
+            }
           }
           clearPendingSaveEntry(normalizedId);
           state.lastError = "";
@@ -3694,7 +3666,10 @@
             if (!timeoutEntry) return;
             if (timeoutEntry.previousItem) {
               replaceItemInState(timeoutEntry.previousItem);
-              rollbackDetailOptimisticState_(timeoutEntry.previousItem.reference, timeoutEntry.previousItem);
+              if (state.detailReference && timeoutEntry.previousItem.reference === state.detailReference) {
+                syncDetailFromState_(timeoutEntry.previousItem.reference);
+                renderDetailView_();
+              }
             }
             clearPendingSaveEntry(itemId);
             state.lastError = "";
@@ -3715,7 +3690,19 @@
           };
           if (optimisticItem) {
             replaceItemInState(optimisticItem);
-            applyOptimisticDetailState_(optimisticItem.reference, optimisticItem, optimisticHistoryEntry);
+            if (state.detailReference && optimisticItem.reference === state.detailReference) {
+              state.detailView.item = Object.assign({}, optimisticItem);
+              if (optimisticHistoryEntry) {
+                state.detailView.history = [Object.assign({}, optimisticHistoryEntry)].concat(
+                  cloneDetailHistoryEntries_(getHistoryItemsForReference_(optimisticItem.reference)).filter(function(entry) {
+                    return !entry || !entry.isOptimistic;
+                  }).slice(0, 19)
+                );
+              } else {
+                state.detailView.history = cloneDetailHistoryEntries_(getHistoryItemsForReference_(optimisticItem.reference).slice(0, 20));
+              }
+              renderDetailView_();
+            }
           }
           closeQuickEdit();
           renderGrid();
@@ -3798,9 +3785,26 @@
           els.warehouseFilterWrap.classList.toggle("hidden", warehouses.length === 0);
         }
 
-        function hydrate(payload) {
+        function mergeInventoryItems_(incomingItems) {
+          const byId = {};
+          state.items.forEach(function(item) {
+            const id = String(item && item.id ? item.id : "").trim();
+            if (id) byId[id] = item;
+          });
+          (Array.isArray(incomingItems) ? incomingItems : []).forEach(function(item) {
+            const id = String(item && item.id ? item.id : "").trim();
+            if (id) byId[id] = item;
+          });
+          return Object.keys(byId).map(function(id) {
+            return byId[id];
+          });
+        }
+
+        function hydrate(payload, options) {
           markAllDetailCacheStale_();
-          state.items = Array.isArray(payload && payload.items) ? payload.items.slice() : [];
+          state.items = options && options.mergeItems
+            ? mergeInventoryItems_(payload && payload.items)
+            : (Array.isArray(payload && payload.items) ? payload.items.slice() : []);
           state.filters = payload && payload.filters ? payload.filters : {};
           state.summary = payload && payload.summary ? payload.summary : {};
           state.generatedAt = payload && payload.generatedAt ? payload.generatedAt : "";
@@ -3831,11 +3835,14 @@
               state.isRefreshing = false;
               state.inventoryLoading = false;
               state.inventoryLoaded = true;
-              hydrate(payload || {});
+              const shouldMerge = !!state.inventoryNeedsHydration && state.items.length > 0;
+              state.inventoryNeedsHydration = false;
+              hydrate(payload || {}, { mergeItems: shouldMerge });
             })
             .withFailureHandler(function(error) {
               state.isRefreshing = false;
               state.inventoryLoading = false;
+              state.inventoryNeedsHydration = false;
               state.lastError = error && error.message ? error.message : "Erreur de rafraichissement";
               renderGrid();
             })
@@ -3847,6 +3854,10 @@
         }
 
         function loadInitialInventory_() {
+          if (state.inventoryNeedsHydration) {
+            runRefresh(true);
+            return;
+          }
           if (!state.inventoryLoading || state.inventoryLoaded) return;
           runRefresh(false);
         }
@@ -3870,19 +3881,16 @@
 
         els.historySearchInput.addEventListener("input", function(event) {
           state.historyView.query = String(event.target.value || "").trim();
-          clearHistoryResults_();
           scheduleHistoryReload_();
         });
 
         els.historyActionTypeFilter.addEventListener("change", function(event) {
           state.historyView.actionType = String(event.target.value || "").trim();
-          clearHistoryResults_();
-          loadHistory_({ append: false });
+          renderHistoryList_(false);
         });
 
         els.historyLoadMoreButton.addEventListener("click", function() {
-          if (!state.historyView.hasMore || state.historyView.loading) return;
-          loadHistory_({ append: true });
+          return;
         });
 
         els.historyList.addEventListener("click", function(event) {
@@ -3906,8 +3914,7 @@
         });
 
         els.detailHistoryLoadMoreButton.addEventListener("click", function() {
-          if (!state.detailReference || state.detailView.loading || !state.detailView.hasMoreHistory) return;
-          loadDetailView_(state.detailReference, { appendHistory: true });
+          return;
         });
 
         els.refreshButton.addEventListener("click", function() {

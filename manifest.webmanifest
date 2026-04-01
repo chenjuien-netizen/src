@@ -1,0 +1,18 @@
+{
+  "name": "SZFashion Inventaire",
+  "short_name": "SZFashion",
+  "description": "Inventaire offline en lecture seule pour la V0.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f7f9fb",
+  "theme_color": "#f7f9fb",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

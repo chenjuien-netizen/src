@@ -1,0 +1,244 @@
+:root {
+  color-scheme: light;
+  --color-bg: #f7f9fb;
+  --color-panel: #ffffff;
+  --color-panel-soft: #f0f4f7;
+  --color-line: #d9e4ea;
+  --color-line-strong: #c7d5dd;
+  --color-text: #2a3439;
+  --color-text-soft: #566166;
+  --color-accent: #565e74;
+  --color-accent-soft: #e8eff3;
+  --color-offline: #7b4d00;
+  --shadow-ledger: 0 1px 0 rgba(113, 124, 130, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  min-height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body {
+  min-height: 100dvh;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: Inter, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.app-shell {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: var(--color-bg);
+}
+
+.app-main {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.top-shell {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  flex-shrink: 0;
+  background: var(--color-bg);
+}
+
+.app-header {
+  display: flex;
+  height: 56px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--color-line);
+  background: #f8fafb;
+  padding: 0 16px;
+}
+
+.app-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  color: #111827;
+}
+
+.icon-button {
+  border: 1px solid var(--color-line-strong);
+  background: var(--color-panel);
+  color: var(--color-text-soft);
+  padding: 9px 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.search-section {
+  border-bottom: 1px solid var(--color-line);
+  background: var(--color-panel-soft);
+  padding: 10px 12px;
+  box-shadow: var(--shadow-ledger);
+}
+
+.search-field {
+  display: block;
+}
+
+.search-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-text-soft);
+}
+
+.search-field input {
+  width: 100%;
+  border: 1px solid var(--color-line-strong);
+  background: var(--color-panel);
+  padding: 12px 14px;
+  font-size: 0.95rem;
+  color: var(--color-text);
+}
+
+.search-field input::placeholder {
+  color: #7b8790;
+}
+
+.status-bar {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  border-bottom: 1px solid var(--color-line);
+  background: #eef3f6;
+  padding: 10px 12px;
+}
+
+.status-chip {
+  min-width: 0;
+  border: 1px solid var(--color-line);
+  background: var(--color-panel);
+  padding: 8px 10px;
+}
+
+.status-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.56rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-text-soft);
+}
+
+.status-value {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.inventory-scroll {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  background: var(--color-line);
+}
+
+.inventory-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: var(--color-line);
+}
+
+.inventory-item {
+  border-bottom: 1px solid var(--color-line);
+  background: var(--color-panel);
+}
+
+.inventory-row {
+  display: flex;
+  min-height: 66px;
+  align-items: center;
+  padding: 0 16px;
+}
+
+.reference-text {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--color-text);
+}
+
+.empty-state {
+  border-top: 1px solid var(--color-line);
+  background: var(--color-panel);
+  padding: 32px 20px;
+  text-align: center;
+}
+
+.empty-title {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-text-soft);
+}
+
+.empty-message {
+  margin: 10px 0 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--color-text-soft);
+}
+
+.network-offline {
+  color: var(--color-offline);
+}
+
+@supports (-webkit-touch-callout: none) {
+  @media (hover: none) and (pointer: coarse) {
+    input {
+      font-size: 16px !important;
+    }
+  }
+}

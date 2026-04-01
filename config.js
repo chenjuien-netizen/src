@@ -1,0 +1,2 @@
+const STOCK_APP_SHEET_NAME = "STOCK_APP";
+const STOCK_APP_REFERENCE_HEADER = "reference";

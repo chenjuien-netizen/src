@@ -435,7 +435,7 @@
                           <div class="hidden" id="quickEditTailGroup">
                             <label class="block" id="quickEditTailSegment">
                               <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">尾箱</span>
-                              <input class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-medium text-on-surface" id="quickEditTail" inputmode="text" maxlength="16" placeholder="(85p)" type="text" />
+                              <input class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-medium text-on-surface" id="quickEditTail" inputmode="numeric" maxlength="16" placeholder="(85p)" type="text" />
                             </label>
                           </div>
                         </div>
@@ -450,7 +450,7 @@
                         <div class="flex-none" id="quickEditUnitsPerBoxSlot">
                           <label class="block" id="quickEditUnitsPerBoxField">
                             <span class="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">件/箱</span>
-                            <input class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-semibold text-on-surface" id="quickEditUnitsPerBox" inputmode="text" maxlength="16" placeholder="144p" type="text" />
+                            <input class="border-outline-variant/30 bg-surface-container-low px-2 text-sm font-semibold text-on-surface" id="quickEditUnitsPerBox" inputmode="numeric" maxlength="16" placeholder="144p" type="text" />
                           </label>
                         </div>
 
@@ -612,6 +612,11 @@
           currentView: "inventory",
           previousView: "inventory",
           detailReference: "",
+          lastOpenedDetailReference: "",
+          historyOrigin: {
+            kind: "inventory-list",
+            reference: ""
+          },
           historyView: {
             query: "",
             actionType: "",
@@ -1137,6 +1142,13 @@
           state.detailView.error = "";
         }
 
+        function resetHistoryOriginToInventoryList_() {
+          state.historyOrigin = {
+            kind: "inventory-list",
+            reference: ""
+          };
+        }
+
         function isFreshTimestamp_(timestampMs, maxAgeMs) {
           const numeric = Number(timestampMs || 0);
           return numeric > 0 && (Date.now() - numeric) < maxAgeMs;
@@ -1557,8 +1569,21 @@
           }
         }
 
-        function openInventoryView_() {
+        function openInventoryView_(options) {
+          const forceList = !!(options && options.forceList);
+          const shouldRestoreDetail = !forceList
+            && state.currentView === "history"
+            && state.historyOrigin
+            && state.historyOrigin.kind === "detail"
+            && state.historyOrigin.reference;
+          if (shouldRestoreDetail) {
+            loadDetailView_(state.historyOrigin.reference, { appendHistory: false });
+            return;
+          }
           state.currentView = "inventory";
+          if (forceList) {
+            resetHistoryOriginToInventoryList_();
+          }
           syncCurrentView_();
         }
 
@@ -1618,6 +1643,14 @@
         }
 
         function openHistoryView_() {
+          if (state.currentView === "detail" && state.detailReference) {
+            state.historyOrigin = {
+              kind: "detail",
+              reference: state.detailReference
+            };
+          } else if (state.currentView === "inventory") {
+            resetHistoryOriginToInventoryList_();
+          }
           state.previousView = state.currentView === "detail" ? (state.previousView || "inventory") : state.currentView;
           switchView_("history");
           if (!state.historyView.initialized) {
@@ -1637,6 +1670,7 @@
           const normalizedReference = String(reference || "").trim();
           if (!normalizedReference) return;
           state.detailView.loading = false;
+          state.lastOpenedDetailReference = normalizedReference;
           syncDetailFromState_(normalizedReference);
           switchView_("detail");
           renderDetailView_();
@@ -3724,6 +3758,7 @@
           const normalizedReference = String(reference || "").trim();
           if (!normalizedReference) return;
           state.previousView = state.currentView === "history" ? "history" : "inventory";
+          state.lastOpenedDetailReference = normalizedReference;
           state.lastError = "";
           loadDetailView_(normalizedReference, { appendHistory: false });
         }
@@ -3876,7 +3911,7 @@
         });
 
         els.historyBackButton.addEventListener("click", function() {
-          openInventoryView_();
+          openInventoryView_({ forceList: true });
         });
 
         els.historySearchInput.addEventListener("input", function(event) {
@@ -3905,7 +3940,7 @@
             openHistoryView_();
             return;
           }
-          openInventoryView_();
+          openInventoryView_({ forceList: true });
         });
 
         els.detailQuickEditButton.addEventListener("click", function() {

@@ -995,11 +995,17 @@ function StockWebApp_ensureStockColumns_(sheet) {
     return !existing[name];
   });
 
-  if (!missing.length) return;
+  if (!missing.length) {
+    StockWebApp_applyStockTextFormats_(sheet, headers);
+    return;
+  }
 
   const insertAt = sheet.getLastColumn();
   sheet.insertColumnsAfter(insertAt || 1, missing.length);
   sheet.getRange(1, insertAt + 1, 1, missing.length).setValues([missing]);
+
+  const refreshedHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
+  StockWebApp_applyStockTextFormats_(sheet, refreshedHeaders);
 }
 
 function StockWebApp_collectHistoryPayload_(input) {
@@ -1074,11 +1080,13 @@ function StockWebApp_readHistoryRows_(sheet) {
   if (lastRow < 2 || lastCol < 1) return [];
   const headers = sheet.getRange(1, 1, 1, lastCol).getDisplayValues()[0];
   const cols = StockWebApp_resolveHistoryColumns_(headers);
-  const values = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+  const range = sheet.getRange(2, 1, lastRow - 1, lastCol);
+  const displayValues = range.getDisplayValues();
+  const rawValues = range.getValues();
   const rows = [];
 
-  for (let i = values.length - 1; i >= 0; i--) {
-    const entry = StockWebApp_buildHistoryEntry_(values[i], cols);
+  for (let i = rawValues.length - 1; i >= 0; i--) {
+    const entry = StockWebApp_buildHistoryEntry_(displayValues[i], rawValues[i], cols);
     if (entry) rows.push(entry);
   }
   return rows;
@@ -1103,11 +1111,11 @@ function StockWebApp_resolveHistoryColumns_(headers) {
   };
 }
 
-function StockWebApp_buildHistoryEntry_(row, cols) {
-  if (!row || !cols) return null;
-  const reference = StockWebApp_normalizeReference_(row[cols.reference]);
-  const actionType = String(row[cols.actionType] || "").trim();
-  const timestampValue = row[cols.timestamp];
+function StockWebApp_buildHistoryEntry_(displayRow, rawRow, cols) {
+  if (!displayRow || !rawRow || !cols) return null;
+  const reference = StockWebApp_normalizeReference_(displayRow[cols.reference]);
+  const actionType = String(displayRow[cols.actionType] || "").trim();
+  const timestampValue = rawRow[cols.timestamp];
   const timestampRaw = StockWebApp_historyTimestampRaw_(timestampValue);
   if (!reference && !actionType && !timestampRaw) return null;
   return {
@@ -1115,13 +1123,13 @@ function StockWebApp_buildHistoryEntry_(row, cols) {
     timestampLabel: StockWebApp_formatHistoryTimestamp_(timestampValue),
     actionType: actionType,
     reference: reference,
-    rowId: String(row[cols.rowId] || "").trim(),
-    beforeDisplay: String(row[cols.beforeDisplay] || "").trim(),
-    afterDisplay: String(row[cols.afterDisplay] || "").trim(),
-    remark: String(row[cols.remark] || "").trim(),
-    source: String(row[cols.source] || "").trim(),
-    beforeTotalPieces: Number(row[cols.beforeTotalPieces] || 0),
-    afterTotalPieces: Number(row[cols.afterTotalPieces] || 0)
+    rowId: String(displayRow[cols.rowId] || "").trim(),
+    beforeDisplay: String(displayRow[cols.beforeDisplay] || "").trim(),
+    afterDisplay: String(displayRow[cols.afterDisplay] || "").trim(),
+    remark: String(displayRow[cols.remark] || "").trim(),
+    source: String(displayRow[cols.source] || "").trim(),
+    beforeTotalPieces: Number(rawRow[cols.beforeTotalPieces] || 0),
+    afterTotalPieces: Number(rawRow[cols.afterTotalPieces] || 0)
   };
 }
 
@@ -1176,12 +1184,15 @@ function StockWebApp_getOrCreateHistorySheet_(spreadsheet) {
     }
     sheet.getRange(1, 1, 1, expectedHeaders[0].length).setValues(expectedHeaders);
     sheet.setFrozenRows(1);
+    StockWebApp_applyHistoryColumnFormats_(sheet, expectedHeaders[0]);
+    StockWebApp_sanitizeHistorySignColumns_(sheet, expectedHeaders[0]);
     return sheet;
   }
 
   sheet = spreadsheet.insertSheet(STOCK_WEBAPP_HISTORY_SHEET);
   sheet.getRange(1, 1, 1, expectedHeaders[0].length).setValues(expectedHeaders);
   sheet.setFrozenRows(1);
+  StockWebApp_applyHistoryColumnFormats_(sheet, expectedHeaders[0]);
   return sheet;
 }
 
@@ -1191,6 +1202,8 @@ function StockWebApp_appendHistoryEntry_(spreadsheet, payload) {
   const afterItem = payload.afterItem || {};
   const beforeTotalPieces = StockWebApp_stateModelToPieces_(beforeItem);
   const afterTotalPieces = StockWebApp_stateModelToPieces_(afterItem);
+  const beforeSign = StockWebApp_normalizeHistorySign_(beforeItem.sign);
+  const afterSign = StockWebApp_normalizeHistorySign_(afterItem.sign);
   sheet.appendRow([
     new Date(),
     String(payload.actionType || ""),
@@ -1201,13 +1214,13 @@ function StockWebApp_appendHistoryEntry_(spreadsheet, payload) {
     Number(beforeItem.tail || 0),
     Number(beforeItem.unitsPerBox || 0),
     Number(beforeItem.itemBoxes || 0),
-    String(beforeItem.sign || ""),
+    beforeSign,
     String(beforeItem.fractionText || ""),
     String(beforeItem.packNotation || ""),
     Number(afterItem.tail || 0),
     Number(afterItem.unitsPerBox || 0),
     Number(afterItem.itemBoxes || 0),
-    String(afterItem.sign || ""),
+    afterSign,
     String(afterItem.fractionText || ""),
     String(afterItem.packNotation || ""),
     String(payload.remark || ""),
@@ -1257,6 +1270,95 @@ function StockWebApp_normalizeFractionText_(value) {
 function StockWebApp_normalizeSign_(value) {
   const sign = String(value || "").trim();
   return (sign === "+" || sign === "×" || sign === "x" || sign === "X") ? (sign === "+" ? "+" : "×") : "";
+}
+
+function StockWebApp_normalizeHistorySign_(value) {
+  return StockWebApp_normalizeSign_(value);
+}
+
+function StockWebApp_applyStockTextFormats_(sheet, headers) {
+  if (!sheet) return;
+  const headerRow = Array.isArray(headers) ? headers : [];
+  if (!headerRow.length) return;
+  const cols = StockWebApp_resolveColumns_(headerRow);
+  const textCols = [
+    cols.reference,
+    cols.signRaw,
+    cols.fractionRaw,
+    cols.packNotation,
+    cols.remark
+  ].filter(function(col) {
+    return !!col;
+  });
+  StockWebApp_applyTextFormatToColumns_(sheet, textCols);
+}
+
+function StockWebApp_applyHistoryColumnFormats_(sheet, headers) {
+  if (!sheet) return;
+  const headerRow = Array.isArray(headers) ? headers : [];
+  if (!headerRow.length) return;
+  const cols = StockWebApp_resolveHistoryColumns_(headerRow);
+  const textCols = [
+    cols.actionType,
+    cols.reference,
+    cols.rowId,
+    cols.beforeDisplay,
+    cols.afterDisplay,
+    headerRow.indexOf("before_sign") + 1,
+    headerRow.indexOf("before_fraction") + 1,
+    headerRow.indexOf("before_pack_notation") + 1,
+    headerRow.indexOf("after_sign") + 1,
+    headerRow.indexOf("after_fraction") + 1,
+    headerRow.indexOf("after_pack_notation") + 1,
+    cols.remark,
+    cols.source
+  ].filter(function(col) {
+    return !!col;
+  });
+  StockWebApp_applyTextFormatToColumns_(sheet, textCols);
+}
+
+function StockWebApp_applyTextFormatToColumns_(sheet, columns) {
+  if (!sheet) return;
+  const rowCount = Math.max(0, sheet.getMaxRows() - 1);
+  if (!(rowCount > 0)) return;
+  const uniqueCols = {};
+  (Array.isArray(columns) ? columns : []).forEach(function(col) {
+    const numericCol = Math.max(0, StockWebApp_toInt_(col));
+    if (numericCol > 0) uniqueCols[numericCol] = true;
+  });
+  Object.keys(uniqueCols).forEach(function(key) {
+    sheet.getRange(2, Number(key), rowCount, 1).setNumberFormat("@");
+  });
+}
+
+function StockWebApp_sanitizeHistorySignColumns_(sheet, headers) {
+  if (!sheet) return;
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return;
+  const headerRow = Array.isArray(headers) ? headers : [];
+  const beforeCol = headerRow.indexOf("before_sign") + 1;
+  const afterCol = headerRow.indexOf("after_sign") + 1;
+  [beforeCol, afterCol].forEach(function(col) {
+    if (!(col > 0)) return;
+    const range = sheet.getRange(2, col, lastRow - 1, 1);
+    const displayValues = range.getDisplayValues();
+    const formulas = range.getFormulas();
+    let needsRewrite = false;
+    const nextValues = displayValues.map(function(row, idx) {
+      const currentDisplay = row && row.length ? row[0] : "";
+      const currentFormula = formulas[idx] && formulas[idx].length ? formulas[idx][0] : "";
+      const normalizedSign = StockWebApp_normalizeHistorySign_(currentDisplay);
+      if (currentFormula || String(currentDisplay || "").trim() !== normalizedSign) {
+        needsRewrite = true;
+      }
+      return [normalizedSign];
+    });
+    if (needsRewrite) {
+      range.setNumberFormat("@");
+      range.setValues(nextValues);
+    }
+  });
 }
 
 function StockWebApp_fractionToText_(value) {

@@ -917,6 +917,10 @@ function ArrivagesStock_runPreflightConfirmations_(shStock, payload) {
 
   const ui = SpreadsheetApp.getUi();
   const existingMap = ArrivagesStock_buildExistingRefMap_(shStock);
+  const missingRefs = [];
+  const changedRefs = [];
+  const seenMissingRefs = {};
+  const seenChangedRefs = {};
 
   for (const item of payload) {
     const ref = String(item && item.ref || "").trim().toUpperCase();
@@ -926,12 +930,10 @@ function ArrivagesStock_runPreflightConfirmations_(shStock, payload) {
     const nextState = ArrivagesStock_getComparableStateForPayloadItem_(item);
 
     if (!existing) {
-      const confirmCreate = ui.alert(
-        "Nouvelle référence",
-        "La référence " + ref + " n'existe pas dans STOCK.\n\nCréer une nouvelle ligne ?",
-        ui.ButtonSet.YES_NO
-      );
-      if (confirmCreate !== ui.Button.YES) throw new Error("Enregistrement annulé par l'utilisateur");
+      if (!seenMissingRefs[ref]) {
+        seenMissingRefs[ref] = true;
+        missingRefs.push(ref);
+      }
       continue;
     }
 
@@ -939,16 +941,66 @@ function ArrivagesStock_runPreflightConfirmations_(shStock, payload) {
 
     if (ArrivagesStock_isComparableStateCompatible_(existing, nextState)) continue;
 
-    const confirmUpdate = ui.alert(
-      "Référence existante différente",
-      "La référence " + ref + " existe déjà dans STOCK, mais ses caractéristiques diffèrent.\n\n" +
-      "Ancien : " + ArrivagesStock_formatComparableState_(existing) + "\n" +
-      "Nouveau : " + ArrivagesStock_formatComparableState_(nextState) + "\n\n" +
-      "Continuer ?",
-      ui.ButtonSet.YES_NO
-    );
-    if (confirmUpdate !== ui.Button.YES) throw new Error("Enregistrement annulé par l'utilisateur");
+    if (!seenChangedRefs[ref]) {
+      seenChangedRefs[ref] = true;
+      changedRefs.push({
+        ref: ref,
+        oldState: ArrivagesStock_formatComparableState_(existing),
+        newState: ArrivagesStock_formatComparableState_(nextState)
+      });
+    }
   }
+
+  if (!missingRefs.length && !changedRefs.length) return;
+
+  const messageParts = [];
+
+  if (missingRefs.length) {
+    messageParts.push(
+      "Nouvelles références (" + missingRefs.length + ") :\n" +
+      ArrivagesStock_formatConfirmationRefList_(missingRefs, 12)
+    );
+  }
+
+  if (changedRefs.length) {
+    messageParts.push(
+      "Références existantes différentes (" + changedRefs.length + ") :\n" +
+      ArrivagesStock_formatConfirmationChangedRefs_(changedRefs, 6)
+    );
+  }
+
+  const confirmAll = ui.alert(
+    "Vérification avant enregistrement",
+    messageParts.join("\n\n") + "\n\nContinuer ?",
+    ui.ButtonSet.YES_NO
+  );
+  if (confirmAll !== ui.Button.YES) throw new Error("Enregistrement annulé par l'utilisateur");
+}
+
+function ArrivagesStock_formatConfirmationRefList_(refs, limit) {
+  const items = Array.isArray(refs) ? refs : [];
+  const maxItems = Math.max(1, Number(limit) || 0);
+  const lines = items.slice(0, maxItems).map(ref => "- " + ref);
+  if (items.length > maxItems) {
+    lines.push("... et " + (items.length - maxItems) + " autre" + ((items.length - maxItems) > 1 ? "s" : ""));
+  }
+  return lines.join("\n");
+}
+
+function ArrivagesStock_formatConfirmationChangedRefs_(entries, limit) {
+  const items = Array.isArray(entries) ? entries : [];
+  const maxItems = Math.max(1, Number(limit) || 0);
+  const blocks = items.slice(0, maxItems).map(entry => {
+    return [
+      "- " + String(entry && entry.ref ? entry.ref : ""),
+      "  Ancien: " + String(entry && entry.oldState ? entry.oldState : ""),
+      "  Nouveau: " + String(entry && entry.newState ? entry.newState : "")
+    ].join("\n");
+  });
+  if (items.length > maxItems) {
+    blocks.push("... et " + (items.length - maxItems) + " autre" + ((items.length - maxItems) > 1 ? "s" : ""));
+  }
+  return blocks.join("\n");
 }
 
 function ArrivagesStock_normalizeComparableField_(value, kind) {

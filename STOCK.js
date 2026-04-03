@@ -16,7 +16,7 @@ function StockMoves_validateAll_() {
   const colOut = StockMoves_col_(map, "开箱/包");
 
   const colTail = StockMoves_col_(map, "尾箱");
-  const colPpc = StockMoves_col_(map, "每箱件数2");
+  const colPpc = StockMoves_col_(map, "件/箱");
   const colBoxes = StockMoves_col_(map, "箱数");
   const colSign = StockMoves_col_(map, "当前signe");
   const colFrac = StockMoves_col_(map, "当前箱数分数");
@@ -24,7 +24,7 @@ function StockMoves_validateAll_() {
   const colOpenRest = StockMoves_col_(map, "Carton ouvert (reste)");
 
   if (!colSel || !colRef || !colIn || !colOut || !colTail || !colPpc || !colBoxes || !colSign || !colFrac || !colMissing) {
-    throw new Error("Colonnes requises manquantes dans STOCK (选择, 货号, 修改日期, 开箱/包, 尾箱, 每箱件数2, 箱数, 当前signe, 当前箱数分数, 当前缺包).");
+    throw new Error("Colonnes requises manquantes dans STOCK (选择, 货号, 修改日期, 开箱/包, 尾箱, 件/箱, 箱数, 当前signe, 当前箱数分数, 当前缺包).");
   }
 
   const data = sh.getRange(2, 1, lastRow - 1, lastCol).getValues();
@@ -169,7 +169,7 @@ function StockMoves_resetPendingRows_() {
   const colIn = StockMoves_col_(map, "修改日期");
   const colOut = StockMoves_col_(map, "开箱/包");
   const colTail = StockMoves_col_(map, "尾箱");
-  const colPpc = StockMoves_col_(map, "每箱件数2");
+  const colPpc = StockMoves_col_(map, "件/箱");
   const colBoxes = StockMoves_col_(map, "箱数");
   const colSign = StockMoves_col_(map, "当前signe");
   const colFrac = StockMoves_col_(map, "当前箱数分数");
@@ -202,7 +202,7 @@ function StockMoves_resetPendingRows_() {
       // Safe fallback when history is empty: restore zero/default state.
       restored = latestStateText ? StockMoves_parseNormalizedStateText_(latestStateText) : { tail: 0, ppc: 0, boxes: 0, sign: "", fraction: 0, missingPacks: 0 };
 
-      // If history is pure pack form like "9包", keep the current 每箱件数2 value
+      // If history is pure pack form like "9包", keep the current 件/箱 value
       if (/^\s*\d+\s*包\s*$/.test(latestStateText)) {
         const currentPpc = StockMoves_toInt_(rowValues[colPpc - 1]);
         if (currentPpc > 0) restored.ppc = currentPpc;
@@ -957,7 +957,7 @@ function StockMoves_isTruthy_(v) {
 function StockMoves_manualStateColumns_(map) {
   return [
     StockMoves_col_(map, "尾箱"),
-    StockMoves_col_(map, "每箱件数2"),
+    StockMoves_col_(map, "件/箱"),
     StockMoves_col_(map, "箱数"),
     StockMoves_col_(map, "当前signe"),
     StockMoves_col_(map, "当前箱数分数"),
@@ -967,7 +967,7 @@ function StockMoves_manualStateColumns_(map) {
 
 function StockMoves_stateFromRowValues_(rowValues, map) {
   const colTail = StockMoves_col_(map, "尾箱");
-  const colPpc = StockMoves_col_(map, "每箱件数2");
+  const colPpc = StockMoves_col_(map, "件/箱");
   const colBoxes = StockMoves_col_(map, "箱数");
   const colSign = StockMoves_col_(map, "当前signe");
   const colFrac = StockMoves_col_(map, "当前箱数分数");

@@ -56,8 +56,10 @@ var SHEET_HEADER_ALIASES_ = {};
 SHEET_HEADER_ALIASES_[normalizeBasicSheetHeaderKey_("进货")] = normalizeBasicSheetHeaderKey_("修改日期");
 SHEET_HEADER_ALIASES_[normalizeBasicSheetHeaderKey_("当前尾箱件数")] = normalizeBasicSheetHeaderKey_("尾箱");
 SHEET_HEADER_ALIASES_[normalizeBasicSheetHeaderKey_("箱件")] = normalizeBasicSheetHeaderKey_("件/箱");
+SHEET_HEADER_ALIASES_[normalizeBasicSheetHeaderKey_("每箱件数2")] = normalizeBasicSheetHeaderKey_("件/箱");
 SHEET_HEADER_ALIASES_[normalizeBasicSheetHeaderKey_("当前箱数")] = normalizeBasicSheetHeaderKey_("箱数");
 SHEET_HEADER_ALIASES_[normalizeBasicSheetHeaderKey_("出-Sortie/箱")] = normalizeBasicSheetHeaderKey_("开箱/包");
+SHEET_HEADER_ALIASES_[normalizeBasicSheetHeaderKey_("出-sortie/箱")] = normalizeBasicSheetHeaderKey_("开箱/包");
 SHEET_HEADER_ALIASES_[normalizeBasicSheetHeaderKey_("出库记录")] = normalizeBasicSheetHeaderKey_("清库记录");
 
 function normalizeSheetHeaderKey_(header) {

@@ -381,7 +381,7 @@ function ArrivagesStock_applyFromArrivagePayload_(shStock, shTpl, payload) {
   const colMix = stockMap["混箱数".toLowerCase()];
   const colSortKey = stockMap["sortkey"];
 
-  const colPpc2 = stockMap["每箱件数2".toLowerCase()];
+  const colPpc2 = stockMap["件/箱".toLowerCase()];
   const colIsMix = stockMap["is_mix".toLowerCase()];
 
   const colLoc = stockMap["放位/提醒".toLowerCase()];
@@ -860,7 +860,7 @@ function ArrivagesStock_getComparableStateForRef_(rowValues, stockMap, row) {
     row: row || 0,
     ref: ArrivagesStock_normalizeComparableField_(get("货号"), "ref"),
     tailDisplay: ArrivagesStock_normalizeComparableField_(get("尾箱"), "text"),
-    ppcDisplay: ArrivagesStock_normalizeComparableField_(get("每箱件数2"), "text"),
+    ppcDisplay: ArrivagesStock_normalizeComparableField_(get("件/箱"), "text"),
     wholeBoxes: ArrivagesStock_normalizeComparableField_(get("箱数"), "num"),
     sign: ArrivagesStock_normalizeComparableField_(get("当前signe"), "text"),
     fraction: ArrivagesStock_normalizeComparableField_(get("当前箱数分数"), "text"),
@@ -1306,7 +1306,7 @@ function ArrivagesStock_resetRefsAndDeleteSuffix_(shStock, refs) {
 
   const colRef      = map["货号"];
   const colTailCur  = map["尾箱"];
-  const colPpc2     = map["每箱件数2"];
+  const colPpc2     = map["件/箱"];
   const colBoxesCur = map["箱数"];
   const colSignCur  = map["当前signe"];
   const colFracCur  = map["当前箱数分数"];
@@ -1317,7 +1317,7 @@ function ArrivagesStock_resetRefsAndDeleteSuffix_(shStock, refs) {
   const colNote2    = map["备注2"];
   const colArrId    = map["到货单"];
   const colWh       = map["仓库"];
-  const colOut      = map["出-sortie/箱"];
+  const colOut      = map["开箱/包"];
 
   if (!colRef) throw new Error("STOCK: colonne '货号' introuvable.");
 

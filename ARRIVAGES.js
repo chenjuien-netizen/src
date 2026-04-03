@@ -2245,6 +2245,99 @@ function getRowsByArrivageId_(dbSheet, id) {
   return ArrivagesRepo_getRowsByArrivageId_(dbSheet, id);
 } 
 
+function menuSyncArrivagesPricesToStock_() {
+  const ss = SpreadsheetApp.getActive();
+  const uiSheet = ss.getSheetByName(SHEET_UI);
+  const stockSheet = ss.getSheetByName(SHEET_STOCK);
+  if (!uiSheet) throw new Error("Feuille ARRIVAGES introuvable.");
+  if (!stockSheet) throw new Error("Feuille introuvable: " + SHEET_STOCK);
+
+  const uiRefs = uiSheet.getRange(UI_TABLE_START_ROW, 1, UI_TABLE_ROWS, 1).getDisplayValues().flat();
+  const uiPrices = uiSheet.getRange(UI_PRICE_RANGE).getDisplayValues().flat();
+
+  const candidates = [];
+  let ignoredEmptyPrice = 0;
+  for (let i = 0; i < UI_TABLE_ROWS; i++) {
+    const rawRef = uiRefs[i];
+    const ref = (typeof cleanRef_ === "function" ? cleanRef_(rawRef) : String(rawRef || "")).trim().toUpperCase();
+    const rawPrice = String(uiPrices[i] === null || typeof uiPrices[i] === "undefined" ? "" : uiPrices[i]).trim();
+
+    if (!ref) continue;
+    if (!rawPrice) {
+      ignoredEmptyPrice++;
+      continue;
+    }
+
+    const normalizedPrice = rawPrice.replace(",", ".");
+    const numericPrice = Number(normalizedPrice);
+    candidates.push({
+      ref: ref,
+      price: Number.isFinite(numericPrice) ? numericPrice : rawPrice,
+      uiRow: UI_TABLE_START_ROW + i
+    });
+  }
+
+  if (!candidates.length) {
+    try { ss.toast("Aucun prix exploitable trouvé dans ARRIVAGES!M4:M305.", "Arrivages", 5); } catch (e) {}
+    return;
+  }
+
+  const stockLastRow = stockSheet.getLastRow();
+  const stockLastCol = stockSheet.getLastColumn();
+  if (stockLastRow < 1 || stockLastCol < 1) throw new Error("STOCK semble vide.");
+
+  const headers = stockSheet.getRange(1, 1, 1, stockLastCol).getValues()[0];
+  const map = (typeof headerMap_ === "function") ? headerMap_(headers) : ArrivagesStock_headerMapLocal_(headers);
+  const colRef = map["货号"];
+  const colPrix = map["prix"];
+
+  if (!colRef) throw new Error("STOCK: colonne '货号' introuvable.");
+  if (!colPrix) throw new Error("STOCK: colonne 'prix' introuvable.");
+  if (stockLastRow < 2) throw new Error("STOCK ne contient aucune ligne de données.");
+
+  const stockRefs = stockSheet.getRange(2, colRef, stockLastRow - 1, 1).getDisplayValues().flat();
+  const refToRow = {};
+  for (let i = 0; i < stockRefs.length; i++) {
+    const ref = String(stockRefs[i] || "").trim().toUpperCase();
+    if (ref) refToRow[ref] = i + 2;
+  }
+
+  const updatesByRow = {};
+  const missingRefs = [];
+  const seenMissingRefs = {};
+  for (let i = 0; i < candidates.length; i++) {
+    const item = candidates[i];
+    const row = refToRow[item.ref] || 0;
+    if (!row) {
+      if (!seenMissingRefs[item.ref]) {
+        seenMissingRefs[item.ref] = true;
+        missingRefs.push(item.ref);
+      }
+      continue;
+    }
+    // Follow existing project convention: the last matching row wins.
+    updatesByRow[row] = item.price;
+  }
+
+  const updateRows = Object.keys(updatesByRow).map(Number).sort((a, b) => a - b);
+  for (let i = 0; i < updateRows.length; i++) {
+    const row = updateRows[i];
+    stockSheet.getRange(row, colPrix).setValue(updatesByRow[row]);
+  }
+
+  const updatedCount = updateRows.length;
+  const missingCount = missingRefs.length;
+  try {
+    ss.toast(
+      "✅ Prix mis à jour: " + updatedCount +
+      "\n⚠️ Refs introuvables: " + missingCount +
+      "\nℹ️ Lignes ignorées (prix vide): " + ignoredEmptyPrice,
+      "Arrivages",
+      8
+    );
+  } catch (e) {}
+}
+
 /***********************
  * Conversion.gs — SUPPLIER -> UI (H:K -> A:F)
  ***********************/

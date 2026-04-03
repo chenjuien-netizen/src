@@ -28,6 +28,7 @@ function onOpen() {
     .addItem("Enregistrer", "arrivagesSaveCurrent")
     .addItem("Supprimer", "deleteArrivage_")
     .addSeparator()
+    .addItem("Sync prix (M → STOCK)", "menuSyncArrivagesPricesToStock_")
     .addItem("Convert supplier → UI (H:K → A:F)", "menuConvertSupplierToUi_")
     .addItem("Clear supplier zone (H4:K305)", "menuClearSupplierZone_")
     .addToUi();

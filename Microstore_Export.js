@@ -150,6 +150,8 @@ function exportStockToMsExport() {
       });
     }
 
+    var exportedRefIndex = msBuildExportedRefIndex_(rows);
+
     var out = [];
     for (var k = 0; k < rows.length; k++) {
       var it = rows[k];
@@ -184,7 +186,8 @@ function exportStockToMsExport() {
       line[expMap["remise (%)"] - 1] = it.remise;
       var prixParPaquetTexte = msBuildPrixParPaquetLine_(it.prix, it.colisage, it.remise);
       var couleursTexte = msBuildCouleursRemark_(it.couleursRaw);
-      line[expMap["remarque"] - 1] = msBuildCleanRemarque_(it.remarque, prixParPaquetTexte, contenu, couleursTexte);
+      var setRemarkLine = msBuildSetRemarkLine_(it.ref, exportedRefIndex);
+      line[expMap["remarque"] - 1] = msBuildCleanRemarque_(it.remarque, prixParPaquetTexte, contenu, couleursTexte, setRemarkLine);
 
       out.push(line);
     }
@@ -231,7 +234,7 @@ function msBuildContenuColis_(totalPieces, packs, pcsPerPack) {
   return "Colis: " + t + " pièces avec " + p + " paquets de " + u + " pièces";
 }
 
-function msBuildCleanRemarque_(existingRemark, prixParPaquetTexte, contenu, couleursTexte) {
+function msBuildCleanRemarque_(existingRemark, prixParPaquetTexte, contenu, couleursTexte, setRemarkLine) {
   var cleanedRemark = String(existingRemark || "")
     .replace(/\s*\[MS_DOUBLON:\d+\]\s*/gi, " ")
     .replace(/[ \t]{2,}/g, " ")
@@ -243,6 +246,7 @@ function msBuildCleanRemarque_(existingRemark, prixParPaquetTexte, contenu, coul
   var prixLine = "";
   var colisLine = "";
   var couleursLine = "";
+  var setLine = "";
 
   for (var i = 0; i < lines.length; i++) {
     var line = String(lines[i] || "").trim();
@@ -263,6 +267,11 @@ function msBuildCleanRemarque_(existingRemark, prixParPaquetTexte, contenu, coul
       continue;
     }
 
+    if (/^Ensemble assorti\s*:/i.test(line)) {
+      if (!setLine) setLine = line;
+      continue;
+    }
+
     if (seenOther[line]) continue;
     seenOther[line] = true;
     otherLines.push(line);
@@ -271,13 +280,59 @@ function msBuildCleanRemarque_(existingRemark, prixParPaquetTexte, contenu, coul
   if (String(prixParPaquetTexte || "").trim()) prixLine = String(prixParPaquetTexte).trim();
   if (String(contenu || "").trim()) colisLine = String(contenu).trim();
   if (String(couleursTexte || "").trim()) couleursLine = String(couleursTexte).trim();
+  if (String(setRemarkLine || "").trim()) setLine = String(setRemarkLine).trim();
 
   var finalLines = otherLines.slice();
   if (prixLine) finalLines.push(prixLine);
   if (colisLine) finalLines.push(colisLine);
   if (couleursLine) finalLines.push(couleursLine);
+  if (setLine) finalLines.push(setLine);
 
   return finalLines.join("\n");
+}
+
+function msBuildExportedRefIndex_(rows) {
+  var out = {};
+  for (var i = 0; i < rows.length; i++) {
+    var ref = msNormalizeExportRefKey_(rows[i] && rows[i].ref);
+    if (!ref) continue;
+    out[ref] = true;
+  }
+  return out;
+}
+
+function msBuildSetRemarkLine_(ref, exportedRefIndex) {
+  var normalizedRef = msNormalizeExportRefKey_(ref);
+  if (!normalizedRef || !exportedRefIndex || !exportedRefIndex[normalizedRef]) return "";
+  if (msIsIgnoredSetReference_(normalizedRef)) return "";
+
+  var matchingRef = "";
+  var pieceLabel = "";
+
+  if (/\-B$/.test(normalizedRef)) {
+    matchingRef = normalizedRef.replace(/\-B$/, "");
+    pieceLabel = "haut";
+  } else {
+    matchingRef = normalizedRef + "-B";
+    pieceLabel = "bas";
+  }
+
+  if (!matchingRef || !exportedRefIndex[matchingRef]) return "";
+  if (msIsIgnoredSetReference_(matchingRef)) return "";
+
+  return "Ensemble assorti : " + pieceLabel + " disponible sous la référence " + matchingRef + ". Pour acheter l’ensemble complet, veuillez également commander cette référence.";
+}
+
+function msNormalizeExportRefKey_(ref) {
+  return String(ref || "").trim().toUpperCase();
+}
+
+function msIsIgnoredSetReference_(ref) {
+  var normalizedRef = msNormalizeExportRefKey_(ref);
+  return normalizedRef === "LA25-5" ||
+    normalizedRef === "LA25-5-B" ||
+    normalizedRef === "LA25-3" ||
+    normalizedRef === "LA25-3-B";
 }
 
 function msString_(v) {

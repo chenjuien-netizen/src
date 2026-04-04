@@ -165,7 +165,7 @@ function exportStockToMsExport() {
 
       var line = new Array(expLastCol).fill("");
       line[expMap["référence"] - 1] = it.ref;
-      line[expMap["nom"] - 1] = it.nom ? String(it.nom).trim() : "";
+      line[expMap["nom"] - 1] = msBuildSetExportName_(it.ref, exportedRefIndex, it.nom);
       line[expMap["catégorie"] - 1] = it.cat;
       line[expMap["contenu colis"] - 1] = it.contenuColis;
       line[expMap["composition matérielle"] - 1] = it.comp;
@@ -321,6 +321,24 @@ function msBuildSetRemarkLine_(ref, exportedRefIndex) {
   if (msIsIgnoredSetReference_(matchingRef)) return "";
 
   return "Ensemble assorti : " + pieceLabel + " disponible sous la référence " + matchingRef + ". Pour acheter l’ensemble complet, veuillez également commander cette référence.";
+}
+
+function msBuildSetExportName_(ref, exportedRefIndex, fallbackName) {
+  var normalizedRef = msNormalizeExportRefKey_(ref);
+  var safeFallback = String(fallbackName || "").trim();
+  if (!normalizedRef || !exportedRefIndex || !exportedRefIndex[normalizedRef]) return safeFallback;
+  if (msIsIgnoredSetReference_(normalizedRef)) return safeFallback;
+
+  var matchingRef = /\-B$/.test(normalizedRef)
+    ? normalizedRef.replace(/\-B$/, "")
+    : normalizedRef + "-B";
+
+  if (!matchingRef || !exportedRefIndex[matchingRef]) return safeFallback;
+  if (msIsIgnoredSetReference_(matchingRef)) return safeFallback;
+
+  return /\-B$/.test(normalizedRef)
+    ? (normalizedRef + " Bas")
+    : (normalizedRef + " Haut");
 }
 
 function msNormalizeExportRefKey_(ref) {

@@ -611,10 +611,11 @@ function exportStockToPFS() {
   }
 
   const out = [];
+  const exportedRefIndex = buildEditorialExportedRefIndex_(selected);
 
   for (const it of selected) {
     const cat = it.cat || ""; // PFS normalized category
-    const editorial = buildPfsEditorialContent_(it.catRaw, it.compo, it.paysFab);
+    const editorial = buildPfsEditorialContent_(it.catRaw, it.compo, it.paysFab, it.ref, exportedRefIndex, it.colisage);
     const nomFr = editorial.nomFr || String(it.catRaw || "").trim() || cat || it.ref;
     const globalTailles = it.taillesInfo || parsePfsTaillesStructure_(it.tailles);
     const compo = normalizeCompositionPFS_(it.compo) || "90% Viscose - 10% Polyester";
@@ -1701,129 +1702,116 @@ function normalizeMaterialName_(matRaw) {
 /****************************************************
  * Build multilingual editorial product names/descriptions for PFS export.
  ****************************************************/
-function buildPfsEditorialContent_(catRaw, compositionRaw, paysRaw) {
-  const key = normalizePfsEditorialCategoryKey_(catRaw);
+function buildPfsEditorialContent_(catRaw, compositionRaw, paysRaw, ref, exportedRefIndex, colisage) {
+  const definition = getPfsEditorialCategoryDefinition_(catRaw);
   const mat = extractPfsEditorialMaterials_(compositionRaw);
   const pays = normalizePfsCountryNameSet_(paysRaw);
+  const base = buildEditorialBaseDescriptions_(definition, mat, pays);
+  const pack = buildEditorialPackLines_(colisage);
+  const setLines = buildEditorialSetLines_(ref, exportedRefIndex);
 
-  const templates = {
-    "ROBES LONGUES": {
-      nomFr: "Robe longue",
-      nomEn: "Long dress",
-      nomEs: "Vestido largo",
-      nomDe: "Langes Kleid",
-      nomIt: "Abito lungo",
-      withMat: {
-        fr: "Robe longue élégante en {mat}, idéale pour le printemps/été. Confectionnée en {countryFr}, parfaite pour toutes les occasions.",
-        en: "Elegant long {matEn} dress, perfect for spring/summer. Made in {countryEn}, ideal for any occasion.",
-        es: "Vestido largo elegante de {matEs}, ideal para primavera/verano. Fabricado en {countryEs}, perfecto para cualquier ocasión.",
-        de: "Elegantes langes Kleid aus {matDe}, ideal für Frühling/Sommer. Hergestellt in {countryDe}, perfekt für jeden Anlass.",
-        it: "Abito lungo elegante in {matIt}, ideale per la primavera/estate. Realizzato in {countryIt}, perfetto per ogni occasione."
-      },
-      noMat: {
-        fr: "Robe longue élégante, idéale pour le printemps/été. Confectionnée en {countryFr}, parfaite pour toutes les occasions.",
-        en: "Elegant long dress, perfect for spring/summer. Made in {countryEn}, ideal for any occasion.",
-        es: "Vestido largo elegante, ideal para primavera/verano. Fabricado en {countryEs}, perfecto para cualquier ocasión.",
-        de: "Elegantes langes Kleid, ideal für Frühling/Sommer. Hergestellt in {countryDe}, perfekt für jeden Anlass.",
-        it: "Abito lungo elegante, ideale per la primavera/estate. Realizzato in {countryIt}, perfetto per ogni occasione."
-      }
-    },
-    "ROBES COURTES": {
-      nomFr: "Robe courte",
-      nomEn: "Short dress",
-      nomEs: "Vestido corto",
-      nomDe: "Kurzes Kleid",
-      nomIt: "Abito corto",
-      withMat: {
-        fr: "Robe courte en {mat}, idéale pour le printemps/été. Confectionnée en {countryFr}, parfaite pour les jours ensoleillés.",
-        en: "Short {matEn} dress, perfect for spring/summer. Made in {countryEn}, ideal for sunny days.",
-        es: "Vestido corto de {matEs}, ideal para primavera/verano. Fabricado en {countryEs}, perfecto para días soleados.",
-        de: "Kurzes Kleid aus {matDe}, ideal für Frühling/Sommer. Hergestellt in {countryDe}, perfekt für sonnige Tage.",
-        it: "Abito corto in {matIt}, ideale per la primavera/estate. Realizzato in {countryIt}, perfetto per le giornate di sole."
-      },
-      noMat: {
-        fr: "Robe courte idéale pour le printemps/été. Confectionnée en {countryFr}, parfaite pour les jours ensoleillés.",
-        en: "Short dress, perfect for spring/summer. Made in {countryEn}, ideal for sunny days.",
-        es: "Vestido corto, ideal para primavera/verano. Fabricado en {countryEs}, perfecto para días soleados.",
-        de: "Kurzes Kleid, ideal für Frühling/Sommer. Hergestellt in {countryDe}, perfekt für sonnige Tage.",
-        it: "Abito corto, ideale per la primavera/estate. Realizzato in {countryIt}, perfetto per le giornate di sole."
-      }
-    },
-    "ENSEMBLES": {
-      nomFr: "Ensemble",
-      nomEn: "Outfit",
-      nomEs: "Conjunto",
-      nomDe: "Outfit",
-      nomIt: "Completo",
-      withMat: {
-        fr: "Ensemble fluide et élégant en {mat}, idéal pour le printemps/été. Confectionné en {countryFr}, parfait pour la saison.",
-        en: "Flowy and elegant {matEn} outfit, perfect for spring/summer. Made in {countryEn}, ideal for the season.",
-        es: "Conjunto fluido y elegante de {matEs}, ideal para primavera/verano. Fabricado en {countryEs}, perfecto para la temporada.",
-        de: "Fließendes und elegantes Outfit aus {matDe}, ideal für Frühling/Sommer. Hergestellt in {countryDe}, perfekt für die Saison.",
-        it: "Completo fluido ed elegante in {matIt}, ideale per la primavera/estate. Realizzato in {countryIt}, perfetto per la stagione."
-      },
-      noMat: {
-        fr: "Ensemble fluide et élégant, idéal pour le printemps/été. Confectionné en {countryFr}, parfait pour la saison.",
-        en: "Flowy and elegant outfit, perfect for spring/summer. Made in {countryEn}, ideal for the season.",
-        es: "Conjunto fluido y elegante, ideal para primavera/verano. Fabricado en {countryEs}, perfecto para la temporada.",
-        de: "Fließendes und elegantes Outfit, ideal für Frühling/Sommer. Hergestellt in {countryDe}, perfekt für die Saison.",
-        it: "Completo fluido ed elegante, ideale per la primavera/estate. Realizzato in {countryIt}, perfetto per la stagione."
-      }
-    },
-    "PANTALONS": {
-      nomFr: "Pantalon",
-      nomEn: "Trousers",
-      nomEs: "Pantalón",
-      nomDe: "Hose",
-      nomIt: "Pantaloni",
-      withMat: {
-        fr: "Pantalon léger en {mat}, idéal pour le printemps/été. Confectionné en {countryFr}, parfait pour la saison chaude.",
-        en: "Lightweight {matEn} trousers, perfect for spring/summer. Made in {countryEn}, ideal for the warm season.",
-        es: "Pantalón ligero de {matEs}, ideal para primavera/verano. Fabricado en {countryEs}, perfecto para la temporada cálida.",
-        de: "Leichte Hose aus {matDe}, ideal für Frühling/Sommer. Hergestellt in {countryDe}, perfekt für die warme Jahreszeit.",
-        it: "Pantaloni leggeri in {matIt}, ideali per la primavera/estate. Realizzati in {countryIt}, perfetti per la stagione calda."
-      },
-      noMat: {
-        fr: "Pantalon léger, idéal pour le printemps/été. Confectionné en {countryFr}, parfait pour la saison chaude.",
-        en: "Lightweight trousers, perfect for spring/summer. Made in {countryEn}, ideal for the warm season.",
-        es: "Pantalón ligero, ideal para primavera/verano. Fabricado en {countryEs}, perfecto para la temporada cálida.",
-        de: "Leichte Hose, ideal für Frühling/Sommer. Hergestellt in {countryDe}, perfekt für die warme Jahreszeit.",
-        it: "Pantaloni leggeri, ideali per la primavera/estate. Realizzati in {countryIt}, perfetti per la stagione calda."
-      }
-    }
+  return {
+    nomFr: definition.nomFr,
+    nomEn: definition.nomEn,
+    nomEs: definition.nomEs,
+    nomDe: definition.nomDe,
+    nomIt: definition.nomIt,
+    descFr: joinEditorialDescriptionParts_([base.fr, pack.fr, setLines.fr]),
+    descEn: joinEditorialDescriptionParts_([base.en, pack.en, setLines.en]),
+    descEs: joinEditorialDescriptionParts_([base.es, pack.es, setLines.es]),
+    descDe: joinEditorialDescriptionParts_([base.de, pack.de, setLines.de]),
+    descIt: joinEditorialDescriptionParts_([base.it, pack.it, setLines.it])
   };
+}
 
-  const tpl = templates[key] || {
-    nomFr: singularizePfsEditorialFallback_(catRaw) || "Produit",
-    nomEn: "Product",
-    nomEs: "Producto",
-    nomDe: "Produkt",
-    nomIt: "Prodotto",
-    withMat: {
-      fr: "{nameFr} en {mat}, idéale pour le printemps/été. Confectionnée en {countryFr}.",
-      en: "{nameEn} in {matEn}, perfect for spring/summer. Made in {countryEn}.",
-      es: "{nameEs} de {matEs}, ideal para primavera/verano. Fabricado en {countryEs}.",
-      de: "{nameDe} aus {matDe}, ideal für Frühling/Sommer. Hergestellt in {countryDe}.",
-      it: "{nameIt} in {matIt}, ideale per la primavera/estate. Realizzato in {countryIt}."
-    },
-    noMat: {
-      fr: "{nameFr} idéale pour le printemps/été. Confectionnée en {countryFr}.",
-      en: "{nameEn}, perfect for spring/summer. Made in {countryEn}.",
-      es: "{nameEs}, ideal para primavera/verano. Fabricado en {countryEs}.",
-      de: "{nameDe}, ideal für Frühling/Sommer. Hergestellt in {countryDe}.",
-      it: "{nameIt}, ideale per la primavera/estate. Realizzato in {countryIt}."
-    }
+function buildEFashionEditorialContent_(catRaw, compositionRaw, paysRaw, ref, exportedRefIndex, colisage) {
+  const editorial = buildPfsEditorialContent_(catRaw, compositionRaw, paysRaw, ref, exportedRefIndex, colisage);
+  return {
+    descFr: editorial.descFr,
+    descEn: editorial.descEn
   };
+}
 
-  const useMat = !!mat.fr;
-  const descTpl = useMat ? tpl.withMat : tpl.noMat;
+function buildEditorialExportedRefIndex_(items) {
+  const out = {};
+  const list = Array.isArray(items) ? items : [];
+  for (let i = 0; i < list.length; i++) {
+    const item = list[i];
+    const ref = normalizeEditorialRefKey_(typeof item === "string" ? item : item && item.ref);
+    if (!ref) continue;
+    out[ref] = true;
+  }
+  return out;
+}
 
+function normalizeEditorialRefKey_(ref) {
+  return String(ref || "").trim().toUpperCase();
+}
+
+function isIgnoredEditorialSetReference_(ref) {
+  const normalizedRef = normalizeEditorialRefKey_(ref);
+  return normalizedRef === "LA25-5" ||
+    normalizedRef === "LA25-5-B" ||
+    normalizedRef === "LA25-3" ||
+    normalizedRef === "LA25-3-B";
+}
+
+function findEditorialSetPairInfo_(ref, exportedRefIndex) {
+  const normalizedRef = normalizeEditorialRefKey_(ref);
+  if (!normalizedRef || !exportedRefIndex || !exportedRefIndex[normalizedRef]) return null;
+  if (isIgnoredEditorialSetReference_(normalizedRef)) return null;
+
+  const isBottom = /\-B$/.test(normalizedRef);
+  const matchingRef = isBottom ? normalizedRef.replace(/\-B$/, "") : (normalizedRef + "-B");
+  if (!matchingRef || !exportedRefIndex[matchingRef]) return null;
+  if (isIgnoredEditorialSetReference_(matchingRef)) return null;
+
+  return {
+    matchingRef: matchingRef,
+    pieceFr: isBottom ? "haut" : "bas",
+    pieceEn: isBottom ? "top" : "bottom",
+    pieceEs: isBottom ? "parte superior" : "parte inferior",
+    pieceDe: isBottom ? "Oberteil" : "Unterteil",
+    pieceIt: isBottom ? "parte superiore" : "parte inferiore"
+  };
+}
+
+function buildEditorialSetLines_(ref, exportedRefIndex) {
+  const info = findEditorialSetPairInfo_(ref, exportedRefIndex);
+  if (!info) {
+    return { fr: "", en: "", es: "", de: "", it: "" };
+  }
+  return {
+    fr: "Ensemble assorti : " + info.pieceFr + " disponible sous la référence " + info.matchingRef + ". Pour acheter l’ensemble complet, veuillez également commander cette référence.",
+    en: "Matching set: " + info.pieceEn + " available under reference " + info.matchingRef + ". To buy the full set, please also order this reference.",
+    es: "Conjunto a juego: la " + info.pieceEs + " está disponible con la referencia " + info.matchingRef + ". Para comprar el conjunto completo, pida también esta referencia.",
+    de: "Passendes Set: Das " + info.pieceDe + " ist unter der Referenz " + info.matchingRef + " erhältlich. Für den Kauf des kompletten Sets bestellen Sie bitte auch diesen Artikel.",
+    it: "Set coordinato: la " + info.pieceIt + " è disponibile con la referenza " + info.matchingRef + ". Per acquistare il set completo, aggiungi anche questo articolo."
+  };
+}
+
+function buildEditorialPackLines_(colisage) {
+  const n = Number(colisage);
+  if (!Number.isFinite(n) || n <= 0) {
+    return { fr: "", en: "", es: "", de: "", it: "" };
+  }
+  const qty = String(Math.round(n));
+  return {
+    fr: "Vendu par pack de " + qty + " uniquement.",
+    en: "Sold in packs of " + qty + " only.",
+    es: "Se vende únicamente en paquetes de " + qty + ".",
+    de: "Nur im " + qty + "er-Pack erhältlich.",
+    it: "Venduto esclusivamente in confezioni da " + qty + "."
+  };
+}
+
+function buildEditorialBaseDescriptions_(definition, mat, pays) {
   const vars = {
-    nameFr: tpl.nomFr,
-    nameEn: tpl.nomEn,
-    nameEs: tpl.nomEs,
-    nameDe: tpl.nomDe,
-    nameIt: tpl.nomIt,
+    nameFr: definition.nomFr,
+    nameEn: definition.nomEn,
+    nameEs: definition.nomEs,
+    nameDe: definition.nomDe,
+    nameIt: definition.nomIt,
     mat: mat.fr,
     matEn: mat.en,
     matEs: mat.es,
@@ -1833,21 +1821,164 @@ function buildPfsEditorialContent_(catRaw, compositionRaw, paysRaw) {
     countryEn: pays.en,
     countryEs: pays.es,
     countryDe: pays.de,
-    countryIt: pays.it
+    countryIt: pays.it,
+    frIdeal: definition.frIdeal,
+    frMade: definition.frMade
   };
 
+  const withMat = !!mat.fr;
   return {
-    nomFr: tpl.nomFr,
-    nomEn: tpl.nomEn,
-    nomEs: tpl.nomEs,
-    nomDe: tpl.nomDe,
-    nomIt: tpl.nomIt,
-    descFr: pfsApplyTemplateVars_(descTpl.fr, vars),
-    descEn: pfsApplyTemplateVars_(descTpl.en, vars),
-    descEs: pfsApplyTemplateVars_(descTpl.es, vars),
-    descDe: pfsApplyTemplateVars_(descTpl.de, vars),
-    descIt: pfsApplyTemplateVars_(descTpl.it, vars)
+    fr: pfsApplyTemplateVars_(withMat ? definition.withMat.fr : definition.noMat.fr, vars),
+    en: pfsApplyTemplateVars_(withMat ? definition.withMat.en : definition.noMat.en, vars),
+    es: pfsApplyTemplateVars_(withMat ? definition.withMat.es : definition.noMat.es, vars),
+    de: pfsApplyTemplateVars_(withMat ? definition.withMat.de : definition.noMat.de, vars),
+    it: pfsApplyTemplateVars_(withMat ? definition.withMat.it : definition.noMat.it, vars)
   };
+}
+
+function joinEditorialDescriptionParts_(parts) {
+  const out = [];
+  const seen = {};
+  const list = Array.isArray(parts) ? parts : [];
+  for (let i = 0; i < list.length; i++) {
+    const line = String(list[i] || "").trim();
+    if (!line || seen[line]) continue;
+    seen[line] = true;
+    out.push(line);
+  }
+  return out.join("\n");
+}
+
+function getPfsEditorialCategoryDefinition_(catRaw) {
+  const key = normalizePfsEditorialCategoryKey_(catRaw);
+  const definitions = {
+    "CHEMISES / TUNIQUES": {
+      nomFr: "Chemise / tunique",
+      nomEn: "Shirt / tunic",
+      nomEs: "Camisa / túnica",
+      nomDe: "Bluse / Tunika",
+      nomIt: "Camicia / tunica",
+      frIdeal: "idéale",
+      frMade: "Confectionnée"
+    },
+    "COMBI PANTALON": {
+      nomFr: "Combinaison pantalon",
+      nomEn: "Jumpsuit",
+      nomEs: "Mono largo",
+      nomDe: "Jumpsuit",
+      nomIt: "Tuta lunga",
+      frIdeal: "idéale",
+      frMade: "Confectionnée"
+    },
+    "COMBI SHORT": {
+      nomFr: "Combinaison short",
+      nomEn: "Playsuit",
+      nomEs: "Mono corto",
+      nomDe: "Kurzer Jumpsuit",
+      nomIt: "Tuta corta",
+      frIdeal: "idéale",
+      frMade: "Confectionnée"
+    },
+    "CROCHETS": {
+      nomFr: "Crochet",
+      nomEn: "Crochet",
+      nomEs: "Ganchillo",
+      nomDe: "Häkel",
+      nomIt: "All'uncinetto",
+      frIdeal: "idéal",
+      frMade: "Confectionné"
+    },
+    "ENSEMBLES": {
+      nomFr: "Ensemble",
+      nomEn: "Outfit",
+      nomEs: "Conjunto",
+      nomDe: "Outfit",
+      nomIt: "Completo",
+      frIdeal: "idéal",
+      frMade: "Confectionné"
+    },
+    "JUPES": {
+      nomFr: "Jupe",
+      nomEn: "Skirt",
+      nomEs: "Falda",
+      nomDe: "Rock",
+      nomIt: "Gonna",
+      frIdeal: "idéale",
+      frMade: "Confectionnée"
+    },
+    "PANTALONS": {
+      nomFr: "Pantalon",
+      nomEn: "Trousers",
+      nomEs: "Pantalón",
+      nomDe: "Hose",
+      nomIt: "Pantalone",
+      frIdeal: "idéal",
+      frMade: "Confectionné"
+    },
+    "ROBES COURTES": {
+      nomFr: "Robe courte",
+      nomEn: "Short dress",
+      nomEs: "Vestido corto",
+      nomDe: "Kurzes Kleid",
+      nomIt: "Abito corto",
+      frIdeal: "idéale",
+      frMade: "Confectionnée"
+    },
+    "ROBES LONGUES": {
+      nomFr: "Robe longue",
+      nomEn: "Long dress",
+      nomEs: "Vestido largo",
+      nomDe: "Langes Kleid",
+      nomIt: "Abito lungo",
+      frIdeal: "idéale",
+      frMade: "Confectionnée"
+    },
+    "SHORTS": {
+      nomFr: "Short",
+      nomEn: "Short",
+      nomEs: "Short",
+      nomDe: "Short",
+      nomIt: "Short",
+      frIdeal: "idéal",
+      frMade: "Confectionné"
+    },
+    "TOPS": {
+      nomFr: "Top",
+      nomEn: "Top",
+      nomEs: "Top",
+      nomDe: "Top",
+      nomIt: "Top",
+      frIdeal: "idéal",
+      frMade: "Confectionné"
+    }
+  };
+
+  const fallbackName = singularizePfsEditorialFallback_(catRaw) || "Article";
+  const base = definitions[key] || {
+    nomFr: fallbackName,
+    nomEn: fallbackName,
+    nomEs: fallbackName,
+    nomDe: fallbackName,
+    nomIt: fallbackName,
+    frIdeal: "idéal",
+    frMade: "Confectionné"
+  };
+
+  base.withMat = {
+    fr: "{nameFr} en {mat}, {frIdeal} pour le printemps/été. {frMade} en {countryFr}.",
+    en: "{nameEn} in {matEn}, perfect for spring/summer. Made in {countryEn}.",
+    es: "{nameEs} de {matEs}, ideal para primavera/verano. Fabricado en {countryEs}.",
+    de: "{nameDe} aus {matDe}, ideal für Frühling/Sommer. Hergestellt in {countryDe}.",
+    it: "{nameIt} in {matIt}, ideale per la primavera/estate. Realizzato in {countryIt}."
+  };
+  base.noMat = {
+    fr: "{nameFr}, {frIdeal} pour le printemps/été. {frMade} en {countryFr}.",
+    en: "{nameEn}, perfect for spring/summer. Made in {countryEn}.",
+    es: "{nameEs}, ideal para primavera/verano. Fabricado en {countryEs}.",
+    de: "{nameDe}, ideal für Frühling/Sommer. Hergestellt in {countryDe}.",
+    it: "{nameIt}, ideale per la primavera/estate. Realizzato in {countryIt}."
+  };
+  return base;
 }
 
 function normalizePfsEditorialCategoryKey_(catRaw) {
@@ -1861,6 +1992,13 @@ function normalizePfsEditorialCategoryKey_(catRaw) {
   if (s === "ROBES COURTES") return "ROBES COURTES";
   if (s === "ENSEMBLES") return "ENSEMBLES";
   if (s === "PANTALONS") return "PANTALONS";
+  if (s === "TOPS") return "TOPS";
+  if (s === "SHORTS") return "SHORTS";
+  if (s === "JUPES") return "JUPES";
+  if (s === "CHEMISES / TUNIQUES") return "CHEMISES / TUNIQUES";
+  if (s === "COMBI PANTALON") return "COMBI PANTALON";
+  if (s === "COMBI SHORT") return "COMBI SHORT";
+  if (s === "CROCHETS") return "CROCHETS";
   return s;
 }
 
@@ -1873,9 +2011,17 @@ function singularizePfsEditorialFallback_(catRaw) {
   if (up === "ROBES COURTES") return "Robe courte";
   if (up === "ENSEMBLES") return "Ensemble";
   if (up === "PANTALONS") return "Pantalon";
+  if (up === "TOPS") return "Top";
+  if (up === "SHORTS") return "Short";
+  if (up === "JUPES") return "Jupe";
+  if (up === "CHEMISES / TUNIQUES") return "Chemise / tunique";
+  if (up === "COMBI PANTALON") return "Combinaison pantalon";
+  if (up === "COMBI SHORT") return "Combinaison short";
+  if (up === "CROCHETS") return "Crochet";
 
-  const low = s.toLowerCase();
-  return low.charAt(0).toUpperCase() + low.slice(1);
+  const compact = s.toLowerCase().replace(/\s+/g, " ");
+  const singular = compact.replace(/s$/i, "");
+  return singular.charAt(0).toUpperCase() + singular.slice(1);
 }
 
 function extractPfsEditorialMaterials_(compositionRaw) {

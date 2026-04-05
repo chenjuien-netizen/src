@@ -868,6 +868,7 @@ function exportStockToEFashion() {
     }
     rows.push({
       ref: ref,
+      catRaw: catStock,
       prix: prix,
       empty: dt.empty,
       ts: dt.ts,
@@ -926,6 +927,8 @@ function exportStockToEFashion() {
     return b.ts - a.ts;
   });
 
+  const exportedRefIndex = buildEditorialExportedRefIndex_(rows);
+
   // --- Read eFashion headers robustly
   const hinfo = readEFashionHeaders_(exp);
   const headers = hinfo.headers;
@@ -946,6 +949,8 @@ function exportStockToEFashion() {
   let cPrixHT = col("prix ht");
   let cPoidsKG = col("poids kg");
   let cCompositions = col("compositions");
+  let cDescFr = col("description") || col("description (fr)");
+  let cDescEn = col("description (en)");
 
   // Fallback fixed positions A..U (1-based)
   if (!cMarque) cMarque = 1;        // A
@@ -962,11 +967,14 @@ function exportStockToEFashion() {
   if (!cPrixHT) cPrixHT = 12;       // L
   if (!cPoidsKG) cPoidsKG = 14;     // N
   if (!cCompositions) cCompositions = 15; // O
+  if (!cDescFr && hinfo.width >= 16) cDescFr = 16; // P
+  if (!cDescEn && hinfo.width >= 17) cDescEn = 17; // Q
 
   const out = [];
 
   for (let it of rows) {
     const line = new Array(hinfo.width).fill("");
+    const editorial = buildEFashionEditorialContent_(it.catRaw, it.compo, it.pays, it.ref, exportedRefIndex, it.colisage);
 
     // Fixed values
     line[cMarque - 1] = "J&S FASHION";
@@ -1002,6 +1010,8 @@ function exportStockToEFashion() {
 
     // Composition: normalized style with import normalizer
     line[cCompositions - 1] = normalizeCompositionEFashionImport_(it.compo) || "Viscose*90,Polyester*10";
+    if (cDescFr) line[cDescFr - 1] = editorial.descFr;
+    if (cDescEn) line[cDescEn - 1] = editorial.descEn;
 
     // Extra safety fallback by fixed template positions (A..U) for test import
     if (hinfo.width >= 1)  line[0] = "J&S FASHION";         // A Marque
@@ -1018,6 +1028,8 @@ function exportStockToEFashion() {
     if (hinfo.width >= 12) line[11] = it.prix;                // L Prix HT
     if (hinfo.width >= 14) line[13] = formatWeightKgEFashionText_(it.poids); // N Poids KG
     if (hinfo.width >= 15) line[14] = normalizeCompositionEFashionImport_(it.compo) || "Viscose*90,Polyester*10"; // O Compositions
+    if (hinfo.width >= 16) line[15] = editorial.descFr;       // P Description
+    if (hinfo.width >= 17) line[16] = editorial.descEn;       // Q Description (en)
 
     out.push(line);
   }

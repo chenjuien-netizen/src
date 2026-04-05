@@ -949,6 +949,7 @@ function exportStockToEFashion() {
   let cPrixHT = col("prix ht");
   let cPoidsKG = col("poids kg");
   let cCompositions = col("compositions");
+  let cCaracteristiques = col("caractéristiques (max 5)") || col("caracteristiques (max 5)");
   let cDescFr = col("description") || col("description (fr)");
   let cDescEn = col("description (en)");
 
@@ -967,8 +968,6 @@ function exportStockToEFashion() {
   if (!cPrixHT) cPrixHT = 12;       // L
   if (!cPoidsKG) cPoidsKG = 14;     // N
   if (!cCompositions) cCompositions = 15; // O
-  if (!cDescFr && hinfo.width >= 16) cDescFr = 16; // P
-  if (!cDescEn && hinfo.width >= 17) cDescEn = 17; // Q
 
   const out = [];
 
@@ -1010,6 +1009,7 @@ function exportStockToEFashion() {
 
     // Composition: normalized style with import normalizer
     line[cCompositions - 1] = normalizeCompositionEFashionImport_(it.compo) || "Viscose*90,Polyester*10";
+    if (cCaracteristiques) line[cCaracteristiques - 1] = "";
     if (cDescFr) line[cDescFr - 1] = editorial.descFr;
     if (cDescEn) line[cDescEn - 1] = editorial.descEn;
 
@@ -1028,8 +1028,6 @@ function exportStockToEFashion() {
     if (hinfo.width >= 12) line[11] = it.prix;                // L Prix HT
     if (hinfo.width >= 14) line[13] = formatWeightKgEFashionText_(it.poids); // N Poids KG
     if (hinfo.width >= 15) line[14] = normalizeCompositionEFashionImport_(it.compo) || "Viscose*90,Polyester*10"; // O Compositions
-    if (hinfo.width >= 16) line[15] = editorial.descFr;       // P Description
-    if (hinfo.width >= 17) line[16] = editorial.descEn;       // Q Description (en)
 
     out.push(line);
   }

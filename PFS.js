@@ -605,10 +605,11 @@ function exportStockToPFS(options) {
   }
 
   const out = [];
+  const exportedRefIndex = buildEditorialExportedRefIndex_(selected);
 
   for (const it of selected) {
     const cat = it.cat || ""; // PFS normalized category
-    const editorial = buildPfsEditorialContent_(it.catRaw, it.compo, it.paysFab);
+    const editorial = buildPfsEditorialContent_(it.catRaw, it.compo, it.paysFab, it.ref, exportedRefIndex, it.colisage);
     const nomFr = editorial.nomFr || String(it.catRaw || "").trim() || cat || it.ref;
     const globalTailles = it.taillesInfo || parsePfsTaillesStructure_(it.tailles);
     const compo = normalizeCompositionPFS_(it.compo) || "90% Viscose - 10% Polyester";
@@ -1880,11 +1881,13 @@ var PFS_EDITORIAL_CATEGORY_SPECS_ = {
   "TOPS": { nomFr: "Top", nomEn: "Top", nomEs: "Top", nomDe: "Top", nomIt: "Top", frGender: "m" }
 };
 
-function buildPfsEditorialContent_(catRaw, compositionRaw, paysRaw) {
+function buildPfsEditorialContent_(catRaw, compositionRaw, paysRaw, ref, exportedRefIndex, colisage) {
   const key = normalizePfsEditorialCategoryKey_(catRaw);
   const spec = getPfsEditorialCategorySpec_(key, catRaw);
   const mat = buildSharedCompositionMaterialTextSet_(compositionRaw);
   const pays = normalizePfsCountryNameSet_(paysRaw);
+  const packLines = buildEditorialPackLines_(colisage);
+  const setLines = buildEditorialSetLines_(ref, exportedRefIndex);
 
   return {
     nomFr: spec.nomFr,
@@ -1892,11 +1895,11 @@ function buildPfsEditorialContent_(catRaw, compositionRaw, paysRaw) {
     nomEs: spec.nomEs,
     nomDe: spec.nomDe,
     nomIt: spec.nomIt,
-    descFr: buildPfsDescriptionFr_(spec, mat, pays),
-    descEn: buildPfsDescriptionEn_(spec, mat, pays),
-    descEs: buildPfsDescriptionEs_(spec, mat, pays),
-    descDe: buildPfsDescriptionDe_(spec, mat, pays),
-    descIt: buildPfsDescriptionIt_(spec, mat, pays)
+    descFr: joinEditorialDescriptionParts_([buildPfsDescriptionFr_(spec, mat, pays), packLines.fr, setLines.fr]),
+    descEn: joinEditorialDescriptionParts_([buildPfsDescriptionEn_(spec, mat, pays), packLines.en, setLines.en]),
+    descEs: joinEditorialDescriptionParts_([buildPfsDescriptionEs_(spec, mat, pays), packLines.es, setLines.es]),
+    descDe: joinEditorialDescriptionParts_([buildPfsDescriptionDe_(spec, mat, pays), packLines.de, setLines.de]),
+    descIt: joinEditorialDescriptionParts_([buildPfsDescriptionIt_(spec, mat, pays), packLines.it, setLines.it])
   };
 }
 
@@ -1951,6 +1954,92 @@ function buildPfsDescriptionIt_(spec, mat, pays) {
     ? `${spec.nomIt} in ${mat.it}, ideale per la primavera/estate.`
     : `${spec.nomIt}, ideale per la primavera/estate.`;
   return `${base} Origine: ${pays.it}.`;
+}
+
+function buildEditorialExportedRefIndex_(items) {
+  const out = {};
+  const list = Array.isArray(items) ? items : [];
+  for (let i = 0; i < list.length; i++) {
+    const item = list[i];
+    const ref = normalizeEditorialRefKey_(typeof item === "string" ? item : item && item.ref);
+    if (!ref) continue;
+    out[ref] = true;
+  }
+  return out;
+}
+
+function normalizeEditorialRefKey_(ref) {
+  return String(ref || "").trim().toUpperCase();
+}
+
+function isIgnoredEditorialSetReference_(ref) {
+  const normalizedRef = normalizeEditorialRefKey_(ref);
+  return normalizedRef === "LA25-5" ||
+    normalizedRef === "LA25-5-B" ||
+    normalizedRef === "LA25-3" ||
+    normalizedRef === "LA25-3-B";
+}
+
+function findEditorialSetPairInfo_(ref, exportedRefIndex) {
+  const normalizedRef = normalizeEditorialRefKey_(ref);
+  if (!normalizedRef || !exportedRefIndex || !exportedRefIndex[normalizedRef]) return null;
+  if (isIgnoredEditorialSetReference_(normalizedRef)) return null;
+
+  const isBottom = /\-B$/.test(normalizedRef);
+  const matchingRef = isBottom ? normalizedRef.replace(/\-B$/, "") : (normalizedRef + "-B");
+  if (!matchingRef || !exportedRefIndex[matchingRef]) return null;
+  if (isIgnoredEditorialSetReference_(matchingRef)) return null;
+
+  return {
+    matchingRef: matchingRef,
+    pieceFr: isBottom ? "haut" : "bas",
+    pieceEn: isBottom ? "top" : "bottom",
+    pieceEs: isBottom ? "parte superior" : "parte inferior",
+    pieceDe: isBottom ? "Oberteil" : "Unterteil",
+    pieceIt: isBottom ? "parte superiore" : "parte inferiore"
+  };
+}
+
+function buildEditorialSetLines_(ref, exportedRefIndex) {
+  const info = findEditorialSetPairInfo_(ref, exportedRefIndex);
+  if (!info) {
+    return { fr: "", en: "", es: "", de: "", it: "" };
+  }
+  return {
+    fr: "Ensemble assorti : " + info.pieceFr + " disponible sous la référence " + info.matchingRef + ". Pour acheter l’ensemble complet, veuillez également commander cette référence.",
+    en: "Matching set: " + info.pieceEn + " available under reference " + info.matchingRef + ". To buy the full set, please also order this reference.",
+    es: "Conjunto a juego: la " + info.pieceEs + " está disponible con la referencia " + info.matchingRef + ". Para comprar el conjunto completo, pida también esta referencia.",
+    de: "Passendes Set: Das " + info.pieceDe + " ist unter der Referenz " + info.matchingRef + " erhältlich. Für den Kauf des kompletten Sets bestellen Sie bitte auch diesen Artikel.",
+    it: "Set coordinato: la " + info.pieceIt + " è disponibile con la referenza " + info.matchingRef + ". Per acquistare il set completo, aggiungi anche questo articolo."
+  };
+}
+
+function buildEditorialPackLines_(colisage) {
+  const n = Number(colisage);
+  if (!Number.isFinite(n) || n <= 0) {
+    return { fr: "", en: "", es: "", de: "", it: "" };
+  }
+  const qty = String(Math.round(n));
+  return {
+    fr: "Vendu par pack de " + qty + " uniquement.",
+    en: "Sold in packs of " + qty + " only.",
+    es: "Se vende únicamente en paquetes de " + qty + ".",
+    de: "Nur im " + qty + "er-Pack erhältlich.",
+    it: "Venduto esclusivamente in confezioni da " + qty + "."
+  };
+}
+
+function joinEditorialDescriptionParts_(parts) {
+  const out = [];
+  const seen = {};
+  const list = Array.isArray(parts) ? parts : [];
+  for (let i = 0; i < list.length; i++) {
+    const line = String(list[i] || "").trim();
+    if (!line || seen[line]) continue;
+    seen[line] = true;
+    out.push(line);
+  }
+  return out.join("\n");
 }
 
 function normalizePfsEditorialCategoryKey_(catRaw) {
@@ -2016,7 +2105,7 @@ function pfsApplyTemplateVars_(template, vars) {
   let out = String(template || "");
   Object.keys(vars || {}).forEach(function(key) {
     const value = vars[key] == null ? "" : String(vars[key]);
-    out = out.replace(new RegExp("\\{" + key + "\\}", "g"), value);
+    out = out.replace(new RegExp("\{" + key + "\}", "g"), value);
   });
   return out.replace(/\s{2,}/g, " ").trim();
 }

@@ -54,6 +54,7 @@ function exportStockToMsExport() {
     var stockMap = headerMap_(stockHeaders);
 
     var stockNeed = [
+      "选择",
       "货号",
       "Nom",
       "Catégorie",
@@ -80,13 +81,14 @@ function exportStockToMsExport() {
     var data = shStock.getRange(2, 1, stockLastRow - 1, stockLastCol).getValues();
 
     var ui = SpreadsheetApp.getUi();
-    var msg = "⚠️ L'export va remplacer tout le contenu de MS_EXPORT avec les données de STOCK.\n\nContinuer ?";
+    var msg = "⚠️ L'export va remplacer tout le contenu de MS_EXPORT avec les lignes cochées (选择=TRUE) de STOCK.\n\nContinuer ?";
     var btn = ui.alert("Confirmer export Microstore", msg, ui.ButtonSet.OK_CANCEL);
     if (btn !== ui.Button.OK) {
       ss.toast("Export annulé.", "Microstore", 4);
       return;
     }
 
+    var cSel = stockMap["选择"] - 1;
     var cRef = stockMap["货号"] - 1;
     var cNom = stockMap["nom"] - 1;
     var cCat = stockMap["catégorie"] - 1;
@@ -114,8 +116,10 @@ function exportStockToMsExport() {
     var cCouleursRemark = stockMap["couleurs"] ? (stockMap["couleurs"] - 1) : cCouleur;
 
     var rows = [];
+    var exportedSelectionRows = [];
     for (var i = 0; i < data.length; i++) {
       var r = data[i];
+      if (r[cSel] !== true) continue;
 
       if (cMsStatut >= 0 && String(r[cMsStatut]).trim() === "MS_SUPPRIME") continue;
 
@@ -123,6 +127,7 @@ function exportStockToMsExport() {
       if (!refRaw) continue;
 
       var dtInfo = msNormalizeDateForSort_(r[cDate]);
+      exportedSelectionRows.push(i + 2);
       rows.push({
         sortEmpty: dtInfo.empty,
         sortTs: dtInfo.ts,
@@ -148,6 +153,12 @@ function exportStockToMsExport() {
         paysOrigine: msString_(r[cPaysOrigine]),
         remarque: cRemarque >= 0 ? msString_(r[cRemarque]) : ""
       });
+    }
+
+    if (!rows.length) {
+      msClearMsExportData_(shExp, expLastCol);
+      ss.toast("Aucune ligne cochée (选择)", "Microstore", 5);
+      return;
     }
 
     var exportedRefIndex = msBuildExportedRefIndex_(rows);
@@ -194,6 +205,17 @@ function exportStockToMsExport() {
 
     msClearMsExportData_(shExp, expLastCol);
     if (out.length) shExp.getRange(3, 1, out.length, expLastCol).setValues(out);
+
+    try {
+      var a1 = exportedSelectionRows.map(function(rowNumber) {
+        return shStock.getRange(rowNumber, cSel + 1).getA1Notation();
+      });
+      shStock.getRangeList(a1).setValue(false);
+    } catch (e) {
+      for (var u = 0; u < exportedSelectionRows.length; u++) {
+        shStock.getRange(exportedSelectionRows[u], cSel + 1).setValue(false);
+      }
+    }
 
     SpreadsheetApp.flush();
     Utilities.sleep(1200);

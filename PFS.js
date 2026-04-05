@@ -1881,10 +1881,10 @@ function getPfsEditorialCategoryDefinition_(catRaw) {
     },
     "CROCHETS": {
       nomFr: "Crochet",
-      nomEn: "Crochet",
-      nomEs: "Ganchillo",
-      nomDe: "Häkel",
-      nomIt: "All'uncinetto",
+      nomEn: "Crochet knitwear",
+      nomEs: "Prenda de ganchillo",
+      nomDe: "Häkelmode",
+      nomIt: "Capo all'uncinetto",
       frIdeal: "idéal",
       frMade: "Confectionné"
     },
@@ -1935,9 +1935,9 @@ function getPfsEditorialCategoryDefinition_(catRaw) {
     },
     "SHORTS": {
       nomFr: "Short",
-      nomEn: "Short",
+      nomEn: "Shorts",
       nomEs: "Short",
-      nomDe: "Short",
+      nomDe: "Shorts",
       nomIt: "Short",
       frIdeal: "idéal",
       frMade: "Confectionné"

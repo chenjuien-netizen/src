@@ -2,6 +2,10 @@ const INITIAL_SERVER_RENDER_COUNT = 80;
 const STOCK_WEBAPP_HISTORY_SHEET = "STOCK_HISTORY";
 const STOCK_WEBAPP_STOCK_EXTRA_COLUMNS = ["Notation paquets"];
 
+function doGet(e) {
+  return StockWebApp_legacyDoGet(e);
+}
+
 function StockWebApp_legacyDoGet() {
   const initialResult = StockWebApp_collectPayload_(INITIAL_SERVER_RENDER_COUNT);
   const template = HtmlService.createTemplateFromFile("StockMobile");

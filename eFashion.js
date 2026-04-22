@@ -748,19 +748,10 @@ function efUniqueList_(values) {
   return out;
 }
 
-function exportStockToEFashion() {
-
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const stock = ss.getSheetByName(SHEET_STOCK);
-  const exp = ss.getSheetByName(SHEET_E_EXPORT);
-
-  if (!stock) throw new Error("Feuille STOCK introuvable");
-  if (!exp) throw new Error("Feuille e_export introuvable");
-
-  // --- Map STOCK headers
-  const stockHeaders = stock.getRange(1, 1, 1, stock.getLastColumn()).getValues()[0];
-  const stockMap = headerMap_(stockHeaders);
-
+function exportStockToEFashion(options) {
+  options = options || {};
+  const perfScope = String(options.perfScope || "eFashion export");
+  const totalStart = Date.now();
   const need = [
     "选择",
     "货号",
@@ -775,18 +766,21 @@ function exportStockToEFashion() {
     "Colisage"
   ];
 
-  ensureHeadersExist_(stockMap, need, "STOCK");
+  const stockContext = options.stockContext || buildSelectedStockExportContext_(need);
+  const ss = stockContext.ss || SpreadsheetApp.getActiveSpreadsheet();
+  const stock = stockContext.stock;
+  const exp = ss.getSheetByName(SHEET_E_EXPORT);
 
-  const lastRow = stock.getLastRow();
-  if (lastRow < 2) {
+  if (!stock) throw new Error("Feuille STOCK introuvable");
+  if (!exp) throw new Error("Feuille e_export introuvable");
+
+  if (stockContext.lastRow < 2) {
     ss.toast("STOCK vide", "eFashion", 4);
     return;
   }
 
-  const n = lastRow - 1;
-
-  // Read only what we need
-  const cSel = stockMap["选择"]; 
+  const stockMap = stockContext.stockMap;
+  const cSel = stockContext.selectionCol || stockMap["选择"];
   const cRef = stockMap["货号"];
   const cPrix = stockMap["prix@"];
   const cDate = stockMap["date de création"];
@@ -797,53 +791,43 @@ function exportStockToEFashion() {
   const cCouleursStock = stockMap["couleurs"];
   const cCategorieStock = stockMap["catégorie"];
   const cColisage = stockMap["colisage"];
+  const selectedRecords = Array.isArray(stockContext.selectedRecords) ? stockContext.selectedRecords : [];
 
-  const refVals = stock.getRange(2, cRef, n, 1).getValues().flat();
-  const prixVals = stock.getRange(2, cPrix, n, 1).getValues().flat();
-  const dateVals = stock.getRange(2, cDate, n, 1).getValues().flat();
-  const contenuVals = stock.getRange(2, cContenu, n, 1).getValues().flat();
-  const poidsVals = stock.getRange(2, cPoids, n, 1).getValues().flat();
-  const paysVals = stock.getRange(2, cPays, n, 1).getValues().flat();
-  const compoVals = stock.getRange(2, cCompo, n, 1).getValues().flat();
-  const selVals = stock.getRange(2, cSel, n, 1).getValues().flat();
-  const couleursStockVals = stock.getRange(2, cCouleursStock, n, 1).getValues().flat();
-  const categorieStockVals = stock.getRange(2, cCategorieStock, n, 1).getValues().flat();
-  const colisageVals = stock.getRange(2, cColisage, n, 1).getValues().flat();
+  Logger.log(perfScope + " | selected rows=" + selectedRecords.length + " / stock rows=" + Math.max(0, stockContext.lastRow - 1));
 
   let rows = [];
   const bad = []; // {row, ref, reason}
+  const validationStart = Date.now();
 
-  for (let i = 0; i < n; i++) {
-
-    if (selVals[i] !== true) continue;
-
-    const ref = String(refVals[i] || "").trim();
+  for (let i = 0; i < selectedRecords.length; i++) {
+    const record = selectedRecords[i];
+    const values = Array.isArray(record.values) ? record.values : [];
+    const sheetRow = record.row;
+    const ref = String(values[cRef - 1] || "").trim();
     if (!ref) continue;
 
-    const prix = formatPriceEFashionText_(prixVals[i]);
-    const dt = normalizeDateForSortEf_(dateVals[i]);
-    const contenuColis = String(contenuVals[i] ?? "").trim();
-    const colisage = parseColisageEFashion_(colisageVals[i]);
+    const prix = formatPriceEFashionText_(values[cPrix - 1]);
+    const dt = normalizeDateForSortEf_(values[cDate - 1]);
+    const contenuColis = String(values[cContenu - 1] ?? "").trim();
+    const colisage = parseColisageEFashion_(values[cColisage - 1]);
     const tailles = colisage.ok
       ? extractTaillesFromContenuColisEFashion_(contenuColis, colisage.value)
       : "";
-    const poids = String(poidsVals[i] ?? "").trim();
-    const pays = String(paysVals[i] ?? "").trim();
+    const poids = String(values[cPoids - 1] ?? "").trim();
+    const pays = String(values[cPays - 1] ?? "").trim();
 
-    // Composition: prefer shared normalizer from PFS.js if present
     let compo = "";
     if (typeof normalizeCompositionPFS_ === "function") {
-      compo = normalizeCompositionPFS_(compoVals[i]);
+      compo = normalizeCompositionPFS_(values[cCompo - 1]);
     } else {
-      compo = normalizeCompositionEFashionFallback_(compoVals[i]);
+      compo = normalizeCompositionEFashionFallback_(values[cCompo - 1]);
     }
 
-    const couleursStock = String(couleursStockVals[i] ?? "").trim();
-    const catStock = String(categorieStockVals[i] ?? "").trim();
+    const couleursStock = String(values[cCouleursStock - 1] ?? "").trim();
+    const catStock = String(values[cCategorieStock - 1] ?? "").trim();
     const efCat = mapStockCategoryToEFashion_(catStock);
     const taillesInfo = tailles ? parseEFashionTaillesStructure_(tailles) : { ok: false, reason: "Tailles introuvables ou invalides dans Contenu colis" };
 
-    const sheetRow = 2 + i;
     if (!colisage.ok) {
       bad.push({ row: sheetRow, ref: ref || "(vide)", reason: colisage.reason });
       continue;
@@ -866,6 +850,7 @@ function exportStockToEFashion() {
       bad.push({ row: sheetRow, ref: ref || "(vide)", reason: "Couleurs incompatibles avec la structure tailles" });
       continue;
     }
+
     rows.push({
       ref: ref,
       prix: prix,
@@ -881,8 +866,9 @@ function exportStockToEFashion() {
       sousSousCategorie: efCat.sousSousCategorie,
       colisage: colisage.value,
     });
-
   }
+  logPerfStep_(perfScope, "validation", validationStart, "rows=" + selectedRecords.length + ", ok=" + rows.length + ", bad=" + bad.length);
+
   if (bad.length) {
     const details = bad
       .slice(0, 15)
@@ -1029,39 +1015,48 @@ function exportStockToEFashion() {
   }
 
   if (out.length) {
+    const writeStart = Date.now();
     exp.getRange(2, 1, out.length, hinfo.width).setNumberFormat("@");
     exp.getRange(2, 1, out.length, hinfo.width).setValues(out);
-    exp.getRange(2, 1, out.length, hinfo.width).setNumberFormat("@");
-    SpreadsheetApp.flush();
+    logPerfStep_(perfScope, "sheet write", writeStart, "out=" + out.length);
 
-    // Auto-uncheck: décoche 选择 pour les lignes exportées
-    try {
-      const a1 = rows.map(it => stock.getRange(it.row, cSel).getA1Notation());
-      stock.getRangeList(a1).setValue(false);
-    } catch (e) {
-      for (const it of rows) {
-        stock.getRange(it.row, cSel).setValue(false);
+    if (!options.deferUncheck) {
+      try {
+        const a1 = rows.map(function(it) { return stock.getRange(it.row, cSel).getA1Notation(); });
+        stock.getRangeList(a1).setValue(false);
+      } catch (e) {
+        for (const it of rows) {
+          stock.getRange(it.row, cSel).setValue(false);
+        }
       }
     }
 
-    // Auto-export Drive after sheet generation
-    // Important: flush first so the XLSX export sees the newly written data, not stale previous values.
-    try {
-      SpreadsheetApp.flush();
-      Utilities.sleep(1200);
-      exportEFashionToDriveXlsx();
-    } catch (e) {
-      Logger.log("Auto export Drive eFashion failed: " + e);
+    if (options.autoDrive !== false) {
+      try {
+        const driveStart = Date.now();
+        SpreadsheetApp.flush();
+        const driveDelayMs = Number(options.driveDelayMs);
+        const effectiveDelayMs = Number.isFinite(driveDelayMs) ? Math.max(0, driveDelayMs) : 1200;
+        if (effectiveDelayMs > 0) Utilities.sleep(effectiveDelayMs);
+        exportEFashionToDriveXlsx();
+        logPerfStep_(perfScope, "drive xlsx", driveStart, "delay=" + effectiveDelayMs);
+      } catch (e) {
+        Logger.log("Auto export Drive eFashion failed: " + e);
+      }
     }
 
-    // Also generate photo ZIP helper files in the export Drive folder
-    try {
-      exportEFashionPhotoZipHelperToDrive_(rows);
-    } catch (e) {
-      Logger.log("Photo ZIP helper export failed: " + e);
+    if (options.skipDriveHelpers !== true) {
+      try {
+        const helperStart = Date.now();
+        exportEFashionPhotoZipHelperToDrive_(rows);
+        logPerfStep_(perfScope, "photo helper", helperStart);
+      } catch (e) {
+        Logger.log("Photo ZIP helper export failed: " + e);
+      }
     }
   }
 
+  logPerfStep_(perfScope, "total", totalStart, "out=" + out.length);
   ss.toast("Export eFashion terminé : " + out.length + " lignes", "eFashion", 5);
 }
 

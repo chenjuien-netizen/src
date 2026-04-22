@@ -199,6 +199,106 @@ function rebuildAndSortStockSheet_(sheet) {
   sheet.getRange(2, 1, lastRow - 1, lastCol).sort({ column: sortCol, ascending: true });
 }
 
+function readSheetRowsByNumbers_(sheet, rowNumbers, lastCol) {
+  var rows = Array.isArray(rowNumbers) ? rowNumbers.slice() : [];
+  if (!sheet || !rows.length || !lastCol) return [];
+
+  rows.sort(function(a, b) { return a - b; });
+
+  var out = [];
+  var blockStart = rows[0];
+  var blockEnd = rows[0];
+
+  function pushBlock_(startRow, endRow) {
+    var numRows = endRow - startRow + 1;
+    var values = sheet.getRange(startRow, 1, numRows, lastCol).getValues();
+    for (var i = 0; i < values.length; i++) {
+      var rowNumber = startRow + i;
+      out.push({
+        row: rowNumber,
+        rowIndex: rowNumber - 2,
+        values: values[i]
+      });
+    }
+  }
+
+  for (var i = 1; i < rows.length; i++) {
+    var row = rows[i];
+    if (row === blockEnd + 1) {
+      blockEnd = row;
+      continue;
+    }
+    pushBlock_(blockStart, blockEnd);
+    blockStart = row;
+    blockEnd = row;
+  }
+
+  pushBlock_(blockStart, blockEnd);
+  return out;
+}
+
+function buildSelectedStockExportContext_(requiredHeaders) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var stock = ss.getSheetByName(SHEET_STOCK);
+
+  if (!stock) {
+    throw new Error("Feuille introuvable: " + SHEET_STOCK);
+  }
+
+  var lastRow = stock.getLastRow();
+  var lastCol = stock.getLastColumn();
+  if (lastRow < 1 || lastCol < 1) {
+    return {
+      ss: ss,
+      stock: stock,
+      stockHeaders: [],
+      stockMap: {},
+      lastRow: lastRow,
+      lastCol: lastCol,
+      selectionCol: 0,
+      selectedRows: [],
+      selectedRecords: []
+    };
+  }
+
+  var stockHeaders = stock.getRange(1, 1, 1, lastCol).getValues()[0];
+  var stockMap = headerMap_(stockHeaders);
+  if (Array.isArray(requiredHeaders) && requiredHeaders.length) {
+    ensureHeadersExist_(stockMap, requiredHeaders, "STOCK");
+  }
+
+  var selectionCol = stockMap["选择"];
+  if (!selectionCol) {
+    throw new Error("Colonne '选择' introuvable dans STOCK.");
+  }
+
+  var selectedRows = [];
+  if (lastRow >= 2) {
+    var values = stock.getRange(2, selectionCol, lastRow - 1, 1).getValues().flat();
+    for (var i = 0; i < values.length; i++) {
+      if (values[i] === true) selectedRows.push(i + 2);
+    }
+  }
+
+  return {
+    ss: ss,
+    stock: stock,
+    stockHeaders: stockHeaders,
+    stockMap: stockMap,
+    lastRow: lastRow,
+    lastCol: lastCol,
+    selectionCol: selectionCol,
+    selectedRows: selectedRows,
+    selectedRecords: readSheetRowsByNumbers_(stock, selectedRows, lastCol)
+  };
+}
+
+function logPerfStep_(scope, label, startMs, extra) {
+  var duration = Date.now() - Number(startMs || 0);
+  var suffix = extra ? " | " + String(extra) : "";
+  Logger.log(String(scope || "perf") + " | " + String(label || "step") + "=" + duration + " ms" + suffix);
+}
+
 function normalizeColorCatalogKey_(value) {
   var s = (value === null || typeof value === "undefined") ? "" : String(value);
   return s

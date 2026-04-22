@@ -85,22 +85,60 @@ function menuExportEFashionAndPFS() {
   lock.waitLock(30000);
 
   try {
-    const selection = getSelectedStockSelectionState_();
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const perfScope = "eFashion+PFS batch";
+    const totalStart = Date.now();
+    const stockContext = buildSelectedStockExportContext_([
+      "选择",
+      "货号",
+      "Prix@",
+      "Date de création",
+      "Catégorie",
+      "Contenu colis",
+      "Poids (en gramme)",
+      "Pays d'origine",
+      "Composition matérielle",
+      "Couleurs",
+      "Colisage"
+    ]);
+    const ss = stockContext.ss || SpreadsheetApp.getActiveSpreadsheet();
 
-    if (!selection.rows.length) {
+    Logger.log(perfScope + " | selected rows=" + stockContext.selectedRows.length + " / stock rows=" + Math.max(0, stockContext.lastRow - 1));
+
+    if (!stockContext.selectedRows.length) {
       ss.toast("Aucune ligne cochée (选择)", "eFashion/PFS", 5);
       return;
     }
 
-    exportStockToEFashion();
-    restoreStockSelectionState_(selection);
-
     try {
-      exportStockToPFS();
-    } finally {
-      clearStockSelectionState_(selection);
+      const efStart = Date.now();
+      exportStockToEFashion({
+        stockContext: stockContext,
+        deferUncheck: true,
+        driveDelayMs: 300,
+        perfScope: "eFashion batch"
+      });
+      logPerfStep_(perfScope, "eFashion total", efStart);
+
+      const pfsStart = Date.now();
+      exportStockToPFS({
+        stockContext: stockContext,
+        deferUncheck: true,
+        driveDelayMs: 300,
+        perfScope: "PFS batch"
+      });
+      logPerfStep_(perfScope, "PFS total", pfsStart);
+
+      clearStockSelectionState_({
+        sheet: stockContext.stock,
+        selectionCol: stockContext.selectionCol,
+        rows: stockContext.selectedRows
+      });
+    } catch (e) {
+      Logger.log(perfScope + " | aborted without uncheck: " + e);
+      throw e;
     }
+
+    logPerfStep_(perfScope, "batch total", totalStart);
   } finally {
     lock.releaseLock();
   }

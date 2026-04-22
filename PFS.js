@@ -376,20 +376,11 @@ function compareStockWithPfsImport() {
   };
 }
 
-function exportStockToPFS() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const stock = ss.getSheetByName(SHEET_STOCK);
-  const exp = ss.getSheetByName(SHEET_PFS_EXPORT);
-
-  if (!stock) throw new Error("STOCK introuvable");
-  if (!exp) throw new Error("pfs_export introuvable");
-
-  // --- Map STOCK headers
-  const stockHeaders = stock.getRange(1, 1, 1, stock.getLastColumn()).getValues()[0];
-  const stockMap = headerMap_(stockHeaders);
-
-  // Required for v0 export
-  ensureHeadersExist_(stockMap, [
+function exportStockToPFS(options) {
+  options = options || {};
+  const perfScope = String(options.perfScope || "PFS export");
+  const totalStart = Date.now();
+  const need = [
     "选择",
     "货号",
     "Prix@",
@@ -399,19 +390,25 @@ function exportStockToPFS() {
     "Pays d'origine",
     "Couleurs",
     "Colisage"
-  ], "STOCK");
+  ];
 
-  const lastRow = stock.getLastRow();
-  if (lastRow < 2) {
+  const stockContext = options.stockContext || buildSelectedStockExportContext_(need);
+  const ss = stockContext.ss || SpreadsheetApp.getActiveSpreadsheet();
+  const stock = stockContext.stock;
+  const exp = ss.getSheetByName(SHEET_PFS_EXPORT);
+
+  if (!stock) throw new Error("STOCK introuvable");
+  if (!exp) throw new Error("pfs_export introuvable");
+
+  if (stockContext.lastRow < 2) {
     ss.toast("STOCK vide", "PFS", 4);
     return;
   }
 
-  // Read only what we need (fast)
-  const n = lastRow - 1;
-  const colSel = stockMap["选择"];
+  const stockMap = stockContext.stockMap;
+  const colSel = stockContext.selectionCol || stockMap["选择"];
   const colRef = stockMap["货号"];
-  const colPrix = stockMap["prix@"]; // headerMap_ lowercases keys
+  const colPrix = stockMap["prix@"];
   const colCat = stockMap["catégorie"];
   const colContenu = stockMap["contenu colis"];
   if (!colContenu) {
@@ -427,41 +424,32 @@ function exportStockToPFS() {
   if (!colPoids) throw new Error("PFS export: colonne 'Poids (en gramme)' introuvable dans STOCK.");
   if (!colPays) throw new Error("PFS export: colonne 'Pays d'origine' introuvable dans STOCK.");
 
-  const selVals = stock.getRange(2, colSel, n, 1).getValues().flat();
-  const refVals = stock.getRange(2, colRef, n, 1).getValues().flat();
-  const prixVals = stock.getRange(2, colPrix, n, 1).getValues().flat();
-  const catVals = stock.getRange(2, colCat, n, 1).getValues().flat();
-  const contenuVals = stock.getRange(2, colContenu, n, 1).getValues().flat();
-  const compoVals = colCompo ? stock.getRange(2, colCompo, n, 1).getValues().flat() : null;
-  const poidsVals = stock.getRange(2, colPoids, n, 1).getValues().flat();
-  const paysVals = stock.getRange(2, colPays, n, 1).getValues().flat();
-  const couleursVals = stock.getRange(2, colCouleurs, n, 1).getValues().flat();
-  const colisageVals = stock.getRange(2, colColisage, n, 1).getValues().flat();
+  const selectedRecords = Array.isArray(stockContext.selectedRecords) ? stockContext.selectedRecords : [];
+  Logger.log(perfScope + " | selected rows=" + selectedRecords.length + " / stock rows=" + Math.max(0, stockContext.lastRow - 1));
 
-  // Collect only selected rows
   const selected = [];
   const bad = []; // {row, ref, reason}
+  const validationStart = Date.now();
 
-  for (let i = 0; i < n; i++) {
-    if (selVals[i] !== true) continue; // checkbox TRUE only
-
-    const sheetRow = 2 + i;
-    const ref = String(refVals[i] || "").trim();
-    const prix = String(prixVals[i] ?? "").trim();
-    const colisage = parseColisagePFS_(colisageVals[i]);
+  for (let i = 0; i < selectedRecords.length; i++) {
+    const record = selectedRecords[i];
+    const values = Array.isArray(record.values) ? record.values : [];
+    const sheetRow = record.row;
+    const ref = String(values[colRef - 1] || "").trim();
+    const prix = String(values[colPrix - 1] ?? "").trim();
+    const colisage = parseColisagePFS_(values[colColisage - 1]);
     const tailles = colisage.ok
-      ? extractTaillesFromContenuColis_(contenuVals[i], colisage.value)
+      ? extractTaillesFromContenuColis_(values[colContenu - 1], colisage.value)
       : "";
-    const poids = String(poidsVals[i] ?? "").trim();
-    const paysFab = String(paysVals[i] ?? "").trim();
-    const couleursRaw = String(couleursVals[i] ?? "").trim();
+    const poids = String(values[colPoids - 1] ?? "").trim();
+    const paysFab = String(values[colPays - 1] ?? "").trim();
+    const couleursRaw = String(values[colCouleurs - 1] ?? "").trim();
     const taillesInfo = tailles ? parsePfsTaillesStructure_(tailles) : { ok: false, reason: "Tailles introuvables (Contenu colis)" };
     const colorPack = taillesInfo.ok
       ? parsePfsColorPackFromStock_(couleursRaw, taillesInfo.sizes, colisage.ok ? colisage.value : 0)
       : { ok: false, reason: taillesInfo.reason };
 
-    // Category normalization and validation
-    const catRaw = String(catVals[i] || "").trim();
+    const catRaw = String(values[colCat - 1] || "").trim();
     const catPfs = normalizeCategoriePFS_(catRaw);
     if (!catPfs) {
       bad.push({ row: sheetRow, ref: ref || "(vide)", reason: "Catégorie PFS invalide: " + (catRaw || "(vide)") });
@@ -509,7 +497,7 @@ function exportStockToPFS() {
       cat: catPfs,
       catRaw: catRaw,
       tailles: tailles,
-      compo: compoVals ? String(compoVals[i] || "").trim() : "",
+      compo: colCompo ? String(values[colCompo - 1] || "").trim() : "",
       poids: poids,
       paysFab: paysFab,
       taillesInfo: taillesInfo,
@@ -517,6 +505,7 @@ function exportStockToPFS() {
       colisage: colisage.value,
     });
   }
+  logPerfStep_(perfScope, "validation", validationStart, "rows=" + selectedRecords.length + ", ok=" + selected.length + ", bad=" + bad.length);
 
   // If invalid selected rows exist, fail loudly (so tests are deterministic)
   if (bad.length) {
@@ -677,41 +666,51 @@ function exportStockToPFS() {
   }
 
   // Pre-format as TEXT before writing, to avoid Sheets coercion
+  const writeStart = Date.now();
   exp.getRange(2, 1, out.length, hinfo.width).setNumberFormat("@");
   exp.getRange(2, 1, out.length, hinfo.width).setValues(out);
 
   // Ensure data is exported with sane formats (avoid date coercion like 6.8 => 06/08/2026)
   applyPfsDataFormats_(exp, out.length, hinfo.width, { cPrix: cPrix, cPoids: cPoids });
+  logPerfStep_(perfScope, "sheet write", writeStart, "out=" + out.length);
 
-  // Auto-uncheck: décoche 选择 pour les lignes exportées
-  try {
-    const ranges = selected.map(it => stock.getRange(it.row, colSel));
-    const rl = stock.getRangeList(ranges.map(r => r.getA1Notation()));
-    // RangeList supports setValue in modern Apps Script
-    rl.setValue(false);
-  } catch (e) {
-    // Fallback: few selections -> loop is fine
-    for (const it of selected) {
-      stock.getRange(it.row, colSel).setValue(false);
+  if (!options.deferUncheck) {
+    try {
+      const ranges = selected.map(it => stock.getRange(it.row, colSel));
+      const rl = stock.getRangeList(ranges.map(r => r.getA1Notation()));
+      rl.setValue(false);
+    } catch (e) {
+      for (const it of selected) {
+        stock.getRange(it.row, colSel).setValue(false);
+      }
     }
   }
 
-  // Auto-export Drive after sheet generation
-  try {
-    SpreadsheetApp.flush();
-    Utilities.sleep(1200);
-    exportPFSToDriveXlsx();
-  } catch (e) {
-    Logger.log("Auto export Drive PFS failed: " + e);
+  if (options.autoDrive !== false) {
+    try {
+      const driveStart = Date.now();
+      SpreadsheetApp.flush();
+      const driveDelayMs = Number(options.driveDelayMs);
+      const effectiveDelayMs = Number.isFinite(driveDelayMs) ? Math.max(0, driveDelayMs) : 1200;
+      if (effectiveDelayMs > 0) Utilities.sleep(effectiveDelayMs);
+      exportPFSToDriveXlsx();
+      logPerfStep_(perfScope, "drive xlsx", driveStart, "delay=" + effectiveDelayMs);
+    } catch (e) {
+      Logger.log("Auto export Drive PFS failed: " + e);
+    }
   }
 
-  // Also generate photo helper files in the export Drive folder
-  try {
-    exportPfsPhotoDupHelperToDrive_(selected);
-  } catch (e) {
-    Logger.log("PFS photo helper export failed: " + e);
+  if (options.skipDriveHelpers !== true) {
+    try {
+      const helperStart = Date.now();
+      exportPfsPhotoDupHelperToDrive_(selected);
+      logPerfStep_(perfScope, "photo helper", helperStart);
+    } catch (e) {
+      Logger.log("PFS photo helper export failed: " + e);
+    }
   }
 
+  logPerfStep_(perfScope, "total", totalStart, "out=" + out.length);
   ss.toast("PFS_EXPORT généré : " + out.length + " lignes", "PFS", 6);
 }
 

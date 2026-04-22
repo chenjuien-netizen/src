@@ -1620,44 +1620,118 @@ function normalizeCategoriePFS_(cat) {
  * - "35%LIN65%RAYON" => "35% Lin - 65% Rayon"
  * - "37%COTON 60%POLYESTER3%ELASTHANNE" => "37% Coton - 60% Polyester - 3% Élasthanne"
  ****************************************************/
-function normalizeCompositionPFS_(v) {
-  const raw0 = String(v || "").trim();
-  if (!raw0) return "";
+var SHARED_EXPORT_MATERIALS_FR_ = [
+  "Vêtements", "Rayonne", "Chlorofibre", "ABS", "Acétate", "Toile de jute", "Acrylique", "Alpaga",
+  "Textile", "Fil d'aluminium", "Fourrure véritable", "Angora", "Nylon", "Bambou", "Laiton", "Cuir de veau",
+  "Métal", "Cuir de vachette", "Carbone", "Cachemire", "Céramique", "Cotton peigné", "Cupro", "Cuivre",
+  "Coton", "Élasthanne", "Verre", "Agneau", "Cuir", "Soie", "Lin", "Lurex", "Lyocell", "Fil métallique",
+  "Polyester", "Modal", "Mohair", "Autre", "Ramie", "Papier", "Coton de percale", "Plexiglass",
+  "Polyamide", "Polycarbonate", "Fibre de polyester", "Polypropylène", "P.U.", "PVC", "Paille",
+  "Synthétique", "Fourrure synthétique", "Cuir végétal", "Vinyle", "Viscose", "Laine", "Lapin", "Marmotte",
+  "Autruche", "Renard", "Acier", "Plume", "Duvet", "Polyester recyclé", "Coton recyclé",
+  "Polyamide recyclé", "Laine recyclée", "Econyl", "Coton bio", "Chanvre bio", "Lin bio", "Laine bio",
+  "Jute", "Cuir à tannage", "Lenpur", "Fibre Ingeo", "Fibre d’ortie", "Bébé alpaca", "Kid Mohair",
+  "Super Kid Mohair", "Raffia", "Polyacrylique", "PBT"
+];
 
-  // Uppercase for matching, normalize accents/typos lightly
-  let raw = raw0
-    .replace(/\u00A0/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+var SHARED_EXPORT_MATERIAL_ALIASES_ = {
+  "RAYON": "Rayonne",
+  "RAYONNE": "Rayonne",
+  "COTTON": "Coton",
+  "COMBEDCOTTON": "Cotton peigné",
+  "PERCALECOTTON": "Coton de percale",
+  "SILK": "Soie",
+  "LINEN": "Lin",
+  "WOOL": "Laine",
+  "LEATHER": "Cuir",
+  "ELASTANE": "Élasthanne",
+  "ELASTHANNE": "Élasthanne",
+  "SPANDEX": "Élasthanne",
+  "POLYSTER": "Polyester",
+  "BAMBOO": "Bambou",
+  "ACRYLIC": "Acrylique",
+  "CASHMERE": "Cachemire",
+  "MODAL": "Modal",
+  "LYOCELL": "Lyocell",
+  "MOHAIR": "Mohair",
+  "ANGORA": "Angora",
+  "CUPRO": "Cupro",
+  "JUTE": "Jute",
+  "PU": "P.U.",
+  "POLYURETHANE": "P.U.",
+  "POLYURETHAN": "P.U.",
+  "POLYAMIDE": "Polyamide",
+  "POLYESTER": "Polyester",
+  "VISCOSE": "Viscose",
+  "NYLON": "Nylon",
+  "LUREX": "Lurex",
+  "PVC": "PVC",
+  "VINYL": "Vinyle",
+  "SYNTHETIC": "Synthétique",
+  "FAUXFUR": "Fourrure synthétique",
+  "FAKEFUR": "Fourrure synthétique",
+  "RECYCLEDPOLYESTER": "Polyester recyclé",
+  "RECYCLEDCOTTON": "Coton recyclé",
+  "RECYCLEDPOLYAMIDE": "Polyamide recyclé",
+  "RECYCLEDWOOL": "Laine recyclée",
+  "ORGANICCOTTON": "Coton bio",
+  "ORGANICLINEN": "Lin bio",
+  "ORGANICWOOL": "Laine bio",
+  "ORGANICHEMP": "Chanvre bio"
+};
 
-  // Common typos
-  raw = raw.replace(/POLYSTER/gi, "POLYESTER");
-  raw = raw.replace(/RAYONNE/gi, "RAYON");
-  raw = raw.replace(/LINEN/gi, "LIN");
-  raw = raw.replace(/ELASTHANNE/gi, "ÉLASTHANNE");
+var SHARED_EXPORT_MATERIAL_TRANSLATIONS_ = {
+  "RAYONNE": { fr: "rayonne", en: "rayon", es: "rayón", de: "Rayon", it: "rayon" },
+  "COTON": { fr: "coton", en: "cotton", es: "algodón", de: "Baumwolle", it: "cotone" },
+  "SOIE": { fr: "soie", en: "silk", es: "seda", de: "Seide", it: "seta" },
+  "LIN": { fr: "lin", en: "linen", es: "lino", de: "Leinen", it: "lino" },
+  "LAINE": { fr: "laine", en: "wool", es: "lana", de: "Wolle", it: "lana" },
+  "ÉLASTHANNE": { fr: "élasthanne", en: "elastane", es: "elastano", de: "Elasthan", it: "elastan" },
+  "POLYESTER": { fr: "polyester", en: "polyester", es: "poliéster", de: "Polyester", it: "poliestere" },
+  "POLYAMIDE": { fr: "polyamide", en: "polyamide", es: "poliamida", de: "Polyamid", it: "poliammide" },
+  "VISCOSE": { fr: "viscose", en: "viscose", es: "viscosa", de: "Viskose", it: "viscosa" },
+  "NYLON": { fr: "nylon", en: "nylon", es: "nailon", de: "Nylon", it: "nylon" },
+  "MODAL": { fr: "modal", en: "modal", es: "modal", de: "Modal", it: "modal" },
+  "LYOCELL": { fr: "lyocell", en: "lyocell", es: "lyocell", de: "Lyocell", it: "lyocell" },
+  "CACHEMIRE": { fr: "cachemire", en: "cashmere", es: "cachemira", de: "Kaschmir", it: "cashmere" },
+  "ACRYLIQUE": { fr: "acrylique", en: "acrylic", es: "acrílico", de: "Acryl", it: "acrilico" },
+  "BAMBOU": { fr: "bambou", en: "bamboo", es: "bambú", de: "Bambus", it: "bambù" },
+  "CUIR": { fr: "cuir", en: "leather", es: "cuero", de: "Leder", it: "pelle" },
+  "P.U.": { fr: "P.U.", en: "PU", es: "PU", de: "PU", it: "PU" },
+  "PVC": { fr: "PVC", en: "PVC", es: "PVC", de: "PVC", it: "PVC" },
+  "RAYON": { fr: "rayon", en: "rayon", es: "rayón", de: "Rayon", it: "rayon" }
+};
 
-  const up = raw.toUpperCase();
+var __sharedExportMaterialMapCache_ = null;
 
-  // Extract pairs like 35% COTON, including stuck formats (35%LIN65%RAYON)
-  const re = /(\d+)\s*%\s*([A-ZÉÈÊËÀÂÎÏÔÖÛÜÙÇ]+(?:\s+[A-ZÉÈÊËÀÂÎÏÔÖÛÜÙÇ]+)*)/g;
-  const parts = [];
-  let m;
-  while ((m = re.exec(up)) !== null) {
-    const pct = m[1];
-    const matRaw = m[2].trim();
-    const mat = normalizeMaterialName_(matRaw);
-    if (mat) parts.push(pct + "% " + mat);
-  }
-
-  if (!parts.length) {
-    // Fallback: just title-case the string
-    return normalizeMaterialName_(raw);
-  }
-
-  return parts.join(" - ");
+function normalizeSharedExportMaterialKey_(value) {
+  return String(value || "")
+    .trim()
+    .replace(/[’`´']/g, "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9]+/g, "")
+    .toUpperCase();
 }
 
-function normalizeMaterialName_(matRaw) {
+function getSharedExportMaterialMap_() {
+  if (__sharedExportMaterialMapCache_) return __sharedExportMaterialMapCache_;
+
+  const map = {};
+  for (let i = 0; i < SHARED_EXPORT_MATERIALS_FR_.length; i++) {
+    const canonical = SHARED_EXPORT_MATERIALS_FR_[i];
+    map[normalizeSharedExportMaterialKey_(canonical)] = canonical;
+  }
+
+  Object.keys(SHARED_EXPORT_MATERIAL_ALIASES_).forEach(function(alias) {
+    map[normalizeSharedExportMaterialKey_(alias)] = SHARED_EXPORT_MATERIAL_ALIASES_[alias];
+  });
+
+  __sharedExportMaterialMapCache_ = map;
+  return map;
+}
+
+function normalizeSharedMaterialName_(matRaw) {
   let s = String(matRaw || "").trim();
   if (!s) return "";
 
@@ -1666,197 +1740,217 @@ function normalizeMaterialName_(matRaw) {
     .replace(/\s+/g, " ")
     .trim();
 
-  // If it's already something like "90% Viscose - 10% Polyester", keep structure for non-percentage fallback
-  // For single material names, map to canonical French casing.
-  const up = s.toUpperCase();
-
-  // Split on separators for fallback strings
   if (/[\-/,]/.test(s) && /%/.test(s)) {
-    // If someone passed a full composition string, return as-is (normalized spaces)
     return s.replace(/\s*-\s*/g, " - ").replace(/\s*,\s*/g, ", ");
   }
 
-  // Canonical mapping
-  const MAP = {
-    "COTON": "Coton",
-    "POLYESTER": "Polyester",
-    "VISCOSE": "Viscose",
-    "POLYAMIDE": "Polyamide",
-    "POLYURÉTHANE": "Polyuréthane",
-    "POLYURETHANE": "Polyuréthane",
-    "ÉLASTHANNE": "Élasthanne",
-    "ELASTHANNE": "Élasthanne",
-    "NYLON": "Nylon",
-    "LAINE": "Laine",
-    "LIN": "Lin",
-    "RAYON": "Rayon",
-    "SPANDEX": "Spandex"
-  };
+  const map = getSharedExportMaterialMap_();
+  const direct = map[normalizeSharedExportMaterialKey_(s)];
+  if (direct) return direct;
 
-  // Some inputs may contain multiple words (e.g. "POLY URÉTHANE")
-  // Try exact match first
-  if (MAP[up]) return MAP[up];
-
-  // Remove spaces to catch variants
-  const compact = up.replace(/\s+/g, "");
-  if (MAP[compact]) return MAP[compact];
-
-  // Title-case fallback
   const low = s.toLowerCase();
   return low.charAt(0).toUpperCase() + low.slice(1);
+}
+
+function normalizeMaterialName_(matRaw) {
+  return normalizeSharedMaterialName_(matRaw);
+}
+
+function extractNormalizedCompositionParts_(compositionRaw) {
+  const normalized = normalizeCompositionPFS_(compositionRaw);
+  if (!normalized) return [];
+
+  if (/%/.test(normalized)) {
+    return String(normalized)
+      .split(/\s*-\s*/)
+      .map(function(part) {
+        const m = String(part || "").trim().match(/^(\d+)%\s+(.+)$/);
+        if (!m) return null;
+        const material = normalizeSharedMaterialName_(m[2]);
+        if (!material) return null;
+        return { pct: m[1], material: material };
+      })
+      .filter(Boolean);
+  }
+
+  const single = normalizeSharedMaterialName_(normalized);
+  return single ? [{ pct: "", material: single }] : [];
+}
+
+function buildSharedMaterialLocaleName_(materialFr, locale) {
+  const canonical = normalizeSharedMaterialName_(materialFr);
+  if (!canonical) return "";
+
+  const key = normalizeSharedExportMaterialKey_(canonical);
+  const t = SHARED_EXPORT_MATERIAL_TRANSLATIONS_[key];
+  if (t && t[locale]) return t[locale];
+
+  if (locale === "de") return canonical;
+  return canonical.toLowerCase();
+}
+
+function joinSharedMaterialList_(items, locale) {
+  const list = Array.isArray(items) ? items.filter(Boolean) : [];
+  if (!list.length) return "";
+  if (list.length === 1) return list[0];
+
+  const conjMap = { fr: " et ", en: " and ", es: " y ", de: " und ", it: " e " };
+  const conj = conjMap[locale] || ", ";
+  if (list.length === 2) return list[0] + conj + list[1];
+  return list.slice(0, -1).join(", ") + conj + list[list.length - 1];
+}
+
+function buildSharedCompositionMaterialTextSet_(compositionRaw) {
+  const parts = extractNormalizedCompositionParts_(compositionRaw);
+  if (!parts.length) {
+    return { fr: "", en: "", es: "", de: "", it: "" };
+  }
+
+  const uniqueFr = [];
+  const seen = {};
+  for (let i = 0; i < parts.length; i++) {
+    const material = normalizeSharedMaterialName_(parts[i].material);
+    const key = normalizeSharedExportMaterialKey_(material);
+    if (!material || seen[key]) continue;
+    seen[key] = true;
+    uniqueFr.push(material);
+  }
+
+  if (!uniqueFr.length) {
+    return { fr: "", en: "", es: "", de: "", it: "" };
+  }
+
+  return {
+    fr: joinSharedMaterialList_(uniqueFr.map(function(mat) { return buildSharedMaterialLocaleName_(mat, "fr"); }), "fr"),
+    en: joinSharedMaterialList_(uniqueFr.map(function(mat) { return buildSharedMaterialLocaleName_(mat, "en"); }), "en"),
+    es: joinSharedMaterialList_(uniqueFr.map(function(mat) { return buildSharedMaterialLocaleName_(mat, "es"); }), "es"),
+    de: joinSharedMaterialList_(uniqueFr.map(function(mat) { return buildSharedMaterialLocaleName_(mat, "de"); }), "de"),
+    it: joinSharedMaterialList_(uniqueFr.map(function(mat) { return buildSharedMaterialLocaleName_(mat, "it"); }), "it")
+  };
+}
+
+function normalizeCompositionPFS_(v) {
+  const raw0 = String(v || "").trim();
+  if (!raw0) return "";
+
+  let raw = raw0
+    .replace(/\u00A0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  raw = raw
+    .replace(/POLYSTER/gi, "POLYESTER")
+    .replace(/RAYONNE/gi, "RAYON")
+    .replace(/LINEN/gi, "LIN")
+    .replace(/ELASTHANNE/gi, "ELASTANE")
+    .replace(/SILK/gi, "SOIE");
+
+  const up = raw.toUpperCase();
+  const re = /(\d+)\s*%\s*([A-ZÉÈÊËÀÂÎÏÔÖÛÜÙÇ'.-]+(?:\s+[A-ZÉÈÊËÀÂÎÏÔÖÛÜÙÇ'.-]+)*)/g;
+  const parts = [];
+  let m;
+  while ((m = re.exec(up)) !== null) {
+    const pct = m[1];
+    const mat = normalizeSharedMaterialName_(m[2]);
+    if (mat) parts.push(pct + "% " + mat);
+  }
+
+  if (!parts.length) {
+    return normalizeSharedMaterialName_(raw);
+  }
+
+  return parts.join(" - ");
 }
 
 
 /****************************************************
  * Build multilingual editorial product names/descriptions for PFS export.
  ****************************************************/
+var PFS_EDITORIAL_CATEGORY_SPECS_ = {
+  "CHEMISES / TUNIQUES": { nomFr: "Tunique", nomEn: "Tunic", nomEs: "Túnica", nomDe: "Tunika", nomIt: "Tunica", frGender: "f" },
+  "COMBI PANTALON": { nomFr: "Combinaison pantalon", nomEn: "Jumpsuit", nomEs: "Mono largo", nomDe: "Jumpsuit", nomIt: "Tuta lunga", frGender: "f" },
+  "COMBI SHORT": { nomFr: "Combishort", nomEn: "Playsuit", nomEs: "Mono corto", nomDe: "Kurzer Jumpsuit", nomIt: "Tuta corta", frGender: "m" },
+  "CROCHETS": { nomFr: "Top crochet", nomEn: "Crochet top", nomEs: "Top de crochet", nomDe: "Häkeltop", nomIt: "Top crochet", frGender: "m" },
+  "ENSEMBLES": { nomFr: "Ensemble", nomEn: "Outfit", nomEs: "Conjunto", nomDe: "Set", nomIt: "Completo", frGender: "m" },
+  "JUPES": { nomFr: "Jupe", nomEn: "Skirt", nomEs: "Falda", nomDe: "Rock", nomIt: "Gonna", frGender: "f" },
+  "PANTALONS": { nomFr: "Pantalon", nomEn: "Trousers", nomEs: "Pantalón", nomDe: "Hose", nomIt: "Pantalone", frGender: "m" },
+  "ROBES COURTES": { nomFr: "Robe courte", nomEn: "Short dress", nomEs: "Vestido corto", nomDe: "Kurzes Kleid", nomIt: "Abito corto", frGender: "f" },
+  "ROBES LONGUES": { nomFr: "Robe longue", nomEn: "Long dress", nomEs: "Vestido largo", nomDe: "Langes Kleid", nomIt: "Abito lungo", frGender: "f" },
+  "SHORTS": { nomFr: "Short", nomEn: "Shorts", nomEs: "Short", nomDe: "Shorts", nomIt: "Short", frGender: "m" },
+  "TOPS": { nomFr: "Top", nomEn: "Top", nomEs: "Top", nomDe: "Top", nomIt: "Top", frGender: "m" }
+};
+
 function buildPfsEditorialContent_(catRaw, compositionRaw, paysRaw) {
   const key = normalizePfsEditorialCategoryKey_(catRaw);
-  const mat = extractPfsPrimaryMaterial_(compositionRaw);
+  const spec = getPfsEditorialCategorySpec_(key, catRaw);
+  const mat = buildSharedCompositionMaterialTextSet_(compositionRaw);
   const pays = normalizePfsCountryNameSet_(paysRaw);
 
-  const templates = {
-    "ROBES LONGUES": {
-      nomFr: "Robe longue",
-      nomEn: "Long dress",
-      nomEs: "Vestido largo",
-      nomDe: "Langes Kleid",
-      nomIt: "Abito lungo",
-      withMat: {
-        fr: "Robe longue élégante en {mat}, idéale pour le printemps/été. Confectionnée en {countryFr}, parfaite pour toutes les occasions.",
-        en: "Elegant long {matEn} dress, perfect for spring/summer. Made in {countryEn}, ideal for any occasion.",
-        es: "Vestido largo elegante de {matEs}, ideal para primavera/verano. Fabricado en {countryEs}, perfecto para cualquier ocasión.",
-        de: "Elegantes langes {matDe}kleid, ideal für Frühling/Sommer. Hergestellt in {countryDe}, perfekt für jeden Anlass.",
-        it: "Abito lungo elegante in {matIt}, ideale per la primavera/estate. Realizzato in {countryIt}, perfetto per ogni occasione."
-      },
-      noMat: {
-        fr: "Robe longue élégante, idéale pour le printemps/été. Confectionnée en {countryFr}, parfaite pour toutes les occasions.",
-        en: "Elegant long dress, perfect for spring/summer. Made in {countryEn}, ideal for any occasion.",
-        es: "Vestido largo elegante, ideal para primavera/verano. Fabricado en {countryEs}, perfecto para cualquier ocasión.",
-        de: "Elegantes langes Kleid, ideal für Frühling/Sommer. Hergestellt in {countryDe}, perfekt für jeden Anlass.",
-        it: "Abito lungo elegante, ideale per la primavera/estate. Realizzato in {countryIt}, perfetto per ogni occasione."
-      }
-    },
-    "ROBES COURTES": {
-      nomFr: "Robe courte",
-      nomEn: "Short dress",
-      nomEs: "Vestido corto",
-      nomDe: "Kurzes Kleid",
-      nomIt: "Abito corto",
-      withMat: {
-        fr: "Robe courte en {mat}, idéale pour le printemps/été. Confectionnée en {countryFr}, parfaite pour les jours ensoleillés.",
-        en: "Short {matEn} dress, perfect for spring/summer. Made in {countryEn}, ideal for sunny days.",
-        es: "Vestido corto de {matEs}, ideal para primavera/verano. Fabricado en {countryEs}, perfecto para días soleados.",
-        de: "Kurzes {matDe}kleid, ideal für Frühling/Sommer. Hergestellt in {countryDe}, perfekt für sonnige Tage.",
-        it: "Abito corto in {matIt}, ideale per la primavera/estate. Realizzato in {countryIt}, perfetto per le giornate di sole."
-      },
-      noMat: {
-        fr: "Robe courte idéale pour le printemps/été. Confectionnée en {countryFr}, parfaite pour les jours ensoleillés.",
-        en: "Short dress, perfect for spring/summer. Made in {countryEn}, ideal for sunny days.",
-        es: "Vestido corto, ideal para primavera/verano. Fabricado en {countryEs}, perfecto para días soleados.",
-        de: "Kurzes Kleid, ideal für Frühling/Sommer. Hergestellt in {countryDe}, perfekt für sonnige Tage.",
-        it: "Abito corto, ideale per la primavera/estate. Realizzato in {countryIt}, perfetto per le giornate di sole."
-      }
-    },
-    "ENSEMBLES": {
-      nomFr: "Ensemble",
-      nomEn: "Outfit",
-      nomEs: "Conjunto",
-      nomDe: "Outfit",
-      nomIt: "Completo",
-      withMat: {
-        fr: "Ensemble fluide et élégant en {mat}, idéal pour le printemps/été. Confectionné en {countryFr}, parfait pour la saison.",
-        en: "Flowy and elegant {matEn} outfit, perfect for spring/summer. Made in {countryEn}, ideal for the season.",
-        es: "Conjunto fluido y elegante de {matEs}, ideal para primavera/verano. Fabricado en {countryEs}, perfecto para la temporada.",
-        de: "Fließendes und elegantes {matDe}-Outfit, ideal für Frühling/Sommer. Hergestellt in {countryDe}, perfekt für die Saison.",
-        it: "Completo fluido ed elegante in {matIt}, ideale per la primavera/estate. Realizzato in {countryIt}, perfetto per la stagione."
-      },
-      noMat: {
-        fr: "Ensemble fluide et élégant, idéal pour le printemps/été. Confectionné en {countryFr}, parfait pour la saison.",
-        en: "Flowy and elegant outfit, perfect for spring/summer. Made in {countryEn}, ideal for the season.",
-        es: "Conjunto fluido y elegante, ideal para primavera/verano. Fabricado en {countryEs}, perfecto para la temporada.",
-        de: "Fließendes und elegantes Outfit, ideal für Frühling/Sommer. Hergestellt in {countryDe}, perfekt für die Saison.",
-        it: "Completo fluido ed elegante, ideale per la primavera/estate. Realizzato in {countryIt}, perfetto per la stagione."
-      }
-    },
-    "PANTALONS": {
-      nomFr: "Pantalon",
-      nomEn: "Trousers",
-      nomEs: "Pantalón",
-      nomDe: "Hose",
-      nomIt: "Pantaloni",
-      withMat: {
-        fr: "Pantalon léger en {mat}, idéal pour le printemps/été. Confectionné en {countryFr}, parfait pour la saison chaude.",
-        en: "Lightweight {matEn} trousers, perfect for spring/summer. Made in {countryEn}, ideal for the warm season.",
-        es: "Pantalón ligero de {matEs}, ideal para primavera/verano. Fabricado en {countryEs}, perfecto para la temporada cálida.",
-        de: "Leichte {matDe}hose, ideal für Frühling/Sommer. Hergestellt in {countryDe}, perfekt für die warme Jahreszeit.",
-        it: "Pantaloni leggeri in {matIt}, ideali per la primavera/estate. Realizzati in {countryIt}, perfetti per la stagione calda."
-      },
-      noMat: {
-        fr: "Pantalon léger, idéal pour le printemps/été. Confectionné en {countryFr}, parfait pour la saison chaude.",
-        en: "Lightweight trousers, perfect for spring/summer. Made in {countryEn}, ideal for the warm season.",
-        es: "Pantalón ligero, ideal para primavera/verano. Fabricado en {countryEs}, perfecto para la temporada cálida.",
-        de: "Leichte Hose, ideal für Frühling/Sommer. Hergestellt in {countryDe}, perfekt für die warme Jahreszeit.",
-        it: "Pantaloni leggeri, ideali per la primavera/estate. Realizzati in {countryIt}, perfetti per la stagione calda."
-      }
-    }
+  return {
+    nomFr: spec.nomFr,
+    nomEn: spec.nomEn,
+    nomEs: spec.nomEs,
+    nomDe: spec.nomDe,
+    nomIt: spec.nomIt,
+    descFr: buildPfsDescriptionFr_(spec, mat, pays),
+    descEn: buildPfsDescriptionEn_(spec, mat, pays),
+    descEs: buildPfsDescriptionEs_(spec, mat, pays),
+    descDe: buildPfsDescriptionDe_(spec, mat, pays),
+    descIt: buildPfsDescriptionIt_(spec, mat, pays)
   };
+}
 
-  const tpl = templates[key] || {
-    nomFr: singularizePfsEditorialFallback_(catRaw) || "Produit",
+function getPfsEditorialCategorySpec_(key, catRaw) {
+  const spec = PFS_EDITORIAL_CATEGORY_SPECS_[key];
+  if (spec) return spec;
+
+  const fallbackFr = singularizePfsEditorialFallback_(catRaw) || "Produit";
+  return {
+    nomFr: fallbackFr,
     nomEn: "Product",
     nomEs: "Producto",
     nomDe: "Produkt",
     nomIt: "Prodotto",
-    withMat: {
-      fr: "{nameFr} en {mat}, idéale pour le printemps/été. Confectionnée en {countryFr}.",
-      en: "{nameEn} in {matEn}, perfect for spring/summer. Made in {countryEn}.",
-      es: "{nameEs} de {matEs}, ideal para primavera/verano. Fabricado en {countryEs}.",
-      de: "{nameDe} aus {matDe}, ideal für Frühling/Sommer. Hergestellt in {countryDe}.",
-      it: "{nameIt} in {matIt}, ideale per la primavera/estate. Realizzato in {countryIt}."
-    },
-    noMat: {
-      fr: "{nameFr} idéale pour le printemps/été. Confectionnée en {countryFr}.",
-      en: "{nameEn}, perfect for spring/summer. Made in {countryEn}.",
-      es: "{nameEs}, ideal para primavera/verano. Fabricado en {countryEs}.",
-      de: "{nameDe}, ideal für Frühling/Sommer. Hergestellt in {countryDe}.",
-      it: "{nameIt}, ideale per la primavera/estate. Realizzato in {countryIt}."
-    }
+    frGender: "m"
   };
+}
 
-  const useMat = !!mat.fr;
-  const descTpl = useMat ? tpl.withMat : tpl.noMat;
+function buildPfsDescriptionFr_(spec, mat, pays) {
+  const feminine = spec && spec.frGender === "f";
+  const ideal = feminine ? "idéale" : "idéal";
+  const made = feminine ? "Confectionnée" : "Confectionné";
+  const base = mat && mat.fr
+    ? `${spec.nomFr} en ${mat.fr}, ${ideal} pour le printemps/été.`
+    : `${spec.nomFr}, ${ideal} pour le printemps/été.`;
+  return `${base} ${made} en ${pays.fr}.`;
+}
 
-  const vars = {
-    nameFr: tpl.nomFr,
-    nameEn: tpl.nomEn,
-    nameEs: tpl.nomEs,
-    nameDe: tpl.nomDe,
-    nameIt: tpl.nomIt,
-    mat: mat.fr,
-    matEn: mat.en,
-    matEs: mat.es,
-    matDe: mat.de,
-    matIt: mat.it,
-    countryFr: pays.fr,
-    countryEn: pays.en,
-    countryEs: pays.es,
-    countryDe: pays.de,
-    countryIt: pays.it
-  };
+function buildPfsDescriptionEn_(spec, mat, pays) {
+  const base = mat && mat.en
+    ? `${spec.nomEn} in ${mat.en}, perfect for spring/summer.`
+    : `${spec.nomEn}, perfect for spring/summer.`;
+  return `${base} Made in ${pays.en}.`;
+}
 
-  return {
-    nomFr: tpl.nomFr,
-    nomEn: tpl.nomEn,
-    nomEs: tpl.nomEs,
-    nomDe: tpl.nomDe,
-    nomIt: tpl.nomIt,
-    descFr: pfsApplyTemplateVars_(descTpl.fr, vars),
-    descEn: pfsApplyTemplateVars_(descTpl.en, vars),
-    descEs: pfsApplyTemplateVars_(descTpl.es, vars),
-    descDe: pfsApplyTemplateVars_(descTpl.de, vars),
-    descIt: pfsApplyTemplateVars_(descTpl.it, vars)
-  };
+function buildPfsDescriptionEs_(spec, mat, pays) {
+  const base = mat && mat.es
+    ? `${spec.nomEs} de ${mat.es}, ideal para primavera/verano.`
+    : `${spec.nomEs}, ideal para primavera/verano.`;
+  return `${base} Origen: ${pays.es}.`;
+}
+
+function buildPfsDescriptionDe_(spec, mat, pays) {
+  const base = mat && mat.de
+    ? `${spec.nomDe} aus ${mat.de}, ideal für Frühling/Sommer.`
+    : `${spec.nomDe}, ideal für Frühling/Sommer.`;
+  return `${base} Herkunft: ${pays.de}.`;
+}
+
+function buildPfsDescriptionIt_(spec, mat, pays) {
+  const base = mat && mat.it
+    ? `${spec.nomIt} in ${mat.it}, ideale per la primavera/estate.`
+    : `${spec.nomIt}, ideale per la primavera/estate.`;
+  return `${base} Origine: ${pays.it}.`;
 }
 
 function normalizePfsEditorialCategoryKey_(catRaw) {
@@ -1866,10 +1960,7 @@ function normalizePfsEditorialCategoryKey_(catRaw) {
     .replace(/\s+/g, " ");
 
   if (!s) return "";
-  if (s === "ROBES LONGUES") return "ROBES LONGUES";
-  if (s === "ROBES COURTES") return "ROBES COURTES";
-  if (s === "ENSEMBLES") return "ENSEMBLES";
-  if (s === "PANTALONS") return "PANTALONS";
+  if (PFS_EDITORIAL_CATEGORY_SPECS_[s]) return s;
   return s;
 }
 
@@ -1878,42 +1969,14 @@ function singularizePfsEditorialFallback_(catRaw) {
   if (!s) return "";
   const up = s.toUpperCase();
 
-  if (up === "ROBES LONGUES") return "Robe longue";
-  if (up === "ROBES COURTES") return "Robe courte";
-  if (up === "ENSEMBLES") return "Ensemble";
-  if (up === "PANTALONS") return "Pantalon";
+  if (PFS_EDITORIAL_CATEGORY_SPECS_[up]) return PFS_EDITORIAL_CATEGORY_SPECS_[up].nomFr;
 
   const low = s.toLowerCase();
   return low.charAt(0).toUpperCase() + low.slice(1);
 }
 
 function extractPfsPrimaryMaterial_(compositionRaw) {
-  const normalized = normalizeCompositionPFS_(compositionRaw);
-  if (!normalized) {
-    return { fr: "", en: "", es: "", de: "", it: "" };
-  }
-
-  const m = String(normalized).match(/^\s*\d+\%\s+([^-]+)/);
-  let matFr = m ? String(m[1] || "").trim() : "";
-
-  if (!matFr) {
-    const m2 = String(normalized).match(/^([A-Za-zÀ-ÿÉéÈèÊêËëÎîÏïÔôÖöÛûÜüÙùÇç'-]+)/);
-    matFr = m2 ? String(m2[1] || "").trim() : "";
-  }
-
-  const up = matFr.toUpperCase();
-  const MAP = {
-    "VISCOSE": { fr: "viscose", en: "viscose", es: "viscosa", de: "Viskose", it: "viscosa" },
-    "POLYESTER": { fr: "polyester", en: "polyester", es: "poliéster", de: "Polyester", it: "poliestere" },
-    "COTON": { fr: "coton", en: "cotton", es: "algodón", de: "Baumwolle", it: "cotone" },
-    "LIN": { fr: "lin", en: "linen", es: "lino", de: "Leinen", it: "lino" },
-    "LAINE": { fr: "laine", en: "wool", es: "lana", de: "Wolle", it: "lana" },
-    "POLYAMIDE": { fr: "polyamide", en: "polyamide", es: "poliamida", de: "Polyamid", it: "poliammide" },
-    "NYLON": { fr: "nylon", en: "nylon", es: "nailon", de: "Nylon", it: "nylon" },
-    "RAYON": { fr: "rayonne", en: "rayon", es: "rayón", de: "Rayon", it: "rayon" }
-  };
-
-  return MAP[up] || { fr: matFr.toLowerCase(), en: matFr.toLowerCase(), es: matFr.toLowerCase(), de: matFr, it: matFr.toLowerCase() };
+  return buildSharedCompositionMaterialTextSet_(compositionRaw);
 }
 
 function normalizePfsCountryNameSet_(paysRaw) {

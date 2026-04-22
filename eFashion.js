@@ -857,6 +857,7 @@ function exportStockToEFashion(options) {
       ref: ref,
       prix: prix,
       promo: promo,
+      catRaw: catStock,
       empty: dt.empty,
       ts: dt.ts,
       tailles: tailles,
@@ -936,6 +937,9 @@ function exportStockToEFashion(options) {
   let cPrixReduitHT = col("prix réduit ht");
   let cPoidsKG = col("poids kg");
   let cCompositions = col("compositions");
+  const efHeaderKeys = headers.map(h => normalizeEFHeaderKey_(h));
+  let cDescription = efHeaderKeys.indexOf(normalizeEFHeaderKey_("description")) + 1;
+  let cDescriptionEn = efHeaderKeys.indexOf(normalizeEFHeaderKey_("description (en)")) + 1;
 
   // Fallback fixed positions A..U (1-based)
   if (!cMarque) cMarque = 1;        // A
@@ -958,6 +962,7 @@ function exportStockToEFashion(options) {
 
   for (let it of rows) {
     const line = new Array(hinfo.width).fill("");
+    const editorial = buildEFashionEditorialContent_(it.catRaw, it.compo, it.pays);
 
     // Fixed values
     line[cMarque - 1] = "J&S FASHION";
@@ -994,6 +999,8 @@ function exportStockToEFashion(options) {
 
     // Composition: normalized style with import normalizer
     line[cCompositions - 1] = normalizeCompositionEFashionImport_(it.compo) || "Viscose*90,Polyester*10";
+    if (cDescription) line[cDescription - 1] = editorial.descFr;
+    if (cDescriptionEn) line[cDescriptionEn - 1] = editorial.descEn;
 
     // Extra safety fallback by fixed template positions (A..U) for test import
     if (hinfo.width >= 1)  line[0] = "J&S FASHION";         // A Marque
@@ -1268,6 +1275,15 @@ function extractTaillesFromContenuColisEFashion_(v, colisage) {
  * Example: "Coton*80,Polyester*20"
  ****************************************************/
 function normalizeCompositionEFashionImport_(v) {
+  if (typeof extractNormalizedCompositionParts_ === "function") {
+    const sharedParts = extractNormalizedCompositionParts_(v);
+    if (sharedParts.length) {
+      return sharedParts.map(function(part) {
+        return `${part.material}*${part.pct}`;
+      }).join(",");
+    }
+  }
+
   const raw0 = String(v || "").trim();
   if (!raw0) return "";
 
@@ -1296,6 +1312,11 @@ function normalizeCompositionEFashionImport_(v) {
 }
 
 function normalizeMaterialEfashion_(matRaw) {
+  if (typeof normalizeSharedMaterialName_ === "function") {
+    const shared = normalizeSharedMaterialName_(matRaw);
+    if (shared) return shared;
+  }
+
   const s = String(matRaw || "").trim();
   if (!s) return "";
   const up = s.toUpperCase().replace(/\s+/g, "");
@@ -1321,6 +1342,18 @@ function normalizeMaterialEfashion_(matRaw) {
   // Title-case fallback
   const low = s.toLowerCase();
   return low.charAt(0).toUpperCase() + low.slice(1);
+}
+
+function buildEFashionEditorialContent_(catRaw, compositionRaw, paysRaw) {
+  if (typeof buildPfsEditorialContent_ === "function") {
+    const editorial = buildPfsEditorialContent_(catRaw, compositionRaw, paysRaw);
+    return {
+      descFr: editorial && editorial.descFr ? editorial.descFr : "",
+      descEn: editorial && editorial.descEn ? editorial.descEn : ""
+    };
+  }
+
+  return { descFr: "", descEn: "" };
 }
 
 /****************************************************

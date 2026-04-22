@@ -817,6 +817,10 @@ function normalizePfsSizeToken_(raw) {
 
   if (!s) return "";
 
+  if (/^(?:\d+\s+)?PIECES?\s+TAILLE\s+UNIQUE$/.test(s) || /^TAILLE\s+UNIQUE$/.test(s)) {
+    return "TU";
+  }
+
   // Keep slash-based dual sizes intact: S/M, L/XL, M/L, XL/XXL
   if (/^[A-Z0-9]+(?:\/[A-Z0-9]+)+$/.test(s)) return s;
 

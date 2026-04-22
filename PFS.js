@@ -409,6 +409,7 @@ function exportStockToPFS(options) {
   const colSel = stockContext.selectionCol || stockMap["选择"];
   const colRef = stockMap["货号"];
   const colPrix = stockMap["prix@"];
+  const colPromo = stockMap["promo@"] || 0;
   const colCat = stockMap["catégorie"];
   const colContenu = stockMap["contenu colis"];
   if (!colContenu) {
@@ -437,6 +438,7 @@ function exportStockToPFS(options) {
     const sheetRow = record.row;
     const ref = String(values[colRef - 1] || "").trim();
     const prix = String(values[colPrix - 1] ?? "").trim();
+    const promo = colPromo ? String(values[colPromo - 1] ?? "").trim() : "";
     const colisage = parseColisagePFS_(values[colColisage - 1]);
     const tailles = colisage.ok
       ? extractTaillesFromContenuColis_(values[colContenu - 1], colisage.value)
@@ -494,6 +496,7 @@ function exportStockToPFS(options) {
       row: sheetRow,
       ref: ref,
       prix: prix,
+      promo: promo,
       cat: catPfs,
       catRaw: catRaw,
       tailles: tailles,
@@ -568,6 +571,7 @@ function exportStockToPFS(options) {
   let cTailles = col("tailles");
   let cCouleurs = col("couleurs");
   let cPrix = col("prix_vente gros");
+  let cPrixReduit = col("prix_vente réduit ht unit. eur");
   let cPoids = col("poids_kg");
   let cCompo = col("composition matière");
   let cPays = col("pays de fabrication");
@@ -589,6 +593,7 @@ function exportStockToPFS(options) {
   if (!cTailles) cTailles = 13;   // M
   if (!cCouleurs) cCouleurs = 14; // N
   if (!cPrix) cPrix = 15;         // O
+  if (!cPrixReduit) cPrixReduit = 16; // P
   if (!cPoids) cPoids = 18;       // R
   if (!cCompo) cCompo = 19;       // S
   if (!cPays) cPays = 21;         // U
@@ -651,6 +656,7 @@ function exportStockToPFS(options) {
       if (cTailles) line[cTailles - 1] = taillesColor.value;
       if (cCouleurs) line[cCouleurs - 1] = entry.color;
       if (cPrix) line[cPrix - 1] = String(it.prix ?? "").trim();
+      if (cPrixReduit) line[cPrixReduit - 1] = String(it.promo ?? "").trim();
       if (cPoids) line[cPoids - 1] = formatWeightKgPFSText_(it.poids);
       if (cCompo) line[cCompo - 1] = compo;
       if (cPays) line[cPays - 1] = it.paysFab;

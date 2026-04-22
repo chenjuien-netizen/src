@@ -783,6 +783,7 @@ function exportStockToEFashion(options) {
   const cSel = stockContext.selectionCol || stockMap["选择"];
   const cRef = stockMap["货号"];
   const cPrix = stockMap["prix@"];
+  const cPromo = stockMap["promo@"] || 0;
   const cDate = stockMap["date de création"];
   const cContenu = stockMap["contenu colis"];
   const cPoids = stockMap["poids (en gramme)"];
@@ -807,6 +808,7 @@ function exportStockToEFashion(options) {
     if (!ref) continue;
 
     const prix = formatPriceEFashionText_(values[cPrix - 1]);
+    const promo = cPromo ? formatPriceEFashionText_(values[cPromo - 1]) : "";
     const dt = normalizeDateForSortEf_(values[cDate - 1]);
     const contenuColis = String(values[cContenu - 1] ?? "").trim();
     const colisage = parseColisageEFashion_(values[cColisage - 1]);
@@ -854,6 +856,7 @@ function exportStockToEFashion(options) {
     rows.push({
       ref: ref,
       prix: prix,
+      promo: promo,
       empty: dt.empty,
       ts: dt.ts,
       tailles: tailles,
@@ -930,6 +933,7 @@ function exportStockToEFashion(options) {
   let cTailles = col("tailles");
   let cCouleurs = col("couleurs");
   let cPrixHT = col("prix ht");
+  let cPrixReduitHT = col("prix réduit ht");
   let cPoidsKG = col("poids kg");
   let cCompositions = col("compositions");
 
@@ -946,6 +950,7 @@ function exportStockToEFashion(options) {
   if (!cTailles) cTailles = 10;     // J
   if (!cCouleurs) cCouleurs = 11;   // K
   if (!cPrixHT) cPrixHT = 12;       // L
+  if (!cPrixReduitHT) cPrixReduitHT = 13; // M
   if (!cPoidsKG) cPoidsKG = 14;     // N
   if (!cCompositions) cCompositions = 15; // O
 
@@ -982,6 +987,7 @@ function exportStockToEFashion(options) {
 
     // Prix: write as TEXT "0.00" (dot)
     line[cPrixHT - 1] = it.prix;
+    if (cPrixReduitHT) line[cPrixReduitHT - 1] = it.promo;
 
     // Poids: convert to KG text
     line[cPoidsKG - 1] = formatWeightKgEFashionText_(it.poids);
@@ -1002,6 +1008,7 @@ function exportStockToEFashion(options) {
     if (hinfo.width >= 10) line[9] = it.tailles;             // J Tailles
     if (hinfo.width >= 11) line[10] = it.couleursEf;         // K Couleurs
     if (hinfo.width >= 12) line[11] = it.prix;                // L Prix HT
+    if (hinfo.width >= 13) line[12] = it.promo;               // M Prix réduit HT
     if (hinfo.width >= 14) line[13] = formatWeightKgEFashionText_(it.poids); // N Poids KG
     if (hinfo.width >= 15) line[14] = normalizeCompositionEFashionImport_(it.compo) || "Viscose*90,Polyester*10"; // O Compositions
 

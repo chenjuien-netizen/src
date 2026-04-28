@@ -1,7 +1,9 @@
 /**
  * Export STOCK → MS_EXPORT
  */
-function exportStockToMsExport() {
+function exportStockToMsExport(options) {
+  options = options || {};
+  var selectedOnly = options.selectedOnly === true;
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var shStock = ss.getSheetByName(SHEET_STOCK);
   var shExp = ss.getSheetByName(SHEET_MS_EXPORT);
@@ -75,12 +77,15 @@ function exportStockToMsExport() {
       "包/箱",
       "Couleurs"
     ];
+    if (selectedOnly) stockNeed.push("选择");
     ensureHeadersExist_(stockMap, stockNeed, "STOCK (ligne 1)");
 
     var data = shStock.getRange(2, 1, stockLastRow - 1, stockLastCol).getValues();
 
     var ui = SpreadsheetApp.getUi();
-    var msg = "⚠️ L'export va remplacer tout le contenu de MS_EXPORT avec les données de STOCK.\n\nContinuer ?";
+    var msg = selectedOnly
+      ? "⚠️ L'export va remplacer tout le contenu de MS_EXPORT avec les lignes cochées (选择) de STOCK.\n\nContinuer ?"
+      : "⚠️ L'export va remplacer tout le contenu de MS_EXPORT avec les données de STOCK.\n\nContinuer ?";
     var btn = ui.alert("Confirmer export Microstore", msg, ui.ButtonSet.OK_CANCEL);
     if (btn !== ui.Button.OK) {
       ss.toast("Export annulé.", "Microstore", 4);
@@ -109,6 +114,7 @@ function exportStockToMsExport() {
     var cHorsColisage = stockMap["nbr de pièces hors unité de colisage"] - 1;
     var cPoidsG = stockMap["poids (en gramme)"] - 1;
     var cPaysOrigine = stockMap["pays d'origine"] - 1;
+    var cSelect = selectedOnly ? (stockMap["选择"] - 1) : -1;
     var cRemarque = stockMap["remarque"] ? (stockMap["remarque"] - 1) : -1;
     var cMsStatut = stockMap["ms_statut"] ? (stockMap["ms_statut"] - 1) : -1;
     var cCouleursRemark = stockMap["couleurs"] ? (stockMap["couleurs"] - 1) : cCouleur;
@@ -117,8 +123,8 @@ function exportStockToMsExport() {
     for (var i = 0; i < data.length; i++) {
       var r = data[i];
 
+      if (selectedOnly && r[cSelect] !== true) continue;
       if (cMsStatut >= 0 && String(r[cMsStatut]).trim() === "MS_SUPPRIME") continue;
-
       var refRaw = msString_(r[cRef]);
       if (!refRaw) continue;
 
@@ -190,7 +196,12 @@ function exportStockToMsExport() {
     }
 
     msClearMsExportData_(shExp, expLastCol);
-    if (out.length) shExp.getRange(3, 1, out.length, expLastCol).setValues(out);
+    if (!out.length) {
+      ss.toast(selectedOnly ? "Aucune ligne cochée (选择)." : "Aucune ligne exportable.", "Microstore", 6);
+      return;
+    }
+
+    shExp.getRange(3, 1, out.length, expLastCol).setValues(out);
 
     SpreadsheetApp.flush();
     Utilities.sleep(1200);
@@ -200,6 +211,13 @@ function exportStockToMsExport() {
   } finally {
     lock.releaseLock();
   }
+}
+
+/**
+ * Export STOCK → MS_EXPORT uniquement pour les lignes cochées (选择)
+ */
+function exportSelectedStockToMsExport() {
+  return exportStockToMsExport({ selectedOnly: true });
 }
 
 function msClearMsExportData_(shExp, expLastCol) {

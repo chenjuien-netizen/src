@@ -5,6 +5,7 @@ function onOpen() {
   ui.createMenu("Microstore")
     .addItem("Sync Microstore", "menuSyncMicrostore")
     .addItem("Exporter Microstore", "menuExportMicrostore")
+    .addItem("Exporter Microstore (sélection)", "menuExportMicrostoreSelection")
     .addToUi();
 
   ui.createMenu("eFashion/PFS")
@@ -54,6 +55,10 @@ function menuSyncMicrostore() {
 
 function menuExportMicrostore() {
   exportStockToMsExport();
+}
+
+function menuExportMicrostoreSelection() {
+  exportSelectedStockToMsExport();
 }
 
 function menuExportEFashion() {

@@ -917,6 +917,8 @@ function ArrivagesStock_runPreflightConfirmations_(shStock, payload) {
 
   const ui = SpreadsheetApp.getUi();
   const existingMap = ArrivagesStock_buildExistingRefMap_(shStock);
+  const missingRefs = [];
+  const differentRefs = [];
 
   for (const item of payload) {
     const ref = String(item && item.ref || "").trim().toUpperCase();
@@ -926,12 +928,7 @@ function ArrivagesStock_runPreflightConfirmations_(shStock, payload) {
     const nextState = ArrivagesStock_getComparableStateForPayloadItem_(item);
 
     if (!existing) {
-      const confirmCreate = ui.alert(
-        "Nouvelle référence",
-        "La référence " + ref + " n'existe pas dans STOCK.\n\nCréer une nouvelle ligne ?",
-        ui.ButtonSet.YES_NO
-      );
-      if (confirmCreate !== ui.Button.YES) throw new Error("Enregistrement annulé par l'utilisateur");
+      missingRefs.push(ref);
       continue;
     }
 
@@ -939,16 +936,66 @@ function ArrivagesStock_runPreflightConfirmations_(shStock, payload) {
 
     if (ArrivagesStock_isComparableStateCompatible_(existing, nextState)) continue;
 
-    const confirmUpdate = ui.alert(
-      "Référence existante différente",
-      "La référence " + ref + " existe déjà dans STOCK, mais ses caractéristiques diffèrent.\n\n" +
-      "Ancien : " + ArrivagesStock_formatComparableState_(existing) + "\n" +
-      "Nouveau : " + ArrivagesStock_formatComparableState_(nextState) + "\n\n" +
-      "Continuer ?",
-      ui.ButtonSet.YES_NO
-    );
-    if (confirmUpdate !== ui.Button.YES) throw new Error("Enregistrement annulé par l'utilisateur");
+    differentRefs.push({
+      ref: ref,
+      existing: existing,
+      next: nextState
+    });
   }
+
+  if (!missingRefs.length && !differentRefs.length) return;
+
+  const message = ArrivagesStock_buildPreflightConfirmationMessage_(missingRefs, differentRefs);
+  const title = ArrivagesStock_buildPreflightConfirmationTitle_(missingRefs, differentRefs);
+  const confirm = ui.alert(title, message, ui.ButtonSet.YES_NO);
+  if (confirm !== ui.Button.YES) throw new Error("Enregistrement annulé par l'utilisateur");
+}
+
+function ArrivagesStock_buildPreflightConfirmationTitle_(missingRefs, differentRefs) {
+  if (missingRefs.length && differentRefs.length) return "Confirmation arrivages";
+  if (missingRefs.length) return "Nouvelles références";
+  return "Références existantes différentes";
+}
+
+function ArrivagesStock_buildPreflightConfirmationMessage_(missingRefs, differentRefs) {
+  const sections = [];
+
+  if (missingRefs.length) {
+    const missingLines = ArrivagesStock_formatPreflightList_(missingRefs, function(ref) {
+      return "• " + ref;
+    });
+    sections.push(
+      "Nouvelles références (" + missingRefs.length + ") :\n" +
+      missingLines + "\n\n" +
+      "Créer ces nouvelles lignes dans STOCK ?"
+    );
+  }
+
+  if (differentRefs.length) {
+    const diffLines = ArrivagesStock_formatPreflightList_(differentRefs, function(entry) {
+      return (
+        "• " + entry.ref + "\n" +
+        "  Ancien : " + ArrivagesStock_formatComparableState_(entry.existing) + "\n" +
+        "  Nouveau : " + ArrivagesStock_formatComparableState_(entry.next)
+      );
+    });
+    sections.push(
+      "Références existantes différentes (" + differentRefs.length + ") :\n" +
+      diffLines + "\n\n" +
+      "Continuer malgré ces différences ?"
+    );
+  }
+
+  return sections.join("\n\n");
+}
+
+function ArrivagesStock_formatPreflightList_(items, formatter) {
+  const maxItems = 12;
+  const shown = items.slice(0, maxItems).map(function(item) {
+    return formatter(item);
+  });
+  if (items.length > maxItems) shown.push("• +" + (items.length - maxItems) + " autres refs");
+  return shown.join("\n");
 }
 
 function ArrivagesStock_normalizeComparableField_(value, kind) {

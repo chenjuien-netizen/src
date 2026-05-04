@@ -919,6 +919,7 @@ function ArrivagesStock_runPreflightConfirmations_(shStock, payload) {
   const existingMap = ArrivagesStock_buildExistingRefMap_(shStock);
   const missingRefs = [];
   const differentRefs = [];
+  const compatibleRefs = [];
 
   for (const item of payload) {
     const ref = String(item && item.ref || "").trim().toUpperCase();
@@ -932,9 +933,15 @@ function ArrivagesStock_runPreflightConfirmations_(shStock, payload) {
       continue;
     }
 
-    if (ArrivagesStock_isComparableStateEmpty_(existing)) continue;
+    if (ArrivagesStock_isComparableStateEmpty_(existing)) {
+      compatibleRefs.push(ref);
+      continue;
+    }
 
-    if (ArrivagesStock_isComparableStateCompatible_(existing, nextState)) continue;
+    if (ArrivagesStock_isComparableStateCompatible_(existing, nextState)) {
+      compatibleRefs.push(ref);
+      continue;
+    }
 
     differentRefs.push({
       ref: ref,
@@ -945,7 +952,12 @@ function ArrivagesStock_runPreflightConfirmations_(shStock, payload) {
 
   if (!missingRefs.length && !differentRefs.length) return;
 
-  const message = ArrivagesStock_buildPreflightConfirmationMessage_(missingRefs, differentRefs);
+  const message = ArrivagesStock_buildPreflightConfirmationMessage_(
+    payload.length,
+    missingRefs,
+    differentRefs,
+    compatibleRefs
+  );
   const title = ArrivagesStock_buildPreflightConfirmationTitle_(missingRefs, differentRefs);
   const confirm = ui.alert(title, message, ui.ButtonSet.YES_NO);
   if (confirm !== ui.Button.YES) throw new Error("Enregistrement annulé par l'utilisateur");
@@ -957,8 +969,16 @@ function ArrivagesStock_buildPreflightConfirmationTitle_(missingRefs, differentR
   return "Références existantes différentes";
 }
 
-function ArrivagesStock_buildPreflightConfirmationMessage_(missingRefs, differentRefs) {
+function ArrivagesStock_buildPreflightConfirmationMessage_(totalRefs, missingRefs, differentRefs, compatibleRefs) {
   const sections = [];
+  const summaryLines = [
+    "Total refs du payload : " + totalRefs,
+    "Nouvelles : " + missingRefs.length,
+    "Existantes différentes : " + differentRefs.length,
+    "Déjà compatibles / sans alerte : " + compatibleRefs.length
+  ];
+
+  sections.push(summaryLines.join("\n"));
 
   if (missingRefs.length) {
     const missingLines = ArrivagesStock_formatPreflightList_(missingRefs, function(ref) {
@@ -983,6 +1003,16 @@ function ArrivagesStock_buildPreflightConfirmationMessage_(missingRefs, differen
       "Références existantes différentes (" + differentRefs.length + ") :\n" +
       diffLines + "\n\n" +
       "Continuer malgré ces différences ?"
+    );
+  }
+
+  if (compatibleRefs.length) {
+    const compatibleLines = ArrivagesStock_formatPreflightList_(compatibleRefs, function(ref) {
+      return "• " + ref;
+    });
+    sections.push(
+      "Déjà présentes sans confirmation (" + compatibleRefs.length + ") :\n" +
+      compatibleLines
     );
   }
 

@@ -15,6 +15,10 @@ const UI_TABLE_RANGE = "A4:F305";
 const UI_TABLE_START_ROW = 4;
 const UI_TABLE_ROWS = 302;
 const UI_TABLE_COLS = 6;
+const UI_PRICE_COL = 13; // M
+const UI_PRICE_RANGE = "M4:M305";
+const UI_PRICE_ROW_START = 4;
+const UI_PRICE_ROW_END = 305;
 
 const SUP_RANGE = "H4:K305";
 const SUP_START_ROW = 4;

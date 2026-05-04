@@ -28,6 +28,7 @@ function onOpen() {
   ui.createMenu("Arrivages")
     .addItem("Enregistrer", "arrivagesSaveCurrent")
     .addItem("Supprimer", "deleteArrivage_")
+    .addItem("Sync prix (M → STOCK)", "menuSyncArrivagesPricesToStock_")
     .addSeparator()
     .addItem("Convert supplier → UI (H:K → A:F)", "menuConvertSupplierToUi_")
     .addItem("Clear supplier zone (H4:K305)", "menuClearSupplierZone_")
@@ -59,6 +60,10 @@ function menuExportMicrostore() {
 
 function menuExportMicrostoreSelection() {
   exportSelectedStockToMsExport();
+}
+
+function menuSyncArrivagesPricesToStock_() {
+  syncArrivagesPricesToStock_();
 }
 
 function menuExportEFashion() {

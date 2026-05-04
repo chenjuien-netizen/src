@@ -126,6 +126,114 @@ function deleteArrivage_() {
   ArrivagesService_deleteCurrent_();
 }
 
+function syncArrivagesPricesToStock_() {
+  const ss = SpreadsheetApp.getActive();
+  const uiSheet = ss.getSheetByName(SHEET_UI);
+  const stock = ss.getSheetByName(SHEET_STOCK);
+  if (!uiSheet || !stock) throw new Error("Feuilles manquantes: ARRIVAGES / STOCK.");
+
+  const refValues = uiSheet.getRange(UI_TABLE_START_ROW, 1, UI_TABLE_ROWS, 1).getDisplayValues().flat();
+  const priceValues = uiSheet.getRange(UI_PRICE_RANGE).getDisplayValues().flat();
+
+  const lastRow = stock.getLastRow();
+  const lastCol = stock.getLastColumn();
+  if (lastRow < 1 || lastCol < 1) throw new Error("STOCK vide (pas d'en-têtes).");
+
+  const headers = stock.getRange(1, 1, 1, lastCol).getValues()[0];
+  const map = (typeof headerMap_ === "function") ? headerMap_(headers) : ArrivagesStock_headerMapLocal_(headers);
+  const colRef = map["货号"];
+  const colPrix = map["prix"];
+  if (!colRef) throw new Error("STOCK: colonne '货号' introuvable.");
+  if (!colPrix) throw new Error("STOCK: colonne 'prix' introuvable.");
+
+  const updatesByRef = {};
+  const duplicateRefs = [];
+  let ignoredRows = 0;
+
+  for (let i = 0; i < UI_TABLE_ROWS; i++) {
+    const rawRef = refValues[i];
+    const rawPrice = priceValues[i];
+    const ref = Arrivages_normalizePriceSyncRef_(rawRef);
+    const parsedPrice = Arrivages_parsePriceSyncValue_(rawPrice);
+    const hasRef = !!ref;
+    const hasPrice = parsedPrice !== null;
+
+    if (!hasRef || !hasPrice) {
+      ignoredRows++;
+      continue;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updatesByRef, ref)) {
+      duplicateRefs.push(ref);
+      continue;
+    }
+
+    updatesByRef[ref] = {
+      price: parsedPrice,
+      row: UI_TABLE_START_ROW + i
+    };
+  }
+
+  if (duplicateRefs.length) {
+    throw new Error(
+      "Références dupliquées avec prix exploitable dans ARRIVAGES!M : " +
+      Array.from(new Set(duplicateRefs)).join(", ")
+    );
+  }
+
+  const refsToUpdate = Object.keys(updatesByRef);
+  if (!refsToUpdate.length) {
+    try { ss.toast("Aucun prix exploitable trouvé dans ARRIVAGES!M4:M305", "ARRIVAGES", 5); } catch (e) {}
+    return;
+  }
+
+  const stockDataRows = Math.max(0, lastRow - 1);
+  const stockRefValues = stockDataRows ? stock.getRange(2, colRef, stockDataRows, 1).getDisplayValues().flat() : [];
+  const refToRow = {};
+  for (let i = 0; i < stockRefValues.length; i++) {
+    const ref = Arrivages_normalizePriceSyncRef_(stockRefValues[i]);
+    if (!ref) continue;
+    // Keep current implicit behavior: if STOCK contains duplicates, the last row wins.
+    refToRow[ref] = i + 2;
+  }
+
+  const foundUpdates = [];
+  const missingRefs = [];
+  for (const ref of refsToUpdate) {
+    const targetRow = refToRow[ref] || 0;
+    if (!targetRow) {
+      missingRefs.push(ref);
+      continue;
+    }
+    foundUpdates.push({ row: targetRow, value: updatesByRef[ref].price });
+  }
+
+  if (!foundUpdates.length) {
+    try {
+      ss.toast(
+        "0 prix mis à jour | " + missingRefs.length + " refs introuvables | " + ignoredRows + " lignes ignorées",
+        "ARRIVAGES",
+        6
+      );
+    } catch (e) {}
+    return;
+  }
+
+  for (const up of foundUpdates) {
+    stock.getRange(up.row, colPrix).setValue(up.value);
+  }
+
+  try {
+    ss.toast(
+      foundUpdates.length + " prix mis à jour | " +
+      missingRefs.length + " refs introuvables | " +
+      ignoredRows + " lignes ignorées",
+      "ARRIVAGES",
+      6
+    );
+  } catch (e) {}
+}
+
 function ArrivagesService_saveCurrent_() {
   const ss = SpreadsheetApp.getActive();
   const ui = ss.getSheetByName(SHEET_UI);
@@ -381,7 +489,7 @@ function ArrivagesStock_applyFromArrivagePayload_(shStock, shTpl, payload) {
   const colMix = stockMap["混箱数".toLowerCase()];
   const colSortKey = stockMap["sortkey"];
 
-  const colPpc2 = stockMap["每箱件数2".toLowerCase()];
+  const colPpc2 = stockMap["件/箱".toLowerCase()];
   const colIsMix = stockMap["is_mix".toLowerCase()];
 
   const colLoc = stockMap["放位/提醒".toLowerCase()];
@@ -860,7 +968,7 @@ function ArrivagesStock_getComparableStateForRef_(rowValues, stockMap, row) {
     row: row || 0,
     ref: ArrivagesStock_normalizeComparableField_(get("货号"), "ref"),
     tailDisplay: ArrivagesStock_normalizeComparableField_(get("尾箱"), "text"),
-    ppcDisplay: ArrivagesStock_normalizeComparableField_(get("每箱件数2"), "text"),
+    ppcDisplay: ArrivagesStock_normalizeComparableField_(get("件/箱"), "text"),
     wholeBoxes: ArrivagesStock_normalizeComparableField_(get("箱数"), "num"),
     sign: ArrivagesStock_normalizeComparableField_(get("当前signe"), "text"),
     fraction: ArrivagesStock_normalizeComparableField_(get("当前箱数分数"), "text"),
@@ -961,6 +1069,22 @@ function ArrivagesStock_runPreflightConfirmations_(shStock, payload) {
   const title = ArrivagesStock_buildPreflightConfirmationTitle_(missingRefs, differentRefs);
   const confirm = ui.alert(title, message, ui.ButtonSet.YES_NO);
   if (confirm !== ui.Button.YES) throw new Error("Enregistrement annulé par l'utilisateur");
+}
+
+function Arrivages_normalizePriceSyncRef_(value) {
+  const raw = (typeof cleanRef_ === "function")
+    ? cleanRef_(value)
+    : String(value === null || typeof value === "undefined" ? "" : value).trim();
+  return String(raw || "").trim().toUpperCase();
+}
+
+function Arrivages_parsePriceSyncValue_(value) {
+  const raw = String(value === null || typeof value === "undefined" ? "" : value).trim();
+  if (!raw) return null;
+  const normalized = raw.replace(/\s+/g, "").replace(",", ".");
+  if (!/^-?\d+(?:\.\d+)?$/.test(normalized)) return null;
+  const num = Number(normalized);
+  return Number.isFinite(num) ? num : null;
 }
 
 function ArrivagesStock_buildPreflightConfirmationTitle_(missingRefs, differentRefs) {
@@ -1383,7 +1507,7 @@ function ArrivagesStock_resetRefsAndDeleteSuffix_(shStock, refs) {
 
   const colRef      = map["货号"];
   const colTailCur  = map["尾箱"];
-  const colPpc2     = map["每箱件数2"];
+  const colPpc2     = map["件/箱"];
   const colBoxesCur = map["箱数"];
   const colSignCur  = map["当前signe"];
   const colFracCur  = map["当前箱数分数"];
@@ -1394,7 +1518,7 @@ function ArrivagesStock_resetRefsAndDeleteSuffix_(shStock, refs) {
   const colNote2    = map["备注2"];
   const colArrId    = map["到货单"];
   const colWh       = map["仓库"];
-  const colOut      = map["出-sortie/箱"];
+  const colOut      = map["开箱/包"];
 
   if (!colRef) throw new Error("STOCK: colonne '货号' introuvable.");
 

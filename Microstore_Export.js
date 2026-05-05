@@ -156,6 +156,7 @@ function exportStockToMsExport(options) {
       });
     }
 
+    var exportedRefIndex = msBuildExportedRefIndex_(rows);
     var out = [];
     for (var k = 0; k < rows.length; k++) {
       var it = rows[k];
@@ -166,10 +167,12 @@ function exportStockToMsExport(options) {
       var contenu = (total > 0 && packs > 0 && ppp > 0)
         ? msBuildContenuColis_(total, packs, ppp)
         : "";
+      var setRemarkLine = msBuildSetRemarkLine_(it.ref, exportedRefIndex);
+      var exportName = msBuildSetExportName_(it.ref, exportedRefIndex, it.nom ? String(it.nom).trim() : "");
 
       var line = new Array(expLastCol).fill("");
       line[expMap["référence"] - 1] = it.ref;
-      line[expMap["nom"] - 1] = it.nom ? String(it.nom).trim() : "";
+      line[expMap["nom"] - 1] = exportName;
       line[expMap["catégorie"] - 1] = it.cat;
       line[expMap["contenu colis"] - 1] = it.contenuColis;
       line[expMap["composition matérielle"] - 1] = it.comp;
@@ -190,7 +193,7 @@ function exportStockToMsExport(options) {
       line[expMap["remise (%)"] - 1] = it.remise;
       var prixParPaquetTexte = msBuildPrixParPaquetLine_(it.prix, it.colisage, it.remise);
       var couleursTexte = msBuildCouleursRemark_(it.couleursRaw);
-      line[expMap["remarque"] - 1] = msBuildCleanRemarque_(it.remarque, prixParPaquetTexte, contenu, couleursTexte);
+      line[expMap["remarque"] - 1] = msBuildCleanRemarque_(it.remarque, prixParPaquetTexte, contenu, couleursTexte, setRemarkLine);
 
       out.push(line);
     }
@@ -249,7 +252,7 @@ function msBuildContenuColis_(totalPieces, packs, pcsPerPack) {
   return "Colis: " + t + " pièces avec " + p + " paquets de " + u + " pièces";
 }
 
-function msBuildCleanRemarque_(existingRemark, prixParPaquetTexte, contenu, couleursTexte) {
+function msBuildCleanRemarque_(existingRemark, prixParPaquetTexte, contenu, couleursTexte, setRemarkLine) {
   var cleanedRemark = String(existingRemark || "")
     .replace(/\s*\[MS_DOUBLON:\d+\]\s*/gi, " ")
     .replace(/[ \t]{2,}/g, " ")
@@ -261,6 +264,7 @@ function msBuildCleanRemarque_(existingRemark, prixParPaquetTexte, contenu, coul
   var prixLine = "";
   var colisLine = "";
   var couleursLine = "";
+  var setLine = "";
 
   for (var i = 0; i < lines.length; i++) {
     var line = String(lines[i] || "").trim();
@@ -281,6 +285,11 @@ function msBuildCleanRemarque_(existingRemark, prixParPaquetTexte, contenu, coul
       continue;
     }
 
+    if (/^Ensemble assorti\s*:/i.test(line)) {
+      if (!setLine) setLine = line;
+      continue;
+    }
+
     if (seenOther[line]) continue;
     seenOther[line] = true;
     otherLines.push(line);
@@ -289,13 +298,75 @@ function msBuildCleanRemarque_(existingRemark, prixParPaquetTexte, contenu, coul
   if (String(prixParPaquetTexte || "").trim()) prixLine = String(prixParPaquetTexte).trim();
   if (String(contenu || "").trim()) colisLine = String(contenu).trim();
   if (String(couleursTexte || "").trim()) couleursLine = String(couleursTexte).trim();
+  if (String(setRemarkLine || "").trim()) setLine = String(setRemarkLine).trim();
 
   var finalLines = otherLines.slice();
   if (prixLine) finalLines.push(prixLine);
   if (colisLine) finalLines.push(colisLine);
   if (couleursLine) finalLines.push(couleursLine);
+  if (setLine) finalLines.push(setLine);
 
   return finalLines.join("\n");
+}
+
+function msNormalizeExportRefKey_(ref) {
+  return String(ref || "").trim().toUpperCase();
+}
+
+function msIgnoredSetRefBaseKey_(ref) {
+  var key = msNormalizeExportRefKey_(ref);
+  if (!key) return "";
+  return /-B$/i.test(key) ? key.replace(/-B$/i, "") : key;
+}
+
+function msIsIgnoredSetReference_(ref) {
+  var baseKey = msIgnoredSetRefBaseKey_(ref);
+  return baseKey === "LA25-5" || baseKey === "LA25-3";
+}
+
+function msBuildExportedRefIndex_(rows) {
+  var index = {};
+  for (var i = 0; i < (rows || []).length; i++) {
+    var key = msNormalizeExportRefKey_(rows[i] && rows[i].ref);
+    if (key) index[key] = true;
+  }
+  return index;
+}
+
+function msFindMatchingSetReference_(ref, exportedRefIndex) {
+  var key = msNormalizeExportRefKey_(ref);
+  if (!key || msIsIgnoredSetReference_(key)) return "";
+
+  if (/-B$/i.test(key)) {
+    var mainRef = key.replace(/-B$/i, "");
+    return exportedRefIndex && exportedRefIndex[mainRef] ? mainRef : "";
+  }
+
+  var bottomRef = key + "-B";
+  return exportedRefIndex && exportedRefIndex[bottomRef] ? bottomRef : "";
+}
+
+function msBuildSetRemarkLine_(ref, exportedRefIndex) {
+  var matchRef = msFindMatchingSetReference_(ref, exportedRefIndex);
+  if (!matchRef) return "";
+
+  var key = msNormalizeExportRefKey_(ref);
+  if (/-B$/i.test(key)) {
+    return "Ensemble assorti : haut disponible sous la référence " + matchRef + ". Pour acheter l’ensemble complet, veuillez également commander cette référence.";
+  }
+
+  return "Ensemble assorti : bas disponible sous la référence " + matchRef + ". Pour acheter l’ensemble complet, veuillez également commander cette référence.";
+}
+
+function msBuildSetExportName_(ref, exportedRefIndex, fallbackName) {
+  var key = msNormalizeExportRefKey_(ref);
+  if (!key) return fallbackName || "";
+  if (msIsIgnoredSetReference_(key)) return fallbackName || "";
+
+  var matchRef = msFindMatchingSetReference_(key, exportedRefIndex);
+  if (!matchRef) return fallbackName || "";
+
+  return /-B$/i.test(key) ? (key + " Bas") : (key + " Haut");
 }
 
 function msString_(v) {

@@ -3,17 +3,32 @@
  * - Conserve le comportement métier existant
  */
 function syncMsImportToStock() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
   var ui = SpreadsheetApp.getUi();
+
+  var chainBtn = ui.alert(
+    "Chaînage Microstore avant sync",
+    "Voulez-vous importer d'abord les exports Microstore actifs et désactivés, puis lancer la sync vers STOCK ?\n\nOK = lancer import actifs + import désactivés + sync\nAnnuler = passer directement à la confirmation de sync normale",
+    ui.ButtonSet.OK_CANCEL
+  );
+
+  if (chainBtn === ui.Button.OK) {
+    msRunImportThenSync_();
+    return;
+  }
 
   var lastImportDate = msGetLastImportDateText_();
   var confirmText =
-    "Dernier import Microstore (LOG_IMPORT): " + (lastImportDate || "—") +
+    "Dernier import Microstore (LOG_IMPORT_EXPORT): " + (lastImportDate || "—") +
     "\n\nLancer la synchro MS_IMPORT → STOCK ?";
 
   var btn = ui.alert("Confirmation", confirmText, ui.ButtonSet.OK_CANCEL);
   if (btn !== ui.Button.OK) return;
 
+  msRunSyncCore_();
+}
+
+function msRunSyncCore_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
   var lock = LockService.getDocumentLock();
   lock.waitLock(30000);
 
@@ -21,12 +36,14 @@ function syncMsImportToStock() {
 
   try {
     var shMs = ss.getSheetByName(SHEET_MS_IMPORT);
+    var shMsDisabled = ss.getSheetByName(SHEET_MS_IMPORT_DISABLED);
     var shStock = ss.getSheetByName(SHEET_STOCK);
     var shTpl = ss.getSheetByName(SHEET_TEMPLATE_STOCK);
 
     if (!shMs) throw new Error("Feuille introuvable: " + SHEET_MS_IMPORT);
     if (!shStock) throw new Error("Feuille introuvable: " + SHEET_STOCK);
     if (!shTpl) throw new Error("Feuille introuvable: " + SHEET_TEMPLATE_STOCK);
+    if (!shMsDisabled) throw new Error("Feuille introuvable: " + SHEET_MS_IMPORT_DISABLED);
 
     var nowText = msFormatNowText_();
 
@@ -75,7 +92,8 @@ function syncMsImportToStock() {
     for (var i = 0; i < msData.length; i++) {
       var row = msData[i];
       var refRaw = msGetCell_(row, msHeaderMap["référence"]);
-      var ref = msNormalizeRef_(refRaw);
+      var refRawStored = String(refRaw || "").trim();
+      var ref = msNormalizeRef_(refRawStored);
       if (!ref) continue;
 
       msOrder.push(ref);
@@ -84,6 +102,7 @@ function syncMsImportToStock() {
 
       msMap[ref] = {
         ref: ref,
+        refRaw: refRawStored,
         nom: msGetCell_(row, msHeaderMap["nom"]),
         categorie: msGetCell_(row, msHeaderMap["catégorie"]),
         contenuColis: msGetCell_(row, msHeaderMap["contenu colis"]),
@@ -117,8 +136,96 @@ function syncMsImportToStock() {
     for (var r = 0; r < refsMs.length; r++) {
       var k = refsMs[r];
       var rec = msMap[k];
-      var merged = msMergeRemarqueNom_(rec.remarque, rec.nom);
-      rec.remarqueFinale = msApplyDoublonTag_(merged, doublonCount[k] || 1);
+      rec.remarqueFinale = msApplyDoublonTag_(rec.remarque, doublonCount[k] || 1);
+    }
+
+    ss.toast("Lecture MS_IMPORT_DISABLED…", "Microstore", 5);
+
+    var disabledIndex = {};
+    var disabledMap = {};
+    var disabledOrder = [];
+    var disabledLastIdxByRef = {};
+    var disabledDoublonCount = {};
+    var disLastRow = shMsDisabled.getLastRow();
+    var disLastCol = shMsDisabled.getLastColumn();
+
+    if (disLastRow >= 3 && disLastCol > 0) {
+      var disHeaders = shMsDisabled.getRange(2, 1, 1, disLastCol).getValues()[0];
+      var disHeaderMap = headerMap_(disHeaders);
+      var disNeed = [
+        "Référence",
+        "Nom",
+        "Catégorie",
+        "Contenu colis",
+        "Composition matérielle",
+        "Marque",
+        "Année",
+        "Saison",
+        "Colisage",
+        "Couleur",
+        "Stock",
+        "Nbr de pièces hors unité de colisage",
+        "Poids (en gramme)",
+        "Prix",
+        "Pays d'origine",
+        "Remise (%)",
+        "Remarque",
+        "Date de création"
+      ];
+      ensureHeadersExist_(disHeaderMap, disNeed, "MS_IMPORT_DISABLED (ligne 2)");
+
+      var disData = shMsDisabled.getRange(3, 1, disLastRow - 2, disLastCol).getValues();
+
+      for (var d = 0; d < disData.length; d++) {
+        var rowDis = disData[d];
+        var refRawDis = msGetCell_(rowDis, disHeaderMap["référence"]);
+        var refRawDisStored = String(refRawDis || "").trim();
+        var refDis = msNormalizeRef_(refRawDisStored);
+        if (!refDis) continue;
+
+        disabledIndex[refDis] = true;
+        disabledOrder.push(refDis);
+        disabledLastIdxByRef[refDis] = d;
+        disabledDoublonCount[refDis] = (disabledDoublonCount[refDis] || 0) + 1;
+
+        disabledMap[refDis] = {
+          ref: refDis,
+          refRaw: refRawDisStored,
+          nom: msGetCell_(rowDis, disHeaderMap["nom"]),
+          categorie: msGetCell_(rowDis, disHeaderMap["catégorie"]),
+          contenuColis: msGetCell_(rowDis, disHeaderMap["contenu colis"]),
+          compo: normalizeUpper_(msGetCell_(rowDis, disHeaderMap["composition matérielle"])),
+          marque: msGetCell_(rowDis, disHeaderMap["marque"]),
+          annee: msGetCell_(rowDis, disHeaderMap["année"]),
+          saison: msGetCell_(rowDis, disHeaderMap["saison"]),
+          colisage: msGetCell_(rowDis, disHeaderMap["colisage"]),
+          couleur: msNormalizeCouleur_(msGetCell_(rowDis, disHeaderMap["couleur"])),
+          stock: msGetCell_(rowDis, disHeaderMap["stock"]),
+          horsColisage: msGetCell_(rowDis, disHeaderMap["nbr de pièces hors unité de colisage"]),
+          poidsG: msGetCell_(rowDis, disHeaderMap["poids (en gramme)"]),
+          prix: msGetCell_(rowDis, disHeaderMap["prix"]),
+          paysOrigine: msGetCell_(rowDis, disHeaderMap["pays d'origine"]),
+          remise: msGetCell_(rowDis, disHeaderMap["remise (%)"]),
+          remarque: msGetCell_(rowDis, disHeaderMap["remarque"]),
+          dateCreation: msGetCell_(rowDis, disHeaderMap["date de création"])
+        };
+      }
+
+      var refsDisabled = [];
+      var seenDisabled = {};
+      for (var dd = 0; dd < disabledOrder.length; dd++) {
+        var refDD = disabledOrder[dd];
+        if (disabledLastIdxByRef[refDD] !== dd) continue;
+        if (seenDisabled[refDD]) continue;
+        seenDisabled[refDD] = true;
+        refsDisabled.push(refDD);
+      }
+
+      for (var dr = 0; dr < refsDisabled.length; dr++) {
+        var dk = refsDisabled[dr];
+        var drec = disabledMap[dk];
+        drec.remarqueFinale = msApplyDoublonTag_(drec.remarque, disabledDoublonCount[dk] || 1);
+      }
     }
 
     ss.toast("Lecture STOCK…", "Microstore", 5);
@@ -153,23 +260,12 @@ function syncMsImportToStock() {
     ];
     ensureHeadersExist_(stockHeaderMap, stockNeed, "STOCK (ligne 1)");
 
-    var formulaCols = [
-      "Colisage",
-      "包/箱",
-      "Stock",
-      "Poids (en gramme)",
-      "Promo",
-      "Prix@",
-      "Promo@",
-      "进货",
-      "剩下 / RESTE",
-      "SortKey"
-    ];
-    ensureHeadersExist_(stockHeaderMap, formulaCols, "STOCK (ligne 1) - colonnes formules");
+    var formulaCols = STOCK_TEMPLATE_PROPAGATION_HEADERS.slice();
+    ensureHeadersExist_(stockHeaderMap, formulaCols, "STOCK (ligne 1) - colonnes template");
 
     var tplHeaders = shTpl.getRange(1, 1, 1, shTpl.getLastColumn()).getValues()[0];
     var tplHeaderMap = headerMap_(tplHeaders);
-    ensureHeadersExist_(tplHeaderMap, formulaCols, "TEMPLATE_STOCK (ligne 1) - colonnes formules");
+    ensureHeadersExist_(tplHeaderMap, formulaCols, "TEMPLATE_STOCK (ligne 1) - colonnes template");
 
     var nExisting = Math.max(0, stockLastRow - 1);
     var colRef = stockHeaderMap["货号"];
@@ -199,8 +295,9 @@ function syncMsImportToStock() {
 
       if (stockIndex.hasOwnProperty(refKey)) {
         var idx = stockIndex[refKey];
+        var paysOrigine = msPreferIncomingNonEmpty_(rec2.paysOrigine, out["Pays d'origine"][idx][0]);
         msSetOutRow_(out, idx, {
-          "货号": rec2.ref,
+          "货号": rec2.refRaw || rec2.ref,
           "Nom": rec2.nom,
           "Catégorie": rec2.categorie,
           "Contenu colis": rec2.contenuColis,
@@ -214,16 +311,16 @@ function syncMsImportToStock() {
           "Nbr de pièces hors unité de colisage": rec2.horsColisage,
           "Poids (en gramme)": rec2.poidsG,
           "Prix": rec2.prix,
-          "Pays d'origine": rec2.paysOrigine,
+          "Pays d'origine": paysOrigine,
           "Remise (%)": rec2.remise,
           "Remarque": rec2.remarqueFinale,
           "Date de création": rec2.dateCreation,
-          "MS_STATUT": "MS",
+          "MS_STATUT": (disabledIndex[rec2.ref] ? "MS_BOTH" : "MS"),
           "MS_LAST_SEEN": nowText
         });
       } else {
         toAdd.push({
-          "货号": rec2.ref,
+          "货号": rec2.refRaw || rec2.ref,
           "Nom": rec2.nom,
           "Catégorie": rec2.categorie,
           "Contenu colis": rec2.contenuColis,
@@ -241,20 +338,86 @@ function syncMsImportToStock() {
           "Remise (%)": rec2.remise,
           "Remarque": rec2.remarqueFinale,
           "Date de création": rec2.dateCreation,
-          "MS_STATUT": "MS",
+          "MS_STATUT": (disabledIndex[rec2.ref] ? "MS_BOTH" : "MS"),
           "MS_LAST_SEEN": nowText
         });
       }
+    }
+
+    // ajouter les refs présentes uniquement dans MS_IMPORT_DISABLED
+    // si elles n'existent ni dans MS_IMPORT ni dans STOCK
+    for (var refDis in disabledIndex) {
+      if (!disabledIndex.hasOwnProperty(refDis)) continue;
+
+      // déjà traité via MS_IMPORT
+      if (seenInMs[refDis]) continue;
+
+      // existe déjà dans STOCK
+      if (stockIndex.hasOwnProperty(refDis)) continue;
+
+      var recDis = disabledMap[refDis] || {};
+      toAdd.push({
+        "货号": recDis.refRaw || refDis,
+        "Nom": recDis.nom || "",
+        "Catégorie": recDis.categorie || "",
+        "Contenu colis": recDis.contenuColis || "",
+        "Composition matérielle": recDis.compo || "",
+        "Marque": recDis.marque || "",
+        "Année": recDis.annee || "",
+        "Saison": recDis.saison || "",
+        "Colisage": recDis.colisage || "",
+        "Couleur": recDis.couleur || "",
+        "Stock": (recDis.stock === null || typeof recDis.stock === "undefined" || recDis.stock === "") ? 0 : recDis.stock,
+        "Nbr de pièces hors unité de colisage": recDis.horsColisage || "",
+        "Poids (en gramme)": recDis.poidsG || "",
+        "Prix": recDis.prix || "",
+        "Pays d'origine": recDis.paysOrigine || "",
+        "Remise (%)": recDis.remise || "",
+        "Remarque": recDis.remarqueFinale || recDis.remarque || "",
+        "Date de création": recDis.dateCreation || "",
+        "MS_STATUT": "MS_DISABLED",
+        "MS_LAST_SEEN": nowText
+      });
     }
 
     if (nExisting > 0) {
       ss.toast("Mise à jour statuts (absents MS)…", "Microstore", 5);
       for (var rr = 0; rr < stockRefs.length; rr++) {
         var rref = msNormalizeRef_(stockRefs[rr][0]);
-        if (!rref || seenInMs[rref]) continue;
+        if (!rref) continue;
+
+        if (disabledIndex[rref] && !seenInMs[rref]) {
+          var recDisExisting = disabledMap[rref] || {};
+          var paysOrigineDisabled = msPreferIncomingNonEmpty_(recDisExisting.paysOrigine, out["Pays d'origine"][rr][0]);
+          msSetOutRow_(out, rr, {
+            "货号": recDisExisting.refRaw || rref,
+            "Nom": recDisExisting.nom || "",
+            "Catégorie": recDisExisting.categorie || "",
+            "Contenu colis": recDisExisting.contenuColis || "",
+            "Composition matérielle": recDisExisting.compo || "",
+            "Marque": recDisExisting.marque || "",
+            "Année": recDisExisting.annee || "",
+            "Saison": recDisExisting.saison || "",
+            "Colisage": recDisExisting.colisage || "",
+            "Couleur": recDisExisting.couleur || "",
+            "Stock": (recDisExisting.stock === null || typeof recDisExisting.stock === "undefined" || recDisExisting.stock === "") ? 0 : recDisExisting.stock,
+            "Nbr de pièces hors unité de colisage": recDisExisting.horsColisage || "",
+            "Poids (en gramme)": recDisExisting.poidsG || "",
+            "Prix": recDisExisting.prix || "",
+            "Pays d'origine": paysOrigineDisabled,
+            "Remise (%)": recDisExisting.remise || "",
+            "Remarque": recDisExisting.remarqueFinale || recDisExisting.remarque || "",
+            "Date de création": recDisExisting.dateCreation || "",
+            "MS_STATUT": "MS_DISABLED",
+            "MS_LAST_SEEN": nowText
+          });
+          continue;
+        }
+
+        if (seenInMs[rref]) continue;
 
         var old = (stockStatus[rr] && stockStatus[rr][0]) ? String(stockStatus[rr][0]).trim() : "";
-        var newStatus = (old === "MS") ? "MS_SUPPRIME" : "A_CREER";
+        var newStatus = (old === "MS" || old === "MS_DISABLED" || old === "MS_BOTH") ? "MS_SUPPRIME" : "A_CREER";
         msSetOutRow_(out, rr, { "MS_STATUT": newStatus });
       }
     }
@@ -277,13 +440,11 @@ function syncMsImportToStock() {
 
     if (addCount > 0) {
       ss.toast("Prolongation formules (TEMPLATE_STOCK)…", "Microstore", 8);
-      msApplyTemplateFormulas_(shTpl, shStock, tplHeaderMap, stockHeaderMap, formulaCols, addCount, addedStartRow);
-      msApplyTemplateColumnByHeaderNoteKey_(shTpl, shStock, "KEY:TOTAL_BOX", addCount, addedStartRow);
-      msApplyTemplateColumnByHeaderNoteKey_(shTpl, shStock, "KEY:TOTAL_PCS", addCount, addedStartRow);
+      applyStockTemplatePropagation_(shTpl, shStock, addCount, addedStartRow, formulaCols, STOCK_TEMPLATE_PROPAGATION_NOTE_KEYS);
     }
 
-    ss.toast("Rebuild filtre (A→AU)…", "Microstore", 5);
-    msRebuildLockedFilter_A_to_AU_(shStock);
+    ss.toast("Rebuild filtre + tri STOCK…", "Microstore", 5);
+    rebuildAndSortStockSheet_(shStock);
 
     ss.toast("Sync OK (MS_IMPORT → STOCK).", "Microstore", 8);
   } catch (err) {
@@ -295,13 +456,56 @@ function syncMsImportToStock() {
   }
 }
 
+function msRunImportThenSync_() {
+  var ui = SpreadsheetApp.getUi();
+  var check = msCanRunImportThenSync_();
+
+  if (!check.ok) {
+    ui.alert("Chaînage annulé", check.message, ui.ButtonSet.OK);
+    return;
+  }
+
+  try {
+    importMicrostoreLatestExport(false, true);
+    importMicrostoreLatestDisabledExport(false, true);
+    msRunSyncCore_();
+  } catch (err) {
+    var msg = (err && err.message) ? err.message : String(err);
+    ui.alert("Chaînage interrompu", "Chaînage import + sync interrompu : " + msg, ui.ButtonSet.OK);
+  }
+}
+
+function msCanRunImportThenSync_() {
+  var hasActive = !!msFindLatestXlsxByCreatedTime_(MS_IMPORT_FOLDER_ID);
+  var hasDisabled = !!msFindLatestXlsxByCreatedTime_(MS_IMPORT_DISABLED_FOLDER_ID);
+
+  if (hasActive && hasDisabled) {
+    return { ok: true, message: "" };
+  }
+
+  var missing = [];
+  if (!hasActive) missing.push("actifs");
+  if (!hasDisabled) missing.push("désactivés");
+
+  return {
+    ok: false,
+    message: "Chaîne import + sync non lancée: fichier .xlsx manquant dans le dossier " + missing.join(" et ") + "."
+  };
+}
+
 function msGetLastImportDateText_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sh = ss.getSheetByName(SHEET_LOG_IMPORT);
+  var sh = ss.getSheetByName(SHEET_LOG_IMPORT_EXPORT);
   if (!sh) return "";
   var lr = sh.getLastRow();
   if (lr < 2) return "";
   return sh.getRange(lr, 1).getDisplayValue() || "";
+}
+
+function msPreferIncomingNonEmpty_(incomingValue, fallbackValue) {
+  var incoming = (incomingValue === null || typeof incomingValue === "undefined") ? "" : String(incomingValue).trim();
+  if (incoming) return incoming;
+  return (fallbackValue === null || typeof fallbackValue === "undefined") ? "" : String(fallbackValue).trim();
 }
 
 function msInitOutColumns_(shStock, stockHeaderMap, stockNeed, nExisting) {
@@ -369,30 +573,21 @@ function msApplyTemplateFormulas_(shTpl, shStock, tplHeaderMap, stockHeaderMap, 
     var stockCol = stockHeaderMap[h.toLowerCase()];
     if (!tplCol || !stockCol) continue;
 
-    var tplCell = shTpl.getRange(2, tplCol);
-    var f = tplCell.getFormulaR1C1();
-
-    if (f) {
-      var formulas = [];
-      for (var r = 0; r < addCount; r++) formulas.push([f]);
-      shStock.getRange(startRow, stockCol, addCount, 1).setFormulasR1C1(formulas);
-    } else {
-      var v = tplCell.getValue();
-      var values = [];
-      for (var rr = 0; rr < addCount; rr++) values.push([v]);
-      shStock.getRange(startRow, stockCol, addCount, 1).setValues(values);
-    }
+    applyTemplateCellToRange_(shTpl, shStock, tplCol, stockCol, addCount, startRow);
   }
 }
 
 function msRebuildLockedFilter_A_to_AU_(sh) {
-  var lastRow = sh.getLastRow();
-  if (lastRow < 1) lastRow = 1;
+  if (typeof rebuildSheetFilterToLastColumn_ === "function") {
+    rebuildSheetFilterToLastColumn_(sh);
+    return;
+  }
 
+  var lastRow = Math.max(1, sh.getLastRow());
+  var lastCol = Math.max(1, sh.getLastColumn());
   var existing = sh.getFilter();
   if (existing) existing.remove();
-
-  sh.getRange(1, 1, lastRow, 47).createFilter();
+  sh.getRange(1, 1, lastRow, lastCol).createFilter();
 }
 
 function msApplyTemplateColumnByHeaderNoteKey_(shTpl, shStock, key, addCount, startRow) {
@@ -421,17 +616,5 @@ function msApplyTemplateColumnByHeaderNoteKey_(shTpl, shStock, key, addCount, st
 
   if (stockCol <= 0 || tplCol <= 0) return;
 
-  var tplCell = shTpl.getRange(2, tplCol);
-  var f = tplCell.getFormulaR1C1();
-
-  if (f) {
-    var formulas = [];
-    for (var r = 0; r < addCount; r++) formulas.push([f]);
-    shStock.getRange(startRow, stockCol, addCount, 1).setFormulasR1C1(formulas);
-  } else {
-    var v = tplCell.getValue();
-    var values = [];
-    for (var rr = 0; rr < addCount; rr++) values.push([v]);
-    shStock.getRange(startRow, stockCol, addCount, 1).setValues(values);
-  }
+  applyTemplateCellToRange_(shTpl, shStock, tplCol, stockCol, addCount, startRow);
 }

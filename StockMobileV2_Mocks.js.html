@@ -1,0 +1,85 @@
+<script>
+(function(global) {
+  "use strict";
+
+  function StockMobileV2_clone(value) {
+    return JSON.parse(JSON.stringify(value));
+  }
+
+  function StockMobileV2_loadMockBoot(rawBoot) {
+    const boot = rawBoot && typeof rawBoot === "object" ? StockMobileV2_clone(rawBoot) : {};
+    return {
+      generatedAt: boot.generatedAt || "",
+      dataConnected: false,
+      ui: {
+        defaultView: boot.ui && boot.ui.defaultView ? boot.ui.defaultView : "inventory"
+      },
+      inventory: {
+        items: Array.isArray(boot.inventory && boot.inventory.items) ? boot.inventory.items : []
+      },
+      history: {
+        items: Array.isArray(boot.history && boot.history.items) ? boot.history.items : []
+      },
+      detailByReference: boot.detailByReference || {}
+    };
+  }
+
+  function StockMobileV2_loadMockInventory(boot) {
+    return StockMobileV2_clone(boot && boot.inventory && Array.isArray(boot.inventory.items) ? boot.inventory.items : []);
+  }
+
+  function StockMobileV2_loadMockHistory(boot) {
+    return StockMobileV2_clone(boot && boot.history && Array.isArray(boot.history.items) ? boot.history.items : []);
+  }
+
+  function StockMobileV2_loadMockDetail(boot, reference) {
+    const normalizedReference = String(reference || "").trim();
+    const detailMap = boot && boot.detailByReference ? boot.detailByReference : {};
+    return StockMobileV2_clone(detailMap[normalizedReference] || null);
+  }
+
+  function StockMobileV2_createMockQuickEditDraft(item) {
+    const safeItem = item || {};
+    return {
+      reference: safeItem.reference || "",
+      mode: "quick-exit",
+      remark: safeItem.remark || "",
+      fields: {
+        stockDisplay: safeItem.stockDisplay || "",
+        warehouse: safeItem.warehouse || "",
+        tailInput: "",
+        unitsPerBoxInput: "",
+        itemBoxes: "",
+        sign: "+",
+        fractionText: "",
+        packNotationSign: "+",
+        packNotationCount: ""
+      }
+    };
+  }
+
+  function StockMobileV2_submitMockQuickEdit(draft, baseItem) {
+    const sourceItem = baseItem || {};
+    const nextItem = Object.assign({}, sourceItem, {
+      reference: draft && draft.reference ? draft.reference : sourceItem.reference || "",
+      stockDisplay: draft && draft.fields ? String(draft.fields.stockDisplay || "").trim() : sourceItem.stockDisplay || "",
+      warehouse: draft && draft.fields ? String(draft.fields.warehouse || "").trim() : sourceItem.warehouse || "",
+      remark: draft ? String(draft.remark || "").trim() : sourceItem.remark || ""
+    });
+
+    return {
+      ok: true,
+      message: "Bientot branche a la sauvegarde V2.",
+      savedAt: new Date().toISOString(),
+      item: nextItem
+    };
+  }
+
+  global.StockMobileV2_loadMockBoot = StockMobileV2_loadMockBoot;
+  global.StockMobileV2_loadMockInventory = StockMobileV2_loadMockInventory;
+  global.StockMobileV2_loadMockHistory = StockMobileV2_loadMockHistory;
+  global.StockMobileV2_loadMockDetail = StockMobileV2_loadMockDetail;
+  global.StockMobileV2_createMockQuickEditDraft = StockMobileV2_createMockQuickEditDraft;
+  global.StockMobileV2_submitMockQuickEdit = StockMobileV2_submitMockQuickEdit;
+})(window);
+</script>

@@ -1,7 +1,9 @@
 /**
  * Export STOCK → MS_EXPORT
  */
-function exportStockToMsExport() {
+function exportStockToMsExport(options) {
+  options = options || {};
+  var selectedOnly = options.selectedOnly === true;
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var shStock = ss.getSheetByName(SHEET_STOCK);
   var shExp = ss.getSheetByName(SHEET_MS_EXPORT);
@@ -71,15 +73,19 @@ function exportStockToMsExport() {
       "Pays d'origine",
       "Remise (%)",
       "Date de création",
-      "每箱件数",
-      "包/箱"
+      "件/箱",
+      "包/箱",
+      "Couleurs"
     ];
+    if (selectedOnly) stockNeed.push("选择");
     ensureHeadersExist_(stockMap, stockNeed, "STOCK (ligne 1)");
 
     var data = shStock.getRange(2, 1, stockLastRow - 1, stockLastCol).getValues();
 
     var ui = SpreadsheetApp.getUi();
-    var msg = "⚠️ L'export va remplacer tout le contenu de MS_EXPORT avec les données de STOCK.\n\nContinuer ?";
+    var msg = selectedOnly
+      ? "⚠️ L'export va remplacer tout le contenu de MS_EXPORT avec les lignes cochées (选择) de STOCK.\n\nContinuer ?"
+      : "⚠️ L'export va remplacer tout le contenu de MS_EXPORT avec les données de STOCK.\n\nContinuer ?";
     var btn = ui.alert("Confirmer export Microstore", msg, ui.ButtonSet.OK_CANCEL);
     if (btn !== ui.Button.OK) {
       ss.toast("Export annulé.", "Microstore", 4);
@@ -94,41 +100,54 @@ function exportStockToMsExport() {
     var cAnnee = stockMap["année"] - 1;
     var cSaison = stockMap["saison"] - 1;
     var cStock = stockMap["stock"] - 1;
+    var totalPqsCol = (typeof findColumnByHeaderNoteKey_ === "function")
+      ? findColumnByHeaderNoteKey_(shStock, "KEY:TOTAL_PQS")
+      : 0;
+    var cTotalPqs = totalPqsCol ? (totalPqsCol - 1) : cStock;
     var cColisage = stockMap["colisage"] - 1;
     var cCouleur = stockMap["couleur"] - 1;
     var cPrix = stockMap["prix"] - 1;
     var cRemise = stockMap["remise (%)"] - 1;
     var cDate = stockMap["date de création"] - 1;
-    var cTotalPcs = stockMap["每箱件数"] - 1;
+    var cTotalPcs = stockMap["件/箱"] - 1;
     var cPacks = stockMap["包/箱"] - 1;
     var cHorsColisage = stockMap["nbr de pièces hors unité de colisage"] - 1;
     var cPoidsG = stockMap["poids (en gramme)"] - 1;
     var cPaysOrigine = stockMap["pays d'origine"] - 1;
+    var cSelect = selectedOnly ? (stockMap["选择"] - 1) : -1;
     var cRemarque = stockMap["remarque"] ? (stockMap["remarque"] - 1) : -1;
+    var cMsStatut = stockMap["ms_statut"] ? (stockMap["ms_statut"] - 1) : -1;
+    var cCouleursRemark = stockMap["couleurs"] ? (stockMap["couleurs"] - 1) : cCouleur;
 
     var rows = [];
     for (var i = 0; i < data.length; i++) {
       var r = data[i];
-      var ref = msNormalizeRef_(r[cRef]);
-      if (!ref) continue;
+
+      if (selectedOnly && r[cSelect] !== true) continue;
+      if (cMsStatut >= 0 && String(r[cMsStatut]).trim() === "MS_SUPPRIME") continue;
+      var refRaw = msString_(r[cRef]);
+      if (!refRaw) continue;
 
       var dtInfo = msNormalizeDateForSort_(r[cDate]);
       rows.push({
         sortEmpty: dtInfo.empty,
         sortTs: dtInfo.ts,
-        ref: ref,
+        ref: refRaw,
+        msStatut: cMsStatut >= 0 ? String(r[cMsStatut] || "").trim() : "",
         nom: msString_(r[cNom]),
         cat: msString_(r[cCat]),
+        contenuColis: msString_(r[stockMap["contenu colis"] - 1]),
         comp: normalizeUpper_(r[cComp]),
         marque: msString_(r[cMarque]),
         annee: msString_(r[cAnnee]),
         saison: msString_(r[cSaison]),
         colisage: (r[cColisage] === null || typeof r[cColisage] === "undefined") ? "" : r[cColisage],
         couleur: msNormalizeCouleur_(r[cCouleur]),
+        couleursRaw: msString_(r[cCouleursRemark]),
         prix: (r[cPrix] === null || typeof r[cPrix] === "undefined") ? "" : r[cPrix],
         remise: (r[cRemise] === null || typeof r[cRemise] === "undefined") ? "" : r[cRemise],
         totalPcs: r[cTotalPcs],
-        stock: r[cStock],
+        stock: r[cTotalPqs],
         packs: r[cPacks],
         horsColisage: r[cHorsColisage],
         poidsG: r[cPoidsG],
@@ -137,13 +156,7 @@ function exportStockToMsExport() {
       });
     }
 
-    rows.sort(function(a, b) {
-      if (a.sortEmpty && !b.sortEmpty) return -1;
-      if (!a.sortEmpty && b.sortEmpty) return 1;
-      if (a.sortEmpty && b.sortEmpty) return 0;
-      return b.sortTs - a.sortTs;
-    });
-
+    var exportedRefIndex = msBuildExportedRefIndex_(rows);
     var out = [];
     for (var k = 0; k < rows.length; k++) {
       var it = rows[k];
@@ -151,37 +164,63 @@ function exportStockToMsExport() {
       var total = toIntSafe_(it.totalPcs);
       var packs = toIntSafe_(it.packs);
       var ppp = toIntSafe_(it.colisage);
-      var contenu = msBuildContenuColis_(total, packs, ppp);
+      var contenu = (total > 0 && packs > 0 && ppp > 0)
+        ? msBuildContenuColis_(total, packs, ppp)
+        : "";
+      var setRemarkLine = msBuildSetRemarkLine_(it.ref, exportedRefIndex);
+      var exportName = msBuildSetExportName_(it.ref, exportedRefIndex, it.nom ? String(it.nom).trim() : "");
 
       var line = new Array(expLastCol).fill("");
       line[expMap["référence"] - 1] = it.ref;
-      line[expMap["nom"] - 1] = it.nom;
+      line[expMap["nom"] - 1] = exportName;
       line[expMap["catégorie"] - 1] = it.cat;
-      line[expMap["contenu colis"] - 1] = contenu;
+      line[expMap["contenu colis"] - 1] = it.contenuColis;
       line[expMap["composition matérielle"] - 1] = it.comp;
       line[expMap["marque"] - 1] = it.marque;
       line[expMap["année"] - 1] = it.annee;
       line[expMap["saison"] - 1] = it.saison;
       line[expMap["colisage"] - 1] = it.colisage;
-      line[expMap["couleur"] - 1] = it.couleur;
-      line[expMap["stock"] - 1] = it.stock;
+      line[expMap["couleur"] - 1] = it.couleur ? it.couleur : "MIX";
+      line[expMap["stock"] - 1] = (it.msStatut === "MS_DISABLED")
+        ? 0
+        : ((it.stock === null || typeof it.stock === "undefined" || String(it.stock).trim() === "" || Number(it.stock) === 0)
+          ? Math.floor(Math.random() * 201) + 100
+          : it.stock);
       line[expMap["nbr de pièces hors unité de colisage"] - 1] = it.horsColisage;
       line[expMap["poids (en gramme)"] - 1] = it.poidsG;
       line[expMap["prix"] - 1] = it.prix;
       line[expMap["pays d'origine"] - 1] = it.paysOrigine;
       line[expMap["remise (%)"] - 1] = it.remise;
-      line[expMap["remarque"] - 1] = it.remarque;
+      var prixParPaquetTexte = msBuildPrixParPaquetLine_(it.prix, it.colisage, it.remise);
+      var couleursTexte = msBuildCouleursRemark_(it.couleursRaw);
+      line[expMap["remarque"] - 1] = msBuildCleanRemarque_(it.remarque, prixParPaquetTexte, contenu, couleursTexte, setRemarkLine);
 
       out.push(line);
     }
 
     msClearMsExportData_(shExp, expLastCol);
-    if (out.length) shExp.getRange(3, 1, out.length, expLastCol).setValues(out);
+    if (!out.length) {
+      ss.toast(selectedOnly ? "Aucune ligne cochée (选择)." : "Aucune ligne exportable.", "Microstore", 6);
+      return;
+    }
+
+    shExp.getRange(3, 1, out.length, expLastCol).setValues(out);
+
+    SpreadsheetApp.flush();
+    Utilities.sleep(1200);
 
     ss.toast("Export terminé: " + out.length + " lignes.", "Microstore", 6);
+    exportMsExportSheetToDriveXlsx();
   } finally {
     lock.releaseLock();
   }
+}
+
+/**
+ * Export STOCK → MS_EXPORT uniquement pour les lignes cochées (选择)
+ */
+function exportSelectedStockToMsExport() {
+  return exportStockToMsExport({ selectedOnly: true });
 }
 
 function msClearMsExportData_(shExp, expLastCol) {
@@ -213,9 +252,253 @@ function msBuildContenuColis_(totalPieces, packs, pcsPerPack) {
   return "Colis: " + t + " pièces avec " + p + " paquets de " + u + " pièces";
 }
 
+function msBuildCleanRemarque_(existingRemark, prixParPaquetTexte, contenu, couleursTexte, setRemarkLine) {
+  var cleanedRemark = String(existingRemark || "")
+    .replace(/\s*\[MS_DOUBLON:\d+\]\s*/gi, " ")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+
+  var lines = cleanedRemark.split(/\r?\n/);
+  var otherLines = [];
+  var seenOther = {};
+  var prixLine = "";
+  var colisLine = "";
+  var couleursLine = "";
+  var setLine = "";
+
+  for (var i = 0; i < lines.length; i++) {
+    var line = String(lines[i] || "").trim();
+    if (!line) continue;
+
+    if (/^Prix par paquet\s*:/i.test(line)) {
+      if (!prixLine) prixLine = line;
+      continue;
+    }
+
+    if (/^Colis\s*:/i.test(line)) {
+      if (!colisLine) colisLine = line;
+      continue;
+    }
+
+    if (/^Couleurs\s*:/i.test(line)) {
+      if (!couleursLine) couleursLine = line;
+      continue;
+    }
+
+    if (/^Ensemble assorti\s*:/i.test(line)) {
+      if (!setLine) setLine = line;
+      continue;
+    }
+
+    if (seenOther[line]) continue;
+    seenOther[line] = true;
+    otherLines.push(line);
+  }
+
+  if (String(prixParPaquetTexte || "").trim()) prixLine = String(prixParPaquetTexte).trim();
+  if (String(contenu || "").trim()) colisLine = String(contenu).trim();
+  if (String(couleursTexte || "").trim()) couleursLine = String(couleursTexte).trim();
+  if (String(setRemarkLine || "").trim()) setLine = String(setRemarkLine).trim();
+
+  var finalLines = otherLines.slice();
+  if (prixLine) finalLines.push(prixLine);
+  if (colisLine) finalLines.push(colisLine);
+  if (couleursLine) finalLines.push(couleursLine);
+  if (setLine) finalLines.push(setLine);
+
+  return finalLines.join("\n");
+}
+
+function msNormalizeExportRefKey_(ref) {
+  return String(ref || "").trim().toUpperCase();
+}
+
+function msIgnoredSetRefBaseKey_(ref) {
+  var key = msNormalizeExportRefKey_(ref);
+  if (!key) return "";
+  return /-B$/i.test(key) ? key.replace(/-B$/i, "") : key;
+}
+
+function msIsIgnoredSetReference_(ref) {
+  var baseKey = msIgnoredSetRefBaseKey_(ref);
+  return baseKey === "LA25-5" || baseKey === "LA25-3";
+}
+
+function msBuildExportedRefIndex_(rows) {
+  var index = {};
+  for (var i = 0; i < (rows || []).length; i++) {
+    var key = msNormalizeExportRefKey_(rows[i] && rows[i].ref);
+    if (key) index[key] = true;
+  }
+  return index;
+}
+
+function msFindMatchingSetReference_(ref, exportedRefIndex) {
+  var key = msNormalizeExportRefKey_(ref);
+  if (!key || msIsIgnoredSetReference_(key)) return "";
+
+  if (/-B$/i.test(key)) {
+    var mainRef = key.replace(/-B$/i, "");
+    return exportedRefIndex && exportedRefIndex[mainRef] ? mainRef : "";
+  }
+
+  var bottomRef = key + "-B";
+  return exportedRefIndex && exportedRefIndex[bottomRef] ? bottomRef : "";
+}
+
+function msBuildSetRemarkLine_(ref, exportedRefIndex) {
+  var matchRef = msFindMatchingSetReference_(ref, exportedRefIndex);
+  if (!matchRef) return "";
+
+  var key = msNormalizeExportRefKey_(ref);
+  if (/-B$/i.test(key)) {
+    return "Ensemble assorti : haut disponible sous la référence " + matchRef + ". Pour acheter l’ensemble complet, veuillez également commander cette référence.";
+  }
+
+  return "Ensemble assorti : bas disponible sous la référence " + matchRef + ". Pour acheter l’ensemble complet, veuillez également commander cette référence.";
+}
+
+function msBuildSetExportName_(ref, exportedRefIndex, fallbackName) {
+  var key = msNormalizeExportRefKey_(ref);
+  if (!key) return fallbackName || "";
+  if (msIsIgnoredSetReference_(key)) return fallbackName || "";
+
+  var matchRef = msFindMatchingSetReference_(key, exportedRefIndex);
+  if (!matchRef) return fallbackName || "";
+
+  return /-B$/i.test(key) ? (key + " Bas") : (key + " Haut");
+}
+
 function msString_(v) {
   if (v === null || typeof v === "undefined") return "";
   return String(v).trim();
+}
+
+function msBuildPrixParPaquetLine_(prix, colisage, remisePct) {
+  var p = msToNumberSafe_(prix);
+  var c = msToNumberSafe_(colisage);
+  if (p === null || c === null || c <= 0) return "";
+
+  var total = p * c;
+  if (!isFinite(total)) return "";
+
+  var remise = msToNumberSafe_(remisePct);
+  if (remise === null || !isFinite(remise) || remise <= 0) {
+    return "Prix par paquet: " + msFormatFrenchNumber_(total);
+  }
+
+  var discounted = total * (1 - (remise / 100));
+  if (!isFinite(discounted)) {
+    return "Prix par paquet: " + msFormatFrenchNumber_(total);
+  }
+
+  return "Prix par paquet: " + msFormatFrenchNumber_(total) + " -> " + msFormatFrenchNumber_(discounted);
+}
+
+function msToNumberSafe_(v) {
+  if (v === null || typeof v === "undefined") return null;
+  var s = String(v).trim();
+  if (!s) return null;
+
+  s = s.replace(/\s+/g, "").replace(",", ".");
+  var n = Number(s);
+  return isNaN(n) ? null : n;
+}
+
+function msFormatFrenchNumber_(n) {
+  if (!isFinite(n)) return "";
+  var rounded = Math.round(n * 100) / 100;
+  return rounded.toFixed(2).replace(".", ",");
+}
+
+function msPreNormalizeCouleursRaw_(raw) {
+  var s = String(raw || "").toUpperCase().trim();
+  if (!s) return "";
+
+  s = s
+    .replace(/[\r\n;,]+/g, " ")
+    .replace(/(\d(?:-\d+)+)(?=[A-ZÀ-Ÿ])/g, "$1 ")
+    .replace(/(\d)(?=[A-ZÀ-Ÿ])/g, "$1 ")
+    .replace(/(?<=[A-ZÀ-Ÿ])(?=\d)/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  return s;
+}
+
+function msNormalizeColorLabel_(raw) {
+  var s = String(raw || "").toUpperCase().replace(/[^A-ZÀ-Ÿ]/g, "").trim();
+  if (!s) return "";
+
+  var specialMap = {
+    "BLEUCLAIR": "Bleu clair",
+    "BLEUFONCE": "Bleu foncé",
+    "VERTCLAIR": "Vert clair",
+    "VERTFONCE": "Vert foncé",
+    "ROSECLAIR": "Rose clair",
+    "ROSEFONCE": "Rose foncé",
+    "GRISCLAIR": "Gris clair",
+    "GRISFONCE": "Gris foncé",
+    "JAUNECLAIR": "Jaune clair",
+    "JAUNEFONCE": "Jaune foncé",
+    "BLEUMARINE": "Bleu marine",
+    "NOIRBLANC": "Noir/Blanc",
+    "BLANCNOIR": "Blanc/Noir"
+  };
+  if (specialMap[s]) return specialMap[s];
+
+  var low = s.toLowerCase();
+  return low.charAt(0).toUpperCase() + low.slice(1);
+}
+
+function msQtyTokenToCount_(token) {
+  var s = String(token || "").trim();
+  if (!s) return 0;
+  if (/^\d+$/.test(s)) return Number(s);
+  if (/^\d+(?:-\d+)+$/.test(s)) {
+    var parts = s.split("-");
+    var total = 0;
+    for (var i = 0; i < parts.length; i++) total += Number(parts[i] || 0);
+    return total;
+  }
+  return 0;
+}
+
+function msBuildCouleursRemark_(raw) {
+  var s = msPreNormalizeCouleursRaw_(raw);
+  if (!s) return "";
+
+  var tokens = s.split(/\s+/);
+  var parts = [];
+  var totals = {};
+  var order = [];
+
+  for (var i = 0; i < tokens.length - 1; i++) {
+    var qtyToken = tokens[i];
+    var colorToken = tokens[i + 1];
+
+    if (!/^\d+(?:-\d+)*$/.test(qtyToken)) continue;
+    if (/^\d+(?:-\d+)*$/.test(colorToken)) continue;
+
+    var qty = msQtyTokenToCount_(qtyToken);
+    var color = msNormalizeColorLabel_(colorToken);
+    if (!qty || !color) continue;
+
+    if (!totals.hasOwnProperty(color)) {
+      totals[color] = 0;
+      order.push(color);
+    }
+    totals[color] += qty;
+    i++;
+  }
+
+  for (var j = 0; j < order.length; j++) {
+    var label = order[j];
+    parts.push(totals[label] + " " + label);
+  }
+
+  if (!parts.length) return "";
+  return "Couleurs: " + parts.join(", ");
 }
 
 /**
@@ -225,6 +508,9 @@ function exportMsExportSheetToDriveXlsx() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(SHEET_MS_EXPORT);
   if (!sheet) throw new Error("Feuille introuvable: " + SHEET_MS_EXPORT);
+
+  SpreadsheetApp.flush();
+  Utilities.sleep(1200);
 
   var folder = DriveApp.getFolderById(MS_EXPORT_DRIVE_FOLDER_ID);
   var spreadsheetId = ss.getId();

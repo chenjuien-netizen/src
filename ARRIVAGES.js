@@ -234,6 +234,115 @@ function syncArrivagesPricesToStock_() {
   } catch (e) {}
 }
 
+function syncArrivagesPpcToStock_() {
+  const ss = SpreadsheetApp.getActive();
+  const uiSheet = ss.getSheetByName(SHEET_UI);
+  const stock = ss.getSheetByName(SHEET_STOCK);
+  if (!uiSheet || !stock) throw new Error("Feuilles manquantes: ARRIVAGES / STOCK.");
+
+  const refValues = uiSheet.getRange(UI_TABLE_START_ROW, 1, UI_TABLE_ROWS, 1).getDisplayValues().flat();
+  const ppcValues = uiSheet.getRange(UI_TABLE_START_ROW, 3, UI_TABLE_ROWS, 1).getDisplayValues().flat();
+
+  const updatesByRef = {};
+  const duplicateRefs = [];
+  let ignoredRows = 0;
+
+  for (let i = 0; i < UI_TABLE_ROWS; i++) {
+    const ref = Arrivages_normalizePriceSyncRef_(refValues[i]);
+    const rawPpc = String(ppcValues[i] === null || typeof ppcValues[i] === "undefined" ? "" : ppcValues[i]).trim();
+
+    if (!ref || !rawPpc) {
+      ignoredRows++;
+      continue;
+    }
+
+    const parsed = ArrivagesDomain_parsePpcInput_(rawPpc);
+    if (!parsed.primary) {
+      ignoredRows++;
+      continue;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updatesByRef, ref)) {
+      duplicateRefs.push(ref);
+      continue;
+    }
+
+    updatesByRef[ref] = {
+      value: parsed.display || String(parsed.primary),
+      row: UI_TABLE_START_ROW + i
+    };
+  }
+
+  if (duplicateRefs.length) {
+    throw new Error(
+      "Références dupliquées avec 件/箱 exploitable dans ARRIVAGES!C : " +
+      Array.from(new Set(duplicateRefs)).join(", ")
+    );
+  }
+
+  const refsToUpdate = Object.keys(updatesByRef);
+  if (!refsToUpdate.length) {
+    try { ss.toast("Aucune valeur 件/箱 exploitable trouvée dans ARRIVAGES!C4:C305", "ARRIVAGES", 5); } catch (e) {}
+    return;
+  }
+
+  const lastRow = stock.getLastRow();
+  const lastCol = stock.getLastColumn();
+  if (lastRow < 1 || lastCol < 1) throw new Error("STOCK vide (pas d'en-têtes).");
+
+  const headers = stock.getRange(1, 1, 1, lastCol).getValues()[0];
+  const map = (typeof headerMap_ === "function") ? headerMap_(headers) : ArrivagesStock_headerMapLocal_(headers);
+  const colRef = map["货号"];
+  const colPpc = map["件/箱"];
+  if (!colRef) throw new Error("STOCK: colonne '货号' introuvable.");
+  if (!colPpc) throw new Error("STOCK: colonne '件/箱' introuvable.");
+
+  const stockDataRows = Math.max(0, lastRow - 1);
+  const stockRefValues = stockDataRows ? stock.getRange(2, colRef, stockDataRows, 1).getDisplayValues().flat() : [];
+  const refToRow = {};
+  for (let i = 0; i < stockRefValues.length; i++) {
+    const ref = Arrivages_normalizePriceSyncRef_(stockRefValues[i]);
+    if (!ref) continue;
+    refToRow[ref] = i + 2;
+  }
+
+  const foundUpdates = [];
+  const missingRefs = [];
+  for (const ref of refsToUpdate) {
+    const targetRow = refToRow[ref] || 0;
+    if (!targetRow) {
+      missingRefs.push(ref);
+      continue;
+    }
+    foundUpdates.push({ row: targetRow, value: updatesByRef[ref].value });
+  }
+
+  if (!foundUpdates.length) {
+    try {
+      ss.toast(
+        "0 件/箱 mis à jour | " + missingRefs.length + " refs introuvables | " + ignoredRows + " lignes ignorées",
+        "ARRIVAGES",
+        6
+      );
+    } catch (e) {}
+    return;
+  }
+
+  for (const up of foundUpdates) {
+    stock.getRange(up.row, colPpc).setValue(up.value);
+  }
+
+  try {
+    ss.toast(
+      foundUpdates.length + " 件/箱 mis à jour | " +
+      missingRefs.length + " refs introuvables | " +
+      ignoredRows + " lignes ignorées",
+      "ARRIVAGES",
+      6
+    );
+  } catch (e) {}
+}
+
 function ArrivagesService_saveCurrent_() {
   const ss = SpreadsheetApp.getActive();
   const ui = ss.getSheetByName(SHEET_UI);

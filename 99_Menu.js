@@ -29,6 +29,7 @@ function onOpen() {
     .addItem("Enregistrer", "arrivagesSaveCurrent")
     .addItem("Supprimer", "deleteArrivage_")
     .addItem("Sync prix (M → STOCK)", "menuSyncArrivagesPricesToStock_")
+    .addItem("Sync 件/箱 (C → STOCK)", "menuSyncArrivagesPpcToStock_")
     .addSeparator()
     .addItem("Convert supplier → UI (H:K → A:F)", "menuConvertSupplierToUi_")
     .addItem("Clear supplier zone (H4:K305)", "menuClearSupplierZone_")
@@ -64,6 +65,10 @@ function menuExportMicrostoreSelection() {
 
 function menuSyncArrivagesPricesToStock_() {
   syncArrivagesPricesToStock_();
+}
+
+function menuSyncArrivagesPpcToStock_() {
+  syncArrivagesPpcToStock_();
 }
 
 function menuExportEFashion() {
